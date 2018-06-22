@@ -1,3 +1,5 @@
+extern crate byteorder;
+
 pub mod cpu;
 
 #[cfg(test)]

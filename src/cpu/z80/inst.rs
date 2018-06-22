@@ -1,3 +1,7 @@
+use std::io;
+
+use byteorder::{ReadBytesExt, LittleEndian};
+
 use super::data::Data;
 use super::regs::Registers;
 
@@ -71,5 +75,17 @@ impl<T: Data> Inst for Load<T> {
         let val = self.1.read(ctx);
         self.0.write(ctx, val);
         ctx.regs_mut().inc_pc(1)
+    }
+}
+
+pub trait Decoder {
+    fn handle<I: Inst>(&mut self, i: &I);
+
+    fn decode<R: io::Read>(&mut self, input: &mut R) -> io::Result<()> {
+        let opcode = input.read_u8()?;
+        match opcode {
+            0x00 => { self.handle(&Nop{}); Ok({}) },
+            _ => unimplemented!("decoding of given opcode is not implemented"),
+        }
     }
 }
