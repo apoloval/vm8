@@ -102,6 +102,10 @@ pub trait Decoder {
                 Dest::Reg(Reg16::BC), 
                 Src::Liter(input.read_i16::<LittleEndian>()?),
             )),
+            0x02 => self.handle(&Load::<Byte>(
+                Dest::IndReg(Reg16::BC), 
+                Src::Reg(Reg8::A),
+            )),
             _ => unimplemented!("decoding of given opcode is not implemented"),
         };
         Ok({})
