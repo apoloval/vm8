@@ -12,6 +12,7 @@ pub trait Context {
     fn regs(&self) -> &Registers;
     fn regs_mut(&mut self) -> &mut Registers;
     fn mem(&self) -> &Self::Mem;
+    fn mem_mut(&mut self) -> &mut Self::Mem;
 }
 
 // Src defines a source operand of a instruction
@@ -51,7 +52,7 @@ impl<T: Data> Dest<T> {
             Dest::Reg(r) => T::write_reg(c.regs_mut(), *r, val),
             Dest::IndReg(r) => {
                 let addr = Word::read_reg(c.regs(), *r) as u16;
-                unimplemented!()
+                T::write_mem(c.mem_mut(), addr, val)
             },
         }
     }

@@ -13,6 +13,7 @@ pub trait Data {
     fn read_reg(regs: &Registers, reg: Self::Reg) -> Self::Value;
     fn write_reg(regs: &mut Registers, reg: Self::Reg, val: Self::Value);
     fn read_mem<M: Memory<Addr=u16>>(mem: &M, addr: u16) -> Self::Value;
+    fn write_mem<M: Memory<Addr=u16>>(mem: &mut M, addr: u16, val: Self::Value);
 
     fn inc(v: Self::Value) -> Self::Value { v + Self::unit() }
 }
@@ -48,6 +49,10 @@ impl Data for Byte {
             Reg8::E => regs.de = (regs.de & 0xff00) | (val as i16),
         }
     }
+
+    fn write_mem<M: Memory<Addr=u16>>(mem: &mut M, addr: u16, val: i8) {
+        mem.write_i8(addr, val)
+    }
 }
 
 pub struct Word;
@@ -76,5 +81,9 @@ impl Data for Word {
             Reg16::BC => regs.bc = val,
             Reg16::DE => regs.de = val,
         }
+    }
+
+    fn write_mem<M: Memory<Addr=u16>>(mem: &mut M, addr: u16, val: i16) {
+        mem.write_i16::<LittleEndian>(addr, val)
     }
 }

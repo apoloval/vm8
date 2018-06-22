@@ -13,6 +13,7 @@ impl<M: Memory<Addr=u16>> Context for CPU<M> {
     fn regs(&self) -> &Registers { &self.regs }
     fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
     fn mem(&self) -> &M { &self.mem }
+    fn mem_mut(&mut self) -> &mut M { &mut self.mem }
 }
 
 impl<M: Memory<Addr=u16>> Decoder for CPU<M> {
