@@ -1,5 +1,5 @@
 use super::data::Data;
-use super::inst::Inst;
+use super::inst::{Context, Inst};
 use super::ops::{Dest, Source};
 use super::regs::Registers;
 
@@ -7,13 +7,14 @@ pub struct CPU {
     regs: Registers,
 }
 
+impl Context for CPU {
+    fn regs(&self) -> &Registers { &self.regs }
+    fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
+}
+
 impl CPU {
-    pub fn exec<T: Data>(&mut self, inst: &Inst<T>) {
-        match inst {
-            Inst::Inc(dst) => self.exec_inc(dst),
-            Inst::Nop => self.exec_nop(),
-            Inst::Load(dst, src) => self.exec_load(dst, src),
-        }
+    pub fn exec<I: Inst>(&mut self, inst: I) {
+        inst.exec(self)
     }
 
     fn exec_inc<T: Data>(&mut self, dst: &Dest<T>) {
