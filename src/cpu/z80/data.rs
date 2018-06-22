@@ -1,6 +1,9 @@
 use std::ops::Add;
 
-use super::regs::{Reg8, Reg16, Registers};
+use byteorder::LittleEndian;
+
+use bus::Memory;
+use cpu::z80::regs::{Reg8, Reg16, Registers};
 
 pub trait Data {
     type Reg: Copy;
@@ -9,6 +12,7 @@ pub trait Data {
     fn unit() -> Self::Value;
     fn read_reg(regs: &Registers, reg: Self::Reg) -> Self::Value;
     fn write_reg(regs: &mut Registers, reg: Self::Reg, val: Self::Value);
+    fn read_mem<M: Memory<Addr=u16>>(mem: &M, addr: u16) -> Self::Value;
 
     fn inc(v: Self::Value) -> Self::Value { v + Self::unit() }
 }
@@ -29,6 +33,10 @@ impl Data for Byte {
             Reg8::D => (regs.de >> 8) as i8,
             Reg8::E => (regs.de) as i8,
         }
+    }
+
+    fn read_mem<M: Memory<Addr=u16>>(mem: &M, addr: u16) -> i8 {
+        mem.read_i8(addr)
     }
 
     fn write_reg(regs: &mut Registers, reg: Reg8, val: i8) {
@@ -56,6 +64,10 @@ impl Data for Word {
             Reg16::BC => regs.bc,
             Reg16::DE => regs.de,
         }
+    }
+
+    fn read_mem<M: Memory<Addr=u16>>(mem: &M, addr: u16) -> i16 {
+        mem.read_i16::<LittleEndian>(addr)
     }
 
     fn write_reg(regs: &mut Registers, reg: Reg16, val: i16) {

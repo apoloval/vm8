@@ -1,5 +1,6 @@
 extern crate byteorder;
 
+pub mod bus;
 pub mod cpu;
 
 #[cfg(test)]
