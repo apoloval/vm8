@@ -2,8 +2,8 @@ use std::io;
 
 use byteorder::{ReadBytesExt, LittleEndian};
 
-use super::data::Data;
-use super::regs::Registers;
+use super::data::{Data, Word, Byte};
+use super::regs::{Reg8, Reg16, Registers};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
@@ -13,34 +13,34 @@ pub trait Context {
 
 // Src defines a source operand of a instruction
 pub enum Src<T: Data> {
-    Literal(T::Value),
-    Register(T::Reg),
+    Liter(T::Value),
+    Reg(T::Reg),
 }
 
 impl<T: Data> Src<T> {
     pub fn read<C: Context>(&self, c: &C) -> T::Value {
         match self {
-            Src::Literal(v) => *v,
-            Src::Register(r) => T::read_reg(c.regs(), *r),
+            Src::Liter(v) => *v,
+            Src::Reg(r) => T::read_reg(c.regs(), *r),
         }
     }
 }
 
 // Dest defines a destination operand of a instruction
 pub enum Dest<T: Data> {
-    Register(T::Reg),
+    Reg(T::Reg),
 }
 
 impl<T: Data> Dest<T> {
     pub fn read<C: Context>(&self, c: &C) -> T::Value {
         match self {
-            Dest::Register(r) => T::read_reg(c.regs(), *r),
+            Dest::Reg(r) => T::read_reg(c.regs(), *r),
         }
     }
 
     pub fn write<C: Context>(&self, c: &mut C, val: T::Value) {
         match self {
-            Dest::Register(r) => T::write_reg(c.regs_mut(), *r, val),
+            Dest::Reg(r) => T::write_reg(c.regs_mut(), *r, val),
         }
     }
 }
@@ -84,8 +84,13 @@ pub trait Decoder {
     fn decode<R: io::Read>(&mut self, input: &mut R) -> io::Result<()> {
         let opcode = input.read_u8()?;
         match opcode {
-            0x00 => { self.handle(&Nop{}); Ok({}) },
+            0x00 => self.handle(&Nop{}),
+            0x01 => self.handle(&Load::<Word>(
+                Dest::Reg(Reg16::BC), 
+                Src::Liter(input.read_i16::<LittleEndian>()?),
+            )),
             _ => unimplemented!("decoding of given opcode is not implemented"),
-        }
+        };
+        Ok({})
     }
 }

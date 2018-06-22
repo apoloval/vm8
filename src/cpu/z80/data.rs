@@ -32,7 +32,13 @@ impl Data for Byte {
     }
 
     fn write_reg(regs: &mut Registers, reg: Reg8, val: i8) {
-        unimplemented!()
+        match reg {
+            Reg8::A => regs.af = (regs.af & 0x00ff) | ((val as i16) << 8),
+            Reg8::B => regs.bc = (regs.bc & 0x00ff) | ((val as i16) << 8),
+            Reg8::C => regs.bc = (regs.bc & 0xff00) | (val as i16),
+            Reg8::D => regs.de = (regs.de & 0x00ff) | ((val as i16) << 8),
+            Reg8::E => regs.de = (regs.de & 0xff00) | (val as i16),
+        }
     }
 }
 
@@ -45,10 +51,18 @@ impl Data for Word {
     fn unit() -> i16 { return 1 }
 
     fn read_reg(regs: &Registers, reg: Reg16) -> i16 {
-        unimplemented!()
+        match reg {
+            Reg16::AF => regs.af,
+            Reg16::BC => regs.bc,
+            Reg16::DE => regs.de,
+        }
     }
 
     fn write_reg(regs: &mut Registers, reg: Reg16, val: i16) {
-        unimplemented!()
+        match reg {
+            Reg16::AF => regs.af = val,
+            Reg16::BC => regs.bc = val,
+            Reg16::DE => regs.de = val,
+        }
     }
 }
