@@ -29,12 +29,17 @@ impl<T: Data> Src<T> {
 // Dest defines a destination operand of a instruction
 pub enum Dest<T: Data> {
     Reg(T::Reg),
+    IndReg(Reg16),
 }
 
 impl<T: Data> Dest<T> {
     pub fn read<C: Context>(&self, c: &C) -> T::Value {
         match self {
             Dest::Reg(r) => T::read_reg(c.regs(), *r),
+            Dest::IndReg(r) => {
+                let addr = Word::read_reg(c.regs(), *r);
+                unimplemented!()
+            },
         }
     }
 
