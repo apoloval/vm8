@@ -1,0 +1,6 @@
+[package]
+name = "hemu"
+version = "0.1.0"
+authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
+
+[dependencies]
