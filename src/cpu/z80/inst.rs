@@ -4,7 +4,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 
 use ::bus::Memory;
 use cpu::z80::data::{Data, Word, Byte};
-use cpu::z80::regs::{Reg8, Reg16, Registers};
+use cpu::z80::regs::{Reg8, Reg16, Register, Registers};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
@@ -25,7 +25,7 @@ impl<T: Data> Src<T> {
     pub fn read<C: Context>(&self, c: &C) -> T::Value {
         match self {
             Src::Liter(v) => *v,
-            Src::Reg(r) => T::read_reg(c.regs(), *r),
+            Src::Reg(r) => r.read(c.regs()),
         }
     }
 }
@@ -39,9 +39,9 @@ pub enum Dest<T: Data> {
 impl<T: Data> Dest<T> {
     pub fn read<C: Context>(&self, c: &C) -> T::Value {
         match self {
-            Dest::Reg(r) => T::read_reg(c.regs(), *r),
+            Dest::Reg(r) => r.read(c.regs()),
             Dest::IndReg(r) => {
-                let addr = Word::read_reg(c.regs(), *r) as u16;
+                let addr = r.read(c.regs()) as u16;
                 T::read_mem(c.mem(), addr)
             },
         }
@@ -49,9 +49,9 @@ impl<T: Data> Dest<T> {
 
     pub fn write<C: Context>(&self, c: &mut C, val: T::Value) {
         match self {
-            Dest::Reg(r) => T::write_reg(c.regs_mut(), *r, val),
+            Dest::Reg(r) => r.write(c.regs_mut(), val),
             Dest::IndReg(r) => {
-                let addr = Word::read_reg(c.regs(), *r) as u16;
+                let addr = r.read(c.regs()) as u16;
                 T::write_mem(c.mem_mut(), addr, val)
             },
         }
