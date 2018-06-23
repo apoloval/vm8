@@ -5,3 +5,4 @@ authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
 
 [dependencies]
 byteorder = "1.2"
+num-traits = "0.2"

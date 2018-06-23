@@ -1,4 +1,5 @@
 extern crate byteorder;
+extern crate num_traits;
 
 pub mod bus;
 pub mod cpu;

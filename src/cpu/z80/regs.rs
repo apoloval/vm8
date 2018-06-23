@@ -60,11 +60,11 @@ pub struct Registers {
 
 impl Registers {
     pub fn read<T: Data>(&self, reg: T::Reg) -> T::Value {
-        T::read_reg(self, reg)
+        reg.read(self)
     }
 
     pub fn write<T: Data>(&mut self, reg: T::Reg, val: T::Value) {
-        T::write_reg(self, reg, val)
+        reg.write(self, val)
     }
 
     pub fn inc_pc(&mut self, val: u16) {
