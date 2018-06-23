@@ -82,25 +82,27 @@ pub enum Inst {
 impl Inst {
     pub fn exec<C: Context>(&self, ctx: &mut C) {
         match self {
-            Inst::Nop => {
-                ctx.regs_mut().inc_pc(1)
-            },
-            Inst::Inc8(dst) => {
-                let val = dst.read(ctx);
-                dst.write(ctx, val + 1);
-                ctx.regs_mut().inc_pc(1)
-            },
-            Inst::Load8(dst, src) => {
-                let val = src.read(ctx);
-                dst.write(ctx, val);
-                ctx.regs_mut().inc_pc(1)
-            },
-            Inst::Load16(dst, src) => {
-                let val = src.read(ctx);
-                dst.write(ctx, val);
-                ctx.regs_mut().inc_pc(1)
-            },
+            Inst::Nop => Self::exec_nop(ctx),
+            Inst::Inc8(dst) => Self::exec_inc(ctx, dst),
+            Inst::Load8(dst, src) => Self::exec_load(ctx, dst, src),
+            Inst::Load16(dst, src) => Self::exec_load(ctx, dst, src),
         }
+    }
+
+    fn exec_nop<C: Context>(ctx: &mut C) {
+        ctx.regs_mut().inc_pc(1)
+    }
+
+    fn exec_inc<C: Context, D: Data>(ctx: &mut C, dst: &Dest<D>) {
+        let val = dst.read(ctx);
+        dst.write(ctx, D::inc(val));
+        ctx.regs_mut().inc_pc(1)
+    }
+
+    fn exec_load<C: Context, D: Data>(ctx: &mut C, dst: &Dest<D>, src: &Src<D>) {
+        let val = src.read(ctx);
+        dst.write(ctx, val);
+        ctx.regs_mut().inc_pc(1)
     }
 }
 
