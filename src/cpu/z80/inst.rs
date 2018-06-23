@@ -2,7 +2,7 @@ use std::io;
 
 use byteorder::{ReadBytesExt, LittleEndian};
 
-use ::bus::Memory;
+use bus::{Memory, MemoryItem};
 use cpu::z80::data::{Data, Word, Byte};
 use cpu::z80::regs::{Reg8, Reg16, Register, Registers};
 
@@ -42,7 +42,7 @@ impl<T: Data> Dest<T> {
             Dest::Reg(r) => r.read(c.regs()),
             Dest::IndReg(r) => {
                 let addr = r.read(c.regs()) as u16;
-                T::read_mem(c.mem(), addr)
+                T::Value::mem_read(c.mem(), addr)
             },
         }
     }
@@ -52,7 +52,7 @@ impl<T: Data> Dest<T> {
             Dest::Reg(r) => r.write(c.regs_mut(), val),
             Dest::IndReg(r) => {
                 let addr = r.read(c.regs()) as u16;
-                T::write_mem(c.mem_mut(), addr, val)
+                T::Value::mem_write(c.mem_mut(), addr, val)
             },
         }
     }
