@@ -15,14 +15,25 @@ pub trait Context {
     fn mem_mut(&mut self) -> &mut Self::Mem;
 }
 
-// Src defines a source operand of a instruction
-pub enum Src<T: Data> {
-    Liter(T::Value),
-    Reg(T::Reg),
+pub trait OpRead<T> {
+    fn read<C: Context>(&self, c: &C) -> T;
 }
 
-impl<T: Data> Src<T> {
-    pub fn read<C: Context>(&self, c: &C) -> T::Value {
+pub trait OpWrite<T> {
+    fn write<C: Context>(&self, c: &mut C, val: T);
+}
+
+// Src defines a source operand of a instruction
+pub enum Src<D: Data> {
+    Liter(D::Value),
+    Reg(D::Reg),
+}
+
+type Src8 = Src<Byte>;
+type Src16 = Src<Word>;
+
+impl<D: Data> Src<D> {
+    fn read<C: Context>(&self, c: &C) -> D::Value {
         match self {
             Src::Liter(v) => *v,
             Src::Reg(r) => r.read(c.regs()),
@@ -31,83 +42,81 @@ impl<T: Data> Src<T> {
 }
 
 // Dest defines a destination operand of a instruction
-pub enum Dest<T: Data> {
-    Reg(T::Reg),
+pub enum Dest<D: Data> {
+    Reg(D::Reg),
     IndReg(Reg16),
 }
 
-impl<T: Data> Dest<T> {
-    pub fn read<C: Context>(&self, c: &C) -> T::Value {
+impl<D: Data> Dest<D> {
+    fn read<C: Context>(&self, c: &C) -> D::Value {
         match self {
             Dest::Reg(r) => r.read(c.regs()),
             Dest::IndReg(r) => {
                 let addr = r.read(c.regs()) as u16;
-                T::Value::mem_read(c.mem(), addr)
+                D::Value::mem_read(c.mem(), addr)
             },
         }
     }
 
-    pub fn write<C: Context>(&self, c: &mut C, val: T::Value) {
+    fn write<C: Context>(&self, c: &mut C, val: D::Value) {
         match self {
             Dest::Reg(r) => r.write(c.regs_mut(), val),
             Dest::IndReg(r) => {
                 let addr = r.read(c.regs()) as u16;
-                T::Value::mem_write(c.mem_mut(), addr, val)
+                D::Value::mem_write(c.mem_mut(), addr, val)
             },
         }
     }
 }
 
-// Inst trait describes a executable instruction over a context.
-pub trait Inst {
-    fn exec<C: Context>(&self, ctx: &mut C);
+type Dest8 = Dest<Byte>;
+type Dest16 = Dest<Word>;
+
+pub enum Inst {
+    Nop,
+    Inc8(Dest8),
+    Load8(Dest8, Src8),
+    Load16(Dest16, Src16),
 }
 
-pub struct Nop{}
-
-impl Inst for Nop {
-    fn exec<C: Context>(&self, ctx: &mut C) {
-        ctx.regs_mut().inc_pc(1)
+impl Inst {
+    pub fn exec<C: Context>(&self, ctx: &mut C) {
+        match self {
+            Inst::Nop => {
+                ctx.regs_mut().inc_pc(1)
+            },
+            Inst::Inc8(dst) => {
+                let val = dst.read(ctx);
+                dst.write(ctx, val + 1);
+                ctx.regs_mut().inc_pc(1)
+            },
+            Inst::Load8(dst, src) => {
+                let val = src.read(ctx);
+                dst.write(ctx, val);
+                ctx.regs_mut().inc_pc(1)
+            },
+            Inst::Load16(dst, src) => {
+                let val = src.read(ctx);
+                dst.write(ctx, val);
+                ctx.regs_mut().inc_pc(1)
+            },
+        }
     }
 }
 
-pub struct Inc<T: Data>(Dest<T>);
-
-impl<T: Data> Inst for Inc<T> {
-    fn exec<C: Context>(&self, ctx: &mut C) {
-        let val = self.0.read(ctx);
-        self.0.write(ctx, T::inc(val));
-        ctx.regs_mut().inc_pc(1)
-    }
-}
-
-pub struct Load<T: Data>(Dest<T>, Src<T>);
-
-impl<T: Data> Inst for Load<T> {
-    fn exec<C: Context>(&self, ctx: &mut C) {
-        let val = self.1.read(ctx);
-        self.0.write(ctx, val);
-        ctx.regs_mut().inc_pc(1)
-    }
-}
-
-pub trait Decoder {
-    fn handle<I: Inst>(&mut self, i: &I);
-
-    fn decode<R: io::Read>(&mut self, input: &mut R) -> io::Result<()> {
-        let opcode = input.read_u8()?;
-        match opcode {
-            0x00 => self.handle(&Nop{}),
-            0x01 => self.handle(&Load::<Word>(
-                Dest::Reg(Reg16::BC), 
-                Src::Liter(input.read_i16::<LittleEndian>()?),
-            )),
-            0x02 => self.handle(&Load::<Byte>(
-                Dest::IndReg(Reg16::BC), 
-                Src::Reg(Reg8::A),
-            )),
-            _ => unimplemented!("decoding of given opcode is not implemented"),
-        };
-        Ok({})
-    }
+fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
+    let opcode = input.read_u8()?;
+    let inst = match opcode {
+        0x00 => Inst::Nop,
+        0x01 => Inst::Load16(
+            Dest::Reg(Reg16::BC), 
+            Src::Liter(input.read_i16::<LittleEndian>()?),
+        ),
+        0x02 => Inst::Load8(
+            Dest::IndReg(Reg16::BC), 
+            Src::Reg(Reg8::A),
+        ),
+        _ => unimplemented!("decoding of given opcode is not implemented"),
+    };
+    Ok(inst)
 }

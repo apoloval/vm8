@@ -1,5 +1,3 @@
-use super::data::{Data};
-
 pub trait Register<T> {
     fn read(&self, regs: &Registers) -> T;
     fn write(&self, regs: &mut Registers, val: T);
@@ -59,14 +57,6 @@ pub struct Registers {
 }
 
 impl Registers {
-    pub fn read<T: Data>(&self, reg: T::Reg) -> T::Value {
-        reg.read(self)
-    }
-
-    pub fn write<T: Data>(&mut self, reg: T::Reg, val: T::Value) {
-        reg.write(self, val)
-    }
-
     pub fn inc_pc(&mut self, val: u16) {
         self.pc += val
     }

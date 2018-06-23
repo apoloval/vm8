@@ -1,6 +1,7 @@
 use bus::Memory;
 
-use cpu::z80::inst::{Context, Decoder, Inst};
+use cpu::z80::Result;
+use cpu::z80::inst::Context;
 use cpu::z80::regs::Registers;
 
 pub struct CPU<M: Memory<Addr=u16>> {
@@ -16,8 +17,8 @@ impl<M: Memory<Addr=u16>> Context for CPU<M> {
     fn mem_mut(&mut self) -> &mut M { &mut self.mem }
 }
 
-impl<M: Memory<Addr=u16>> Decoder for CPU<M> {
-    fn handle<I: Inst>(&mut self, inst: &I) {
-        inst.exec(self)
+impl<M: Memory<Addr=u16>> CPU<M> {
+    fn exec_step(&mut self) -> Result<()> {
+        unimplemented!()
     }
 }
