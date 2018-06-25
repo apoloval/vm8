@@ -24,6 +24,7 @@ pub trait OpWrite<T> {
 }
 
 // Src defines a source operand of a instruction
+#[derive(Debug, PartialEq)]
 pub enum Src<D: Data> {
     Liter(D::Value),
     Reg(D::Reg),
@@ -42,6 +43,7 @@ impl<D: Data> Src<D> {
 }
 
 // Dest defines a destination operand of a instruction
+#[derive(Debug, PartialEq)]
 pub enum Dest<D: Data> {
     Reg(D::Reg),
     IndReg(Reg16),
@@ -75,6 +77,7 @@ type Dest16 = Dest<Word>;
 type InstSize = usize;
 type InstTime = usize;
 
+#[derive(Debug, PartialEq)]
 pub struct Inst {
     action: Action,
     size: InstSize,
@@ -117,6 +120,7 @@ impl Inst {
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Action {
     Nop,
     Inc8(Dest8),
@@ -148,5 +152,59 @@ impl Action {
         let val = src.read(ctx);
         dst.write(ctx, val);
         ctx.regs_mut().inc_pc(size)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use cpu::z80::regs::{Reg16};
+    use super::*;
+
+    #[test]
+    fn encode_nop() {
+        test_encode(
+            vec![0x00],
+            Inst { 
+                action: Action::Nop, 
+                size: 1, 
+                time: 4,
+            },
+        );
+    }
+        
+    #[test]
+    fn encode_load_bc_liter() {
+        test_encode(
+            vec![0x01, 0x34, 0x12],
+            Inst { 
+                action: Action::Load16(
+                    Dest::Reg(Reg16::BC), 
+                    Src::Liter(0x1234),
+                ), 
+                size: 3, 
+                time: 10,
+            },
+        );
+    }
+        
+    #[test]
+    fn encode_load_ind_bc_a() {
+        test_encode(
+            vec![0x02],
+            Inst { 
+                action: Action::Load8(
+                    Dest::IndReg(Reg16::BC), 
+                    Src::Reg(Reg8::A),
+                ), 
+                size: 1, 
+                time: 7,
+            },
+        );
+    }
+
+    fn test_encode(input: Vec<u8>, expected: Inst) {
+        let mut read: &[u8] = &input;
+        let given = Inst::decode(&mut read).unwrap();
+        assert_eq!(expected, given);
     }
 }

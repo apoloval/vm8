@@ -5,7 +5,7 @@ pub trait Register<T> {
     fn write(&self, regs: &mut Registers, val: T);
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Reg8 { A, B, C, D, E }
 
 impl Register<u8> for Reg8 {
@@ -30,7 +30,7 @@ impl Register<u8> for Reg8 {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Reg16 { AF, BC, DE }
 
 impl Register<u16> for Reg16 {
