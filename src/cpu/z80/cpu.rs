@@ -20,12 +20,12 @@ impl<M: Memory16> Context for CPU<M> {
 
 impl<M: Memory16> CPU<M> {
     pub fn exec_step(&mut self) -> Result<()> {
-        let (inst, decbytes) = self.decode_inst();
-        inst.exec(self, decbytes);
+        let inst = self.decode_inst();
+        inst.exec(self);
         Ok({})
     }
 
-    pub fn decode_inst(&mut self) -> (Inst, usize) {
+    pub fn decode_inst(&mut self) -> Inst {
         let mut mread = bus::read_from(&self.mem, self.regs.pc());
         Inst::decode(&mut mread).expect("memory read should never fail")
     }

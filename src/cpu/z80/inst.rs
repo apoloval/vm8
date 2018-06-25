@@ -72,55 +72,81 @@ impl<D: Data> Dest<D> {
 type Dest8 = Dest<Byte>;
 type Dest16 = Dest<Word>;
 
-pub enum Inst {
+type InstSize = usize;
+type InstTime = usize;
+
+pub struct Inst {
+    action: Action,
+    size: InstSize,
+    time: InstTime,
+}
+
+impl Inst {
+    pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {
+        self.action.exec(ctx, self.size);
+        self.time
+    }
+
+    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
+        let opcode = input.read_u8()?;
+        let inst = match opcode {
+            0x00 => Inst {
+                action: Action::Nop, 
+                size: 1, 
+                time: 4,
+            },
+            0x01 => Inst {
+                action: Action::Load16(
+                    Dest::Reg(Reg16::BC), 
+                    Src::Liter(input.read_u16::<LittleEndian>()?),
+                ), 
+                size: 3,
+                time: 10,
+            },
+            0x02 => Inst {
+                action: Action::Load8(
+                    Dest::IndReg(Reg16::BC), 
+                    Src::Reg(Reg8::A),
+                ), 
+                size: 1,
+                time: 7,
+            },
+            _ => unimplemented!("decoding of given opcode is not implemented"),
+        };
+        Ok(inst)
+    }
+}
+
+pub enum Action {
     Nop,
     Inc8(Dest8),
     Load8(Dest8, Src8),
     Load16(Dest16, Src16),
 }
 
-type DecodedBytes = usize;
-
-impl Inst {
-    pub fn exec<C: Context>(&self, ctx: &mut C, decbytes: DecodedBytes) {
+impl Action {
+    pub fn exec<C: Context>(&self, ctx: &mut C, size: InstSize) {
         match self {
-            Inst::Nop => Self::exec_nop(ctx, decbytes),
-            Inst::Inc8(dst) => Self::exec_inc(ctx, decbytes, dst),
-            Inst::Load8(dst, src) => Self::exec_load(ctx, decbytes, dst, src),
-            Inst::Load16(dst, src) => Self::exec_load(ctx, decbytes, dst, src),
+            Action::Nop => Self::exec_nop(ctx, size),
+            Action::Inc8(dst) => Self::exec_inc(ctx, size, dst),
+            Action::Load8(dst, src) => Self::exec_load(ctx, size, dst, src),
+            Action::Load16(dst, src) => Self::exec_load(ctx, size, dst, src),
         }
     }
 
-    fn exec_nop<C: Context>(ctx: &mut C, decbytes: DecodedBytes) {
-        ctx.regs_mut().inc_pc(decbytes)
+    fn exec_nop<C: Context>(ctx: &mut C, size: InstSize) {
+        ctx.regs_mut().inc_pc(size)
     }
 
-    fn exec_inc<C: Context, D: Data>(ctx: &mut C, decbytes: DecodedBytes, dst: &Dest<D>) {
+    fn exec_inc<C: Context, D: Data>(ctx: &mut C, size: InstSize, dst: &Dest<D>) {
         let val = dst.read(ctx);
         dst.write(ctx, D::inc(val));
-        ctx.regs_mut().inc_pc(decbytes)
+        ctx.regs_mut().inc_pc(size)
     }
 
-    fn exec_load<C: Context, D: Data>(ctx: &mut C, decbytes: DecodedBytes, dst: &Dest<D>, src: &Src<D>) {
+    fn exec_load<C: Context, D: Data>(ctx: &mut C, size: InstSize, dst: &Dest<D>, src: &Src<D>) {
         let val = src.read(ctx);
         dst.write(ctx, val);
-        ctx.regs_mut().inc_pc(decbytes)
-    }
-
-    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<(Inst, DecodedBytes)> {
-        let opcode = input.read_u8()?;
-        let (inst, decbytes) = match opcode {
-            0x00 => (Inst::Nop, 1),
-            0x01 => (Inst::Load16(
-                Dest::Reg(Reg16::BC), 
-                Src::Liter(input.read_u16::<LittleEndian>()?),
-            ), 3),
-            0x02 => (Inst::Load8(
-                Dest::IndReg(Reg16::BC), 
-                Src::Reg(Reg8::A),
-            ), 1),
-            _ => unimplemented!("decoding of given opcode is not implemented"),
-        };
-        Ok((inst, decbytes))
+        ctx.regs_mut().inc_pc(size)
     }
 }
