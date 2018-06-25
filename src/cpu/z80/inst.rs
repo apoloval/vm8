@@ -79,46 +79,48 @@ pub enum Inst {
     Load16(Dest16, Src16),
 }
 
+type DecodedBytes = usize;
+
 impl Inst {
-    pub fn exec<C: Context>(&self, ctx: &mut C) {
+    pub fn exec<C: Context>(&self, ctx: &mut C, decbytes: DecodedBytes) {
         match self {
-            Inst::Nop => Self::exec_nop(ctx),
-            Inst::Inc8(dst) => Self::exec_inc(ctx, dst),
-            Inst::Load8(dst, src) => Self::exec_load(ctx, dst, src),
-            Inst::Load16(dst, src) => Self::exec_load(ctx, dst, src),
+            Inst::Nop => Self::exec_nop(ctx, decbytes),
+            Inst::Inc8(dst) => Self::exec_inc(ctx, decbytes, dst),
+            Inst::Load8(dst, src) => Self::exec_load(ctx, decbytes, dst, src),
+            Inst::Load16(dst, src) => Self::exec_load(ctx, decbytes, dst, src),
         }
     }
 
-    fn exec_nop<C: Context>(ctx: &mut C) {
-        ctx.regs_mut().inc_pc(1)
+    fn exec_nop<C: Context>(ctx: &mut C, decbytes: DecodedBytes) {
+        ctx.regs_mut().inc_pc(decbytes)
     }
 
-    fn exec_inc<C: Context, D: Data>(ctx: &mut C, dst: &Dest<D>) {
+    fn exec_inc<C: Context, D: Data>(ctx: &mut C, decbytes: DecodedBytes, dst: &Dest<D>) {
         let val = dst.read(ctx);
         dst.write(ctx, D::inc(val));
-        ctx.regs_mut().inc_pc(1)
+        ctx.regs_mut().inc_pc(decbytes)
     }
 
-    fn exec_load<C: Context, D: Data>(ctx: &mut C, dst: &Dest<D>, src: &Src<D>) {
+    fn exec_load<C: Context, D: Data>(ctx: &mut C, decbytes: DecodedBytes, dst: &Dest<D>, src: &Src<D>) {
         let val = src.read(ctx);
         dst.write(ctx, val);
-        ctx.regs_mut().inc_pc(1)
+        ctx.regs_mut().inc_pc(decbytes)
     }
-    
-    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
+
+    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<(Inst, DecodedBytes)> {
         let opcode = input.read_u8()?;
-        let inst = match opcode {
-            0x00 => Inst::Nop,
-            0x01 => Inst::Load16(
+        let (inst, decbytes) = match opcode {
+            0x00 => (Inst::Nop, 1),
+            0x01 => (Inst::Load16(
                 Dest::Reg(Reg16::BC), 
                 Src::Liter(input.read_u16::<LittleEndian>()?),
-            ),
-            0x02 => Inst::Load8(
+            ), 3),
+            0x02 => (Inst::Load8(
                 Dest::IndReg(Reg16::BC), 
                 Src::Reg(Reg8::A),
-            ),
+            ), 1),
             _ => unimplemented!("decoding of given opcode is not implemented"),
         };
-        Ok(inst)
+        Ok((inst, decbytes))
     }
 }

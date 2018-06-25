@@ -63,7 +63,7 @@ impl Registers {
         return Addr16::from(self.pc)
     }
 
-    pub fn inc_pc(&mut self, val: u16) {
-        self.pc += val
+    pub fn inc_pc(&mut self, val: usize) {
+        self.pc += val as u16
     }
 }
