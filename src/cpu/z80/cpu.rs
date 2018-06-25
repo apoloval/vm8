@@ -1,3 +1,6 @@
+use std::time::{Duration, Instant};
+use std::thread;
+
 use bus::Memory16;
 
 use bus;
@@ -8,6 +11,7 @@ use cpu::z80::regs::Registers;
 pub struct CPU<M: Memory16> {
     mem: M,
     regs: Registers,
+    clock_period: Duration,
 }
 
 impl<M: Memory16> Context for CPU<M> {
@@ -20,8 +24,12 @@ impl<M: Memory16> Context for CPU<M> {
 
 impl<M: Memory16> CPU<M> {
     pub fn exec_step(&mut self) -> Result<()> {
+        let t0 = Instant::now();
         let inst = self.decode_inst();
-        inst.exec(self);
+        let cycles = inst.exec(self);
+        let t1 = t0 + (self.clock_period * cycles as u32);
+        let wait = t1 - Instant::now();
+        thread::sleep(wait);
         Ok({})
     }
 
