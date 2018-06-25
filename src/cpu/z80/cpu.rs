@@ -2,7 +2,6 @@ use bus::Memory16;
 
 use bus;
 use cpu::z80::Result;
-use cpu::z80::inst;
 use cpu::z80::inst::{Context, Inst};
 use cpu::z80::regs::Registers;
 
@@ -28,6 +27,6 @@ impl<M: Memory16> CPU<M> {
 
     pub fn decode_inst(&mut self) -> Inst {
         let mut mread = bus::read_from(&self.mem, self.regs.pc());
-        inst::decode(&mut mread).expect("memory read should never fail")
+        Inst::decode(&mut mread).expect("memory read should never fail")
     }
 }

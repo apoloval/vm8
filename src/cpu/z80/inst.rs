@@ -104,21 +104,21 @@ impl Inst {
         dst.write(ctx, val);
         ctx.regs_mut().inc_pc(1)
     }
-}
-
-pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
-    let opcode = input.read_u8()?;
-    let inst = match opcode {
-        0x00 => Inst::Nop,
-        0x01 => Inst::Load16(
-            Dest::Reg(Reg16::BC), 
-            Src::Liter(input.read_u16::<LittleEndian>()?),
-        ),
-        0x02 => Inst::Load8(
-            Dest::IndReg(Reg16::BC), 
-            Src::Reg(Reg8::A),
-        ),
-        _ => unimplemented!("decoding of given opcode is not implemented"),
-    };
-    Ok(inst)
+    
+    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
+        let opcode = input.read_u8()?;
+        let inst = match opcode {
+            0x00 => Inst::Nop,
+            0x01 => Inst::Load16(
+                Dest::Reg(Reg16::BC), 
+                Src::Liter(input.read_u16::<LittleEndian>()?),
+            ),
+            0x02 => Inst::Load8(
+                Dest::IndReg(Reg16::BC), 
+                Src::Reg(Reg8::A),
+            ),
+            _ => unimplemented!("decoding of given opcode is not implemented"),
+        };
+        Ok(inst)
+    }
 }
