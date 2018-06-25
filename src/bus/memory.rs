@@ -38,32 +38,32 @@ pub trait MemoryItem<O: ByteOrder> {
     fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: Self);
 }
 
-impl<O: ByteOrder> MemoryItem<O> for i8 {
-    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> i8 {
+impl<O: ByteOrder> MemoryItem<O> for u8 {
+    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> u8 {
         let mut buf = [0];
         mem.read(addr, &mut buf);
-        buf[0] as i8
+        buf[0]
     }
 
-    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: i8) {
-        let buf = [val as u8];
+    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: u8) {
+        let buf = [val];
         mem.write(addr, &buf);
     }
 }
 
-impl<O: ByteOrder> MemoryItem<O> for i16 {
-    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> i16 {
+impl<O: ByteOrder> MemoryItem<O> for u16 {
+    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> u16 {
         let mut buf = [0, 0];
         mem.read(addr, &mut buf);
         let mut rbuf: &[u8] = &buf;
-        rbuf.read_i16::<O>().unwrap()
+        rbuf.read_u16::<O>().unwrap()
     }
 
-    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: i16) {
+    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: u16) {
         let mut buf = [0, 0];
         {
             let mut wbuf: &mut [u8] = &mut buf;
-            wbuf.write_i16::<O>(val).unwrap();
+            wbuf.write_u16::<O>(val).unwrap();
         }
         mem.write(addr, &buf);
     }

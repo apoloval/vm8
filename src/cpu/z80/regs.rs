@@ -8,18 +8,18 @@ pub trait Register<T> {
 #[derive(Clone, Copy)]
 pub enum Reg8 { A, B, C, D, E }
 
-impl Register<i8> for Reg8 {
-    fn read(&self, regs: &Registers) -> i8 {
+impl Register<u8> for Reg8 {
+    fn read(&self, regs: &Registers) -> u8 {
         match self {
-            Reg8::A => (regs.af >> 8) as i8,
-            Reg8::B => (regs.bc >> 8) as i8,
-            Reg8::C => (regs.bc) as i8,
-            Reg8::D => (regs.de >> 8) as i8,
-            Reg8::E => (regs.de) as i8,
+            Reg8::A => (regs.af >> 8) as u8,
+            Reg8::B => (regs.bc >> 8) as u8,
+            Reg8::C => (regs.bc) as u8,
+            Reg8::D => (regs.de >> 8) as u8,
+            Reg8::E => (regs.de) as u8,
         }
     }
 
-    fn write(&self, regs: &mut Registers, val: i8) {
+    fn write(&self, regs: &mut Registers, val: u8) {
         match self {
             Reg8::A => regs.af = (regs.af & 0x00ff) | ((val as u16) << 8),
             Reg8::B => regs.bc = (regs.bc & 0x00ff) | ((val as u16) << 8),
@@ -33,20 +33,20 @@ impl Register<i8> for Reg8 {
 #[derive(Clone, Copy)]
 pub enum Reg16 { AF, BC, DE }
 
-impl Register<i16> for Reg16 {
-    fn read(&self, regs: &Registers) -> i16 {
+impl Register<u16> for Reg16 {
+    fn read(&self, regs: &Registers) -> u16 {
         match self {
-            Reg16::AF => regs.af as i16,
-            Reg16::BC => regs.bc as i16,
-            Reg16::DE => regs.de as i16,
+            Reg16::AF => regs.af,
+            Reg16::BC => regs.bc,
+            Reg16::DE => regs.de,
         }
     }
 
-    fn write(&self, regs: &mut Registers, val: i16) {
+    fn write(&self, regs: &mut Registers, val: u16) {
         match self {
-            Reg16::AF => regs.af = val as u16,
-            Reg16::BC => regs.bc = val as u16,
-            Reg16::DE => regs.de = val as u16,
+            Reg16::AF => regs.af = val,
+            Reg16::BC => regs.bc = val,
+            Reg16::DE => regs.de = val,
         }
     }
 }

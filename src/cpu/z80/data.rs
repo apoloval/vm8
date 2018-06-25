@@ -16,7 +16,7 @@ pub struct Byte;
 
 impl Data for Byte {
     type Ord = LittleEndian;
-    type Value = i8;
+    type Value = u8;
     type Reg = Reg8;
 }
 
@@ -24,6 +24,6 @@ pub struct Word;
 
 impl Data for Word {
     type Ord = LittleEndian;
-    type Value = i16;
+    type Value = u16;
     type Reg = Reg16;
 }

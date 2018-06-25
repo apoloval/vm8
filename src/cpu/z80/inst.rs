@@ -112,7 +112,7 @@ pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
         0x00 => Inst::Nop,
         0x01 => Inst::Load16(
             Dest::Reg(Reg16::BC), 
-            Src::Liter(input.read_i16::<LittleEndian>()?),
+            Src::Liter(input.read_u16::<LittleEndian>()?),
         ),
         0x02 => Inst::Load8(
             Dest::IndReg(Reg16::BC), 
