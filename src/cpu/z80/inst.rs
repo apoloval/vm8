@@ -106,7 +106,7 @@ impl Inst {
     }
 }
 
-fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
+pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
     let opcode = input.read_u8()?;
     let inst = match opcode {
         0x00 => Inst::Nop,

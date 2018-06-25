@@ -1,7 +1,9 @@
 use bus::Memory16;
 
+use bus;
 use cpu::z80::Result;
-use cpu::z80::inst::Context;
+use cpu::z80::inst;
+use cpu::z80::inst::{Context, Inst};
 use cpu::z80::regs::Registers;
 
 pub struct CPU<M: Memory16> {
@@ -18,7 +20,14 @@ impl<M: Memory16> Context for CPU<M> {
 }
 
 impl<M: Memory16> CPU<M> {
-    fn exec_step(&mut self) -> Result<()> {
-        unimplemented!()
+    pub fn exec_step(&mut self) -> Result<()> {
+        let inst = self.decode_inst();
+        inst.exec(self);
+        Ok({})
+    }
+
+    pub fn decode_inst(&mut self) -> Inst {
+        let mut mread = bus::read_from(&self.mem, self.regs.pc());
+        inst::decode(&mut mread).expect("memory read should never fail")
     }
 }

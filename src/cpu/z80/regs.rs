@@ -1,3 +1,5 @@
+use bus::Addr16;
+
 pub trait Register<T> {
     fn read(&self, regs: &Registers) -> T;
     fn write(&self, regs: &mut Registers, val: T);
@@ -57,6 +59,10 @@ pub struct Registers {
 }
 
 impl Registers {
+    pub fn pc(&self) -> Addr16 {
+        return Addr16::from(self.pc)
+    }
+
     pub fn inc_pc(&mut self, val: u16) {
         self.pc += val
     }
