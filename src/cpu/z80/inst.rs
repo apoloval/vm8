@@ -2,13 +2,13 @@ use std::io;
 
 use byteorder::{ReadBytesExt, LittleEndian};
 
-use bus::{Memory, MemoryItem};
+use bus::{Addr16, Memory16, MemoryItem};
 use cpu::z80::data::{Data, Word, Byte};
 use cpu::z80::regs::{Reg8, Reg16, Register, Registers};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
-    type Mem: Memory<Addr=u16>;
+    type Mem: Memory16;
     fn regs(&self) -> &Registers;
     fn regs_mut(&mut self) -> &mut Registers;
     fn mem(&self) -> &Self::Mem;
@@ -52,7 +52,7 @@ impl<D: Data> Dest<D> {
         match self {
             Dest::Reg(r) => r.read(c.regs()),
             Dest::IndReg(r) => {
-                let addr = r.read(c.regs()) as u16;
+                let addr = Addr16::from(r.read(c.regs()) as u16);
                 D::Value::mem_read(c.mem(), addr)
             },
         }
@@ -62,7 +62,7 @@ impl<D: Data> Dest<D> {
         match self {
             Dest::Reg(r) => r.write(c.regs_mut(), val),
             Dest::IndReg(r) => {
-                let addr = r.read(c.regs()) as u16;
+                let addr = Addr16::from(r.read(c.regs()) as u16);
                 D::Value::mem_write(c.mem_mut(), addr, val)
             },
         }
