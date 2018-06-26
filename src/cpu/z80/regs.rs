@@ -59,6 +59,10 @@ pub struct Registers {
 }
 
 impl Registers {
+    pub fn new() -> Registers {
+        Registers { af: 0, bc: 0, de: 0, pc: 0 }
+    }
+    
     pub fn pc(&self) -> Addr16 {
         return Addr16::from(self.pc)
     }
