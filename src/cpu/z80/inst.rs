@@ -74,84 +74,78 @@ impl<D: Data> Dest<D> {
 type Dest8 = Dest<Byte>;
 type Dest16 = Dest<Word>;
 
-type InstSize = usize;
-type InstTime = usize;
-
 #[derive(Debug, PartialEq)]
-pub struct Inst {
-    action: Action,
-    size: InstSize,
-    time: InstTime,
-}
-
-impl Inst {
-    pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {
-        self.action.exec(ctx, self.size);
-        self.time
-    }
-
-    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
-        let opcode = input.read_u8()?;
-        let inst = match opcode {
-            0x00 => Inst {
-                action: Action::Nop, 
-                size: 1, 
-                time: 4,
-            },
-            0x01 => Inst {
-                action: Action::Load16(
-                    Dest::Reg(Reg16::BC), 
-                    Src::Liter(input.read_u16::<LittleEndian>()?),
-                ), 
-                size: 3,
-                time: 10,
-            },
-            0x02 => Inst {
-                action: Action::Load8(
-                    Dest::IndReg(Reg16::BC), 
-                    Src::Reg(Reg8::A),
-                ), 
-                size: 1,
-                time: 7,
-            },
-            _ => unimplemented!("decoding of given opcode is not implemented"),
-        };
-        Ok(inst)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum Action {
+pub enum Inst {
     Nop,
     Inc8(Dest8),
     Load8(Dest8, Src8),
     Load16(Dest16, Src16),
 }
 
-impl Action {
-    pub fn exec<C: Context>(&self, ctx: &mut C, size: InstSize) {
+type InstSize = usize;
+type InstTime = usize;
+
+pub struct InstProps {
+    size: InstSize,
+    time: InstTime,
+}
+
+impl Inst {
+    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
+        let opcode = input.read_u8()?;
+        let inst = match opcode {
+            0x00 => Inst::Nop,
+            0x01 => Inst::Load16(
+                Dest::Reg(Reg16::BC), 
+                Src::Liter(input.read_u16::<LittleEndian>()?),
+            ), 
+            0x02 => Inst::Load8(
+                Dest::IndReg(Reg16::BC), 
+                Src::Reg(Reg8::A),
+            ), 
+            _ => unimplemented!("decoding of given opcode is not implemented"),
+        };
+        Ok(inst)
+    }
+
+    pub fn props(&self) -> InstProps {
         match self {
-            Action::Nop => Self::exec_nop(ctx, size),
-            Action::Inc8(dst) => Self::exec_inc(ctx, size, dst),
-            Action::Load8(dst, src) => Self::exec_load(ctx, size, dst, src),
-            Action::Load16(dst, src) => Self::exec_load(ctx, size, dst, src),
+            Inst::Nop => InstProps { size: 1, time: 4 },
+            Inst::Load16(Dest::Reg(Reg16::BC), Src::Liter(_)) => InstProps { size: 3, time: 10 },
+            Inst::Load8(Dest::IndReg(Reg16::BC), Src::Reg(Reg8::A)) => InstProps { size: 1, time: 7 },
+            _ => unimplemented!("props of given instruction is not implemented"),
         }
     }
 
-    fn exec_nop<C: Context>(ctx: &mut C, size: InstSize) {
-        ctx.regs_mut().inc_pc(size)
+    pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {
+        match self {
+            Inst::Nop => self.exec_nop(ctx),
+            Inst::Inc8(dst) => self.exec_inc(ctx, dst),
+            Inst::Load8(dst, src) => self.exec_load(ctx, dst, src),
+            Inst::Load16(dst, src) => self.exec_load(ctx, dst, src),
+        }
     }
 
-    fn exec_inc<C: Context, D: Data>(ctx: &mut C, size: InstSize, dst: &Dest<D>) {
+    fn exec_nop<C: Context>(&self, ctx: &mut C) -> InstTime {
+        let props = self.props();
+        ctx.regs_mut().inc_pc(props.size);
+        props.time
+    }
+
+    fn exec_inc<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>) -> InstTime {
+        let props = self.props();
         let val = dst.read(ctx);
         dst.write(ctx, D::inc(val));
-        ctx.regs_mut().inc_pc(size)
+        ctx.regs_mut().inc_pc(props.size);
+        props.time
     }
 
-    fn exec_load<C: Context, D: Data>(ctx: &mut C, size: InstSize, dst: &Dest<D>, src: &Src<D>) {
+    fn exec_load<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> InstTime {
+        let props = self.props();
         let val = src.read(ctx);
         dst.write(ctx, val);
-        ctx.regs_mut().inc_pc(size)
+        ctx.regs_mut().inc_pc(props.size);
+        props.time
     }
 }
 
@@ -164,11 +158,7 @@ mod test {
     fn encode_nop() {
         test_encode(
             vec![0x00],
-            Inst { 
-                action: Action::Nop, 
-                size: 1, 
-                time: 4,
-            },
+            Inst::Nop, 
         );
     }
         
@@ -176,14 +166,10 @@ mod test {
     fn encode_load_bc_liter() {
         test_encode(
             vec![0x01, 0x34, 0x12],
-            Inst { 
-                action: Action::Load16(
-                    Dest::Reg(Reg16::BC), 
-                    Src::Liter(0x1234),
-                ), 
-                size: 3, 
-                time: 10,
-            },
+            Inst::Load16(
+                Dest::Reg(Reg16::BC), 
+                Src::Liter(0x1234),
+            ), 
         );
     }
         
@@ -191,14 +177,10 @@ mod test {
     fn encode_load_ind_bc_a() {
         test_encode(
             vec![0x02],
-            Inst { 
-                action: Action::Load8(
-                    Dest::IndReg(Reg16::BC), 
-                    Src::Reg(Reg8::A),
-                ), 
-                size: 1, 
-                time: 7,
-            },
+            Inst::Load8(
+                Dest::IndReg(Reg16::BC), 
+                Src::Reg(Reg8::A),
+            ), 
         );
     }
 
