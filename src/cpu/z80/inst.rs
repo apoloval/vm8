@@ -155,38 +155,46 @@ mod test {
     use super::*;
 
     #[test]
-    fn encode_nop() {
-        test_encode(
-            vec![0x00],
-            Inst::Nop, 
-        );
-    }
-        
-    #[test]
-    fn encode_load_bc_liter() {
-        test_encode(
-            vec![0x01, 0x34, 0x12],
-            Inst::Load16(
-                Dest::Reg(Reg16::BC), 
-                Src::Liter(0x1234),
-            ), 
-        );
-    }
-        
-    #[test]
-    fn encode_load_ind_bc_a() {
-        test_encode(
-            vec![0x02],
-            Inst::Load8(
-                Dest::IndReg(Reg16::BC), 
-                Src::Reg(Reg8::A),
-            ), 
-        );
+    fn should_encode() {
+        let tests = [
+            EncodeTest {
+                what: "nop",
+                input: vec![0x00],
+                expected: Inst::Nop,
+            },
+            EncodeTest {
+                what: "load bc, 1234h",
+                input: vec![0x01, 0x34, 0x12],
+                expected: Inst::Load16(
+                    Dest::Reg(Reg16::BC), 
+                    Src::Liter(0x1234),
+                ), 
+            },
+            EncodeTest {
+                what: "load (bc), a",
+                input: vec![0x02],
+                expected: Inst::Load8(
+                    Dest::IndReg(Reg16::BC), 
+                    Src::Reg(Reg8::A),
+                ), 
+            },
+        ];
+        for test in &tests {
+            test.run();
+        }
     }
 
-    fn test_encode(input: Vec<u8>, expected: Inst) {
-        let mut read: &[u8] = &input;
-        let given = Inst::decode(&mut read).unwrap();
-        assert_eq!(expected, given);
+    struct EncodeTest {
+        what: &'static str,
+        input: Vec<u8>,
+        expected: Inst,
+    }
+
+    impl EncodeTest {
+        fn run(&self) {
+            let mut read: &[u8] = &self.input;
+            let given = Inst::decode(&mut read).unwrap();
+            assert_eq!(self.expected, given, "decoding instruction:Dest {}", self.what);
+        }
     }
 }
