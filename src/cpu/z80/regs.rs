@@ -13,34 +13,52 @@ pub enum Reg8 { A, B, C, D, E, H, L, IXH, IXL, IYH, IYL }
 impl Register<u8> for Reg8 {
     fn read(&self, regs: &Registers) -> u8 {
         match self {
-            Reg8::A => (regs.af >> 8) as u8,
-            Reg8::B => (regs.bc >> 8) as u8,
-            Reg8::C => (regs.bc) as u8,
-            Reg8::D => (regs.de >> 8) as u8,
-            Reg8::E => (regs.de) as u8,
-            Reg8::H => (regs.hl >> 8) as u8,
-            Reg8::L => (regs.hl) as u8,
-            Reg8::IXH => (regs.ix >> 8) as u8,
-            Reg8::IXL => (regs.ix) as u8,
-            Reg8::IYH => (regs.iy >> 8) as u8,
-            Reg8::IYL => (regs.iy) as u8,
+            Reg8::A => Self::read_h(&regs.af),
+            Reg8::B => Self::read_h(&regs.bc),
+            Reg8::C => Self::read_l(&regs.bc),
+            Reg8::D => Self::read_h(&regs.de),
+            Reg8::E => Self::read_l(&regs.de),
+            Reg8::H => Self::read_h(&regs.hl),
+            Reg8::L => Self::read_l(&regs.hl),
+            Reg8::IXH => Self::read_h(&regs.ix),
+            Reg8::IXL => Self::read_l(&regs.ix),
+            Reg8::IYH => Self::read_h(&regs.iy),
+            Reg8::IYL => Self::read_l(&regs.iy),
         }
     }
 
     fn write(&self, regs: &mut Registers, val: u8) {
         match self {
-            Reg8::A => regs.af = (regs.af & 0x00ff) | ((val as u16) << 8),
-            Reg8::B => regs.bc = (regs.bc & 0x00ff) | ((val as u16) << 8),
-            Reg8::C => regs.bc = (regs.bc & 0xff00) | (val as u16),
-            Reg8::D => regs.de = (regs.de & 0x00ff) | ((val as u16) << 8),
-            Reg8::E => regs.de = (regs.de & 0xff00) | (val as u16),
-            Reg8::H => regs.hl = (regs.hl & 0x00ff) | ((val as u16) << 8),
-            Reg8::L => regs.hl = (regs.hl & 0xff00) | (val as u16),
-            Reg8::IXH => regs.ix = (regs.ix & 0x00ff) | ((val as u16) << 8),
-            Reg8::IXL => regs.ix = (regs.ix & 0xff00) | (val as u16),
-            Reg8::IYH => regs.iy = (regs.iy & 0x00ff) | ((val as u16) << 8),
-            Reg8::IYL => regs.iy = (regs.iy & 0xff00) | (val as u16),
+            Reg8::A => Self::write_h(&mut regs.af, val),
+            Reg8::B => Self::write_h(&mut regs.bc, val),
+            Reg8::C => Self::write_l(&mut regs.bc, val),
+            Reg8::D => Self::write_h(&mut regs.de, val),
+            Reg8::E => Self::write_l(&mut regs.de, val),
+            Reg8::H => Self::write_h(&mut regs.hl, val),
+            Reg8::L => Self::write_l(&mut regs.hl, val),
+            Reg8::IXH => Self::write_h(&mut regs.ix, val),
+            Reg8::IXL => Self::write_l(&mut regs.ix, val),
+            Reg8::IYH => Self::write_h(&mut regs.iy, val),
+            Reg8::IYL => Self::write_l(&mut regs.iy, val),
         }
+    }
+}
+
+impl Reg8 {
+    fn read_h(src: &u16) -> u8 {
+        (*src >> 8) as u8
+    }
+
+    fn read_l(src: &u16) -> u8 {
+        *src as u8
+    }
+
+    fn write_h(dst: &mut u16, val: u8) {
+        *dst = (*dst & 0x00ff) | ((val as u16) << 8);
+    }
+
+    fn write_l(dst: &mut u16, val: u8) {
+        *dst = (*dst & 0x00ff) | (val as u16);
     }
 }
 
