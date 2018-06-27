@@ -77,9 +77,13 @@ type Dest16 = Dest<Word>;
 #[derive(Debug, PartialEq)]
 pub enum Inst {
     Nop,
+    Dec8(Dest8),
+    Dec16(Dest16),
     Inc8(Dest8),
+    Inc16(Dest16),
     Load8(Dest8, Src8),
     Load16(Dest16, Src16),
+    RLCA,
 }
 
 type InstSize = usize;
@@ -103,6 +107,20 @@ impl Inst {
                 Dest::IndReg(Reg16::BC), 
                 Src::Reg(Reg8::A),
             ), 
+            0x03 => Inst::Inc16(
+                Dest::Reg(Reg16::BC), 
+            ), 
+            0x04 => Inst::Inc8(
+                Dest::Reg(Reg8::B), 
+            ), 
+            0x05 => Inst::Dec8(
+                Dest::Reg(Reg8::B), 
+            ), 
+            0x06 => Inst::Load8(
+                Dest::Reg(Reg8::B), 
+                Src::Liter(input.read_u8()?), 
+            ), 
+            0x07 => Inst::RLCA, 
             _ => unimplemented!("decoding of given opcode is not implemented"),
         };
         Ok(inst)
@@ -120,9 +138,13 @@ impl Inst {
     pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {
         match self {
             Inst::Nop => self.exec_nop(ctx),
+            Inst::Dec8(dst) => self.exec_dec(ctx, dst),
+            Inst::Dec16(dst) => self.exec_dec(ctx, dst),
             Inst::Inc8(dst) => self.exec_inc(ctx, dst),
+            Inst::Inc16(dst) => self.exec_inc(ctx, dst),
             Inst::Load8(dst, src) => self.exec_load(ctx, dst, src),
             Inst::Load16(dst, src) => self.exec_load(ctx, dst, src),
+            Inst::RLCA => self.exec_rlca(ctx),
         }
     }
 
@@ -140,6 +162,14 @@ impl Inst {
         props.time
     }
 
+    fn exec_dec<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>) -> InstTime {
+        let props = self.props();
+        let val = dst.read(ctx);
+        dst.write(ctx, D::dec(val));
+        ctx.regs_mut().inc_pc(props.size);
+        props.time
+    }
+
     fn exec_load<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> InstTime {
         let props = self.props();
         let val = src.read(ctx);
@@ -147,6 +177,15 @@ impl Inst {
         ctx.regs_mut().inc_pc(props.size);
         props.time
     }
+
+    fn exec_rlca<C: Context>(&self, ctx: &mut C) -> InstTime {
+        let props = self.props();
+        let orig = Reg8::A.read(ctx.regs());
+        let dest = (orig << 1) | (orig >> 7);
+        Reg8::A.write(ctx.regs_mut(), dest);
+        props.time
+    }
+
 }
 
 #[cfg(test)]
@@ -177,6 +216,40 @@ mod test {
                     Dest::IndReg(Reg16::BC), 
                     Src::Reg(Reg8::A),
                 ), 
+            },
+            EncodeTest {
+                what: "inc bc",
+                input: vec![0x03],
+                expected: Inst::Inc16(
+                    Dest::Reg(Reg16::BC), 
+                ), 
+            },
+            EncodeTest {
+                what: "inc b",
+                input: vec![0x04],
+                expected: Inst::Inc8(
+                    Dest::Reg(Reg8::B), 
+                ), 
+            },
+            EncodeTest {
+                what: "dec b",
+                input: vec![0x05],
+                expected: Inst::Dec8(
+                    Dest::Reg(Reg8::B), 
+                ), 
+            },
+            EncodeTest {
+                what: "ld b, 12h",
+                input: vec![0x06, 0x12],
+                expected: Inst::Load8(
+                    Dest::Reg(Reg8::B), 
+                    Src::Liter(0x12), 
+                ), 
+            },
+            EncodeTest {
+                what: "rlca",
+                input: vec![0x07],
+                expected: Inst::RLCA, 
             },
         ];
         for test in &tests {

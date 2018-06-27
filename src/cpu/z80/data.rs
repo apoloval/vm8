@@ -10,6 +10,7 @@ pub trait Data {
     type Reg: Register<Self::Value>;
 
     fn inc(v: Self::Value) -> Self::Value { v + Self::Value::one() }
+    fn dec(v: Self::Value) -> Self::Value { v - Self::Value::one() }
 }
 
 #[derive(Debug, PartialEq)]
