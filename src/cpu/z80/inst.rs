@@ -28,6 +28,7 @@ pub trait OpWrite<T> {
 pub enum Src<D: Data> {
     Liter(D::Value),
     Reg(D::Reg),
+    IndReg(Reg16),
 }
 
 type Src8 = Src<Byte>;
@@ -38,6 +39,10 @@ impl<D: Data> Src<D> {
         match self {
             Src::Liter(v) => *v,
             Src::Reg(r) => r.read(c.regs()),
+            Src::IndReg(r) => {
+                let addr = Addr16::from(r.read(c.regs()) as u16);
+                D::Value::mem_read(c.mem(), addr)
+            },
         }
     }
 }
@@ -76,14 +81,17 @@ type Dest16 = Dest<Word>;
 
 #[derive(Debug, PartialEq)]
 pub enum Inst {
+    ADD16(Dest16, Src16),
     NOP,
     DEC8(Dest8),
     DEC16(Dest16),
+    EXAF,
     INC8(Dest8),
     INC16(Dest16),
     LD8(Dest8, Src8),
     LD16(Dest16, Src16),
     RLCA,
+    RRCA,
 }
 
 type InstSize = usize;
@@ -121,6 +129,29 @@ impl Inst {
                 Src::Liter(input.read_u8()?), 
             ), 
             0x07 => Inst::RLCA, 
+            0x08 => Inst::EXAF, 
+            0x09 => Inst::ADD16(
+                Dest::Reg(Reg16::HL),
+                Src::Reg(Reg16::BC),
+            ), 
+            0x0a => Inst::LD8(
+                Dest::Reg(Reg8::A),
+                Src::IndReg(Reg16::BC),
+            ), 
+            0x0b => Inst::DEC16(
+                Dest::Reg(Reg16::BC), 
+            ), 
+            0x0c => Inst::INC8(
+                Dest::Reg(Reg8::C), 
+            ), 
+            0x0d => Inst::DEC8(
+                Dest::Reg(Reg8::C), 
+            ), 
+            0x0e => Inst::LD8(
+                Dest::Reg(Reg8::C),
+                Src::Liter(input.read_u8()?),
+            ), 
+            0x0f => Inst::RRCA, 
             _ => unimplemented!("decoding of given opcode is not implemented"),
         };
         Ok(inst)
@@ -137,15 +168,27 @@ impl Inst {
 
     pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {
         match self {
+            Inst::ADD16(dst, src) => self.exec_add(ctx, dst, src),
             Inst::NOP => self.exec_nop(ctx),
             Inst::DEC8(dst) => self.exec_dec(ctx, dst),
             Inst::DEC16(dst) => self.exec_dec(ctx, dst),
+            Inst::EXAF => self.exec_exaf(ctx),
             Inst::INC8(dst) => self.exec_inc(ctx, dst),
             Inst::INC16(dst) => self.exec_inc(ctx, dst),
             Inst::LD8(dst, src) => self.exec_load(ctx, dst, src),
             Inst::LD16(dst, src) => self.exec_load(ctx, dst, src),
             Inst::RLCA => self.exec_rlca(ctx),
+            Inst::RRCA => self.exec_rrca(ctx),
         }
+    }
+
+    fn exec_add<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> InstTime {
+        let props = self.props();
+        let a = src.read(ctx);
+        let b = dst.read(ctx);
+        dst.write(ctx, a + b);
+        ctx.regs_mut().inc_pc(props.size);
+        props.time
     }
 
     fn exec_nop<C: Context>(&self, ctx: &mut C) -> InstTime {
@@ -170,6 +213,13 @@ impl Inst {
         props.time
     }
 
+    fn exec_exaf<C: Context>(&self, ctx: &mut C) -> InstTime {
+        let props = self.props();
+        ctx.regs_mut().swap_af();
+        ctx.regs_mut().inc_pc(props.size);
+        props.time
+    }
+
     fn exec_load<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> InstTime {
         let props = self.props();
         let val = src.read(ctx);
@@ -182,6 +232,14 @@ impl Inst {
         let props = self.props();
         let orig = Reg8::A.read(ctx.regs());
         let dest = (orig << 1) | (orig >> 7);
+        Reg8::A.write(ctx.regs_mut(), dest);
+        props.time
+    }
+
+    fn exec_rrca<C: Context>(&self, ctx: &mut C) -> InstTime {
+        let props = self.props();
+        let orig = Reg8::A.read(ctx.regs());
+        let dest = (orig >> 1) | (orig << 7);
         Reg8::A.write(ctx.regs_mut(), dest);
         props.time
     }
@@ -202,7 +260,7 @@ mod test {
                 expected: Inst::NOP,
             },
             EncodeTest {
-                what: "load bc, 1234h",
+                what: "load bc,1234h",
                 input: vec![0x01, 0x34, 0x12],
                 expected: Inst::LD16(
                     Dest::Reg(Reg16::BC), 
@@ -210,7 +268,7 @@ mod test {
                 ), 
             },
             EncodeTest {
-                what: "load (bc), a",
+                what: "load (bc),a",
                 input: vec![0x02],
                 expected: Inst::LD8(
                     Dest::IndReg(Reg16::BC), 
@@ -239,7 +297,7 @@ mod test {
                 ), 
             },
             EncodeTest {
-                what: "ld b, 12h",
+                what: "ld b,12h",
                 input: vec![0x06, 0x12],
                 expected: Inst::LD8(
                     Dest::Reg(Reg8::B), 
@@ -250,6 +308,61 @@ mod test {
                 what: "rlca",
                 input: vec![0x07],
                 expected: Inst::RLCA, 
+            },
+            EncodeTest {
+                what: "ex af,af'",
+                input: vec![0x08],
+                expected: Inst::EXAF, 
+            },
+            EncodeTest {
+                what: "add hl,bc'",
+                input: vec![0x09],
+                expected: Inst::ADD16(
+                    Dest::Reg(Reg16::HL),
+                    Src::Reg(Reg16::BC),
+                ), 
+            },
+            EncodeTest {
+                what: "ld a,(bc)'",
+                input: vec![0x0a],
+                expected: Inst::LD8(
+                    Dest::Reg(Reg8::A),
+                    Src::IndReg(Reg16::BC),
+                ), 
+            },
+            EncodeTest {
+                what: "dec bc'",
+                input: vec![0x0b],
+                expected: Inst::DEC16(
+                    Dest::Reg(Reg16::BC),
+                ), 
+            },
+            EncodeTest {
+                what: "inc c'",
+                input: vec![0x0c],
+                expected: Inst::INC8(
+                    Dest::Reg(Reg8::C),
+                ), 
+            },
+            EncodeTest {
+                what: "dec c'",
+                input: vec![0x0d],
+                expected: Inst::DEC8(
+                    Dest::Reg(Reg8::C),
+                ), 
+            },
+            EncodeTest {
+                what: "ld c,12h'",
+                input: vec![0x0e, 0x12],
+                expected: Inst::LD8(
+                    Dest::Reg(Reg8::C),
+                    Src::Liter(0x12),
+                ), 
+            },
+            EncodeTest {
+                what: "rrca",
+                input: vec![0x0f],
+                expected: Inst::RRCA, 
             },
         ];
         for test in &tests {
