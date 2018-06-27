@@ -61,7 +61,7 @@ mod test {
     #[test]
     fn exec_nop() {
         let mut cpu = sample_cpu();
-        cpu.exec_inst(&Inst::Nop);
+        cpu.exec_inst(&Inst::NOP);
         assert_eq!(Addr16::from(0x0001), cpu.regs.pc());
     }
 
