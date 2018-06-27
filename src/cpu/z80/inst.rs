@@ -5,6 +5,7 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use bus::{Addr16, Memory16, MemoryItem};
 use cpu::z80::data::{Data, Word, Byte};
 use cpu::z80::regs::{Reg8, Reg16, Register, Registers};
+use cpu::z80::props::{InstProps, InstTime};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
@@ -94,14 +95,6 @@ pub enum Inst {
     RRCA,
 }
 
-type InstSize = usize;
-type InstTime = usize;
-
-pub struct InstProps {
-    size: InstSize,
-    time: InstTime,
-}
-
 impl Inst {
     pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
         let opcode = input.read_u8()?;
@@ -158,12 +151,7 @@ impl Inst {
     }
 
     pub fn props(&self) -> InstProps {
-        match self {
-            Inst::NOP => InstProps { size: 1, time: 4 },
-            Inst::LD16(Dest::Reg(Reg16::BC), Src::Liter(_)) => InstProps { size: 3, time: 10 },
-            Inst::LD8(Dest::IndReg(Reg16::BC), Src::Reg(Reg8::A)) => InstProps { size: 1, time: 7 },
-            _ => unimplemented!("props of given instruction is not implemented"),
-        }
+        InstProps::from_inst(self)
     }
 
     pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {

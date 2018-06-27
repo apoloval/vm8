@@ -6,3 +6,4 @@ pub mod regs;
 mod error;
 pub use self::error::*;
 
+mod props;
