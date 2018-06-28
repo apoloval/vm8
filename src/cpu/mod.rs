@@ -1,4 +1,4 @@
 pub mod z80;
 
-mod freq;
-pub use self::freq::*;
+mod clock;
+pub use self::clock::*;
