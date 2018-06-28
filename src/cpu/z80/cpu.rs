@@ -1,17 +1,16 @@
 use std::time::Instant;
-use std::thread;
 
 use bus::Memory16;
 
 use bus;
-use cpu::Frequency;
+use cpu::{Clock, Cycles, Frequency};
 use cpu::z80::inst::{Context, Inst};
 use cpu::z80::regs::Registers;
 
 pub struct CPU<M: Memory16> {
     mem: M,
     regs: Registers,
-    freq: Frequency,
+    clock: Clock,
 }
 
 impl<M: Memory16> Context for CPU<M> {
@@ -23,20 +22,18 @@ impl<M: Memory16> Context for CPU<M> {
 }
 
 impl<M: Memory16> CPU<M> {
-    pub fn new(mem: M, freq: Frequency) -> CPU<M> {
+    pub fn new(mem: M, freq: Frequency, adjust_period: Cycles) -> CPU<M> {
         CPU {
             mem: mem,
             regs: Registers::new(),
-            freq: freq,
+            clock: Clock::new(freq, adjust_period),
         }
     }
     pub fn exec_step(&mut self) {
         let t0 = Instant::now();
         let inst = self.decode_inst();
         let cycles = inst.exec(self);
-        let t1 = t0 + (self.freq.period() * cycles as u32);
-        let wait = t1 - Instant::now();
-        thread::sleep(wait);
+        self.clock.walk(cycles, t0.elapsed());
     }
 
     pub fn exec_inst(&mut self, inst: &Inst) {
@@ -61,8 +58,10 @@ mod test {
     #[test]
     fn exec_nop() {
         let mut cpu = sample_cpu(&[0x00]);
-        cpu.exec_step();
-        assert_eq!(Addr16::from(0x0001), cpu.regs.pc());
+        for _ in 0..10000 {
+            cpu.exec_step();
+        }
+        assert_eq!(Addr16::from(10000), cpu.regs.pc());
     }
 
     struct SampleMem {
@@ -98,6 +97,6 @@ mod test {
     }
 
     fn sample_cpu(program: &[u8]) -> CPU<SampleMem> {
-        CPU::new(SampleMem::new(program), Frequency::from_mhz(0.1))
+        CPU::new(SampleMem::new(program), Frequency::from_mhz(6.0), 10000)
     }
 }
