@@ -13,7 +13,7 @@ pub trait Data {
     fn dec(v: Self::Value) -> Self::Value { v - Self::Value::one() }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Byte;
 
 impl Data for Byte {
@@ -22,7 +22,7 @@ impl Data for Byte {
     type Reg = Reg8;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Word;
 
 impl Data for Word {

@@ -5,7 +5,6 @@ use byteorder::{ReadBytesExt, LittleEndian};
 use bus::{Addr16, Memory16, MemoryItem};
 use cpu::z80::data::{Data, Word, Byte};
 use cpu::z80::regs::{Reg8, Reg16, Register, Registers};
-use cpu::z80::props::{InstProps, InstTime};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
@@ -25,7 +24,7 @@ pub trait OpWrite<T> {
 }
 
 // Src defines a source operand of a instruction
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Src<D: Data> {
     Liter(D::Value),
     Reg(D::Reg),
@@ -49,7 +48,7 @@ impl<D: Data> Src<D> {
 }
 
 // Dest defines a destination operand of a instruction
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Dest<D: Data> {
     Reg(D::Reg),
     IndReg(Reg16),
@@ -80,156 +79,144 @@ impl<D: Data> Dest<D> {
 type Dest8 = Dest<Byte>;
 type Dest16 = Dest<Word>;
 
-#[derive(Debug, PartialEq)]
-pub enum Inst {
-    ADD16(Dest16, Src16),
-    NOP,
-    DEC8(Dest8),
-    DEC16(Dest16),
-    EXAF,
-    INC8(Dest8),
-    INC16(Dest16),
-    LD8(Dest8, Src8),
-    LD16(Dest16, Src16),
-    RLCA,
-    RRCA,
+#[derive(Debug, Eq, PartialEq)]
+pub enum Mnemo { ADD, DEC, EX, INC, LD, NOP, RLCA, RRCA }
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum Operands {
+    Nulary,
+    Unary8(Dest8),
+    Unary16(Dest16),
+    Binary8(Dest8, Src8),    
+    Binary16(Dest16, Src16),
+}
+
+pub type OpCode = u32;
+pub type Size = usize;
+pub type Cycles = usize;
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Inst {
+    opcode: OpCode,
+    mnemo: Mnemo,
+    ops: Operands,
+    size: Size,
+    cycles: Cycles,
+}
+
+macro_rules! inst {
+    (ADD HL, BC) => (Inst{opcode: 0x09, mnemo: Mnemo::ADD, ops: Operands::Binary16(Dest::Reg(Reg16::HL), Src::Reg(Reg16::BC)), size: 1, cycles: 11});
+    (DEC B) => (Inst{opcode: 0x05, mnemo: Mnemo::DEC, ops: Operands::Unary8(Dest::Reg(Reg8::B)), size: 1, cycles: 4});
+    (DEC C) => (Inst{opcode: 0x0d, mnemo: Mnemo::DEC, ops: Operands::Unary8(Dest::Reg(Reg8::C)), size: 1, cycles: 4});
+    (DEC BC) => (Inst{opcode: 0x0b, mnemo: Mnemo::DEC, ops: Operands::Unary16(Dest::Reg(Reg16::BC)), size: 1, cycles: 6});
+    (EX AF, AF_) => (Inst{opcode: 0x08, mnemo: Mnemo::EX, ops: Operands::Unary16(Dest::Reg(Reg16::AF)), size: 1, cycles: 4});
+    (INC B) => (Inst{opcode: 0x04, mnemo: Mnemo::INC, ops: Operands::Unary8(Dest::Reg(Reg8::B)), size: 1, cycles: 4});
+    (INC C) => (Inst{opcode: 0x0c, mnemo: Mnemo::INC, ops: Operands::Unary8(Dest::Reg(Reg8::C)), size: 1, cycles: 4});
+    (INC BC) => (Inst{opcode: 0x03, mnemo: Mnemo::INC, ops: Operands::Unary16(Dest::Reg(Reg16::BC)), size: 1, cycles: 6});
+    (LD A, (BC)) => (Inst{opcode: 0x0a, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::Reg(Reg8::A), Src::IndReg(Reg16::BC)), size: 1, cycles: 7});
+    (LD (BC), A) => (Inst{opcode: 0x02, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::IndReg(Reg16::BC), Src::Reg(Reg8::A)), size: 1, cycles: 7});
+    (LD B, $x:expr) => (Inst{opcode: 0x06, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::Reg(Reg8::B), Src::Liter($x)), size: 2, cycles: 7});
+    (LD C, $x:expr) => (Inst{opcode: 0x0e, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::Reg(Reg8::C), Src::Liter($x)), size: 2, cycles: 7});
+    (LD BC, $x:expr) => (Inst{opcode: 0x01, mnemo: Mnemo::LD, ops: Operands::Binary16(Dest::Reg(Reg16::BC), Src::Liter($x)), size: 3, cycles: 10});
+    (NOP) => (Inst{opcode: 0x00, mnemo: Mnemo::NOP, ops: Operands::Nulary, size: 1, cycles: 4});
+    (RLCA) => (Inst{opcode: 0x07, mnemo: Mnemo::RLCA, ops: Operands::Nulary, size: 1, cycles: 4});
+    (RRCA) => (Inst{opcode: 0x0f, mnemo: Mnemo::RRCA, ops: Operands::Nulary, size: 1, cycles: 4});
 }
 
 impl Inst {
     pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
         let opcode = input.read_u8()?;
         let inst = match opcode {
-            0x00 => Inst::NOP,
-            0x01 => Inst::LD16(
-                Dest::Reg(Reg16::BC), 
-                Src::Liter(input.read_u16::<LittleEndian>()?),
-            ), 
-            0x02 => Inst::LD8(
-                Dest::IndReg(Reg16::BC), 
-                Src::Reg(Reg8::A),
-            ), 
-            0x03 => Inst::INC16(
-                Dest::Reg(Reg16::BC), 
-            ), 
-            0x04 => Inst::INC8(
-                Dest::Reg(Reg8::B), 
-            ), 
-            0x05 => Inst::DEC8(
-                Dest::Reg(Reg8::B), 
-            ), 
-            0x06 => Inst::LD8(
-                Dest::Reg(Reg8::B), 
-                Src::Liter(input.read_u8()?), 
-            ), 
-            0x07 => Inst::RLCA, 
-            0x08 => Inst::EXAF, 
-            0x09 => Inst::ADD16(
-                Dest::Reg(Reg16::HL),
-                Src::Reg(Reg16::BC),
-            ), 
-            0x0a => Inst::LD8(
-                Dest::Reg(Reg8::A),
-                Src::IndReg(Reg16::BC),
-            ), 
-            0x0b => Inst::DEC16(
-                Dest::Reg(Reg16::BC), 
-            ), 
-            0x0c => Inst::INC8(
-                Dest::Reg(Reg8::C), 
-            ), 
-            0x0d => Inst::DEC8(
-                Dest::Reg(Reg8::C), 
-            ), 
-            0x0e => Inst::LD8(
-                Dest::Reg(Reg8::C),
-                Src::Liter(input.read_u8()?),
-            ), 
-            0x0f => Inst::RRCA, 
+            0x00 => inst!(NOP),
+            0x01 => inst!(LD BC, input.read_u16::<LittleEndian>()?),
+            0x02 => inst!(LD (BC), A), 
+            0x03 => inst!(INC BC), 
+            0x04 => inst!(INC B), 
+            0x05 => inst!(DEC B), 
+            0x06 => inst!(LD B, input.read_u8()?), 
+            0x07 => inst!(RLCA), 
+            0x08 => inst!(EX AF, AF_), 
+            0x09 => inst!(ADD HL, BC),
+            0x0a => inst!(LD A, (BC)), 
+            0x0b => inst!(DEC BC), 
+            0x0c => inst!(INC C), 
+            0x0d => inst!(DEC C), 
+            0x0e => inst!(LD C, input.read_u8()?), 
+            0x0f => inst!(RRCA), 
             _ => unimplemented!("decoding of given opcode is not implemented"),
         };
         Ok(inst)
     }
 
-    pub fn props(&self) -> InstProps {
-        InstProps::from_inst(self)
-    }
-
-    pub fn exec<C: Context>(&self, ctx: &mut C) -> InstTime {
+    pub fn exec<C: Context>(&self, ctx: &mut C) -> Cycles {
         match self {
-            Inst::ADD16(dst, src) => self.exec_add(ctx, dst, src),
-            Inst::NOP => self.exec_nop(ctx),
-            Inst::DEC8(dst) => self.exec_dec(ctx, dst),
-            Inst::DEC16(dst) => self.exec_dec(ctx, dst),
-            Inst::EXAF => self.exec_exaf(ctx),
-            Inst::INC8(dst) => self.exec_inc(ctx, dst),
-            Inst::INC16(dst) => self.exec_inc(ctx, dst),
-            Inst::LD8(dst, src) => self.exec_load(ctx, dst, src),
-            Inst::LD16(dst, src) => self.exec_load(ctx, dst, src),
-            Inst::RLCA => self.exec_rlca(ctx),
-            Inst::RRCA => self.exec_rrca(ctx),
-        }
+            Inst{mnemo: Mnemo::ADD, ops: Operands::Binary8(dst, src), .. } => self.exec_add(ctx, dst, src),
+            Inst{mnemo: Mnemo::ADD, ops: Operands::Binary16(dst, src), .. } => self.exec_add(ctx, dst, src),
+            Inst{mnemo: Mnemo::DEC, ops: Operands::Unary8(dst), .. } => self.exec_dec(ctx, dst),
+            Inst{mnemo: Mnemo::DEC, ops: Operands::Unary16(dst), .. } => self.exec_dec(ctx, dst),
+            Inst{mnemo: Mnemo::EX, ops: Operands::Unary8(_), .. } => self.exec_exaf(ctx),
+            Inst{mnemo: Mnemo::INC, ops: Operands::Unary8(dst), .. } => self.exec_inc(ctx, dst),
+            Inst{mnemo: Mnemo::INC, ops: Operands::Unary16(dst), .. } => self.exec_inc(ctx, dst),
+            Inst{mnemo: Mnemo::LD, ops: Operands::Binary16(dst, src), .. } => self.exec_load(ctx, dst, src),
+            Inst{mnemo: Mnemo::NOP, .. } => self.exec_nop(ctx),
+            Inst{mnemo: Mnemo::RLCA, .. } => self.exec_rlca(ctx),
+            Inst{mnemo: Mnemo::RRCA, .. } => self.exec_rrca(ctx),
+            _ => unimplemented!("cannot execute illegal instruction"),
+        }    
     }
 
-    fn exec_add<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> InstTime {
-        let props = self.props();
+    fn exec_add<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> Cycles {
         let a = src.read(ctx);
         let b = dst.read(ctx);
         dst.write(ctx, a + b);
-        ctx.regs_mut().inc_pc(props.size);
-        props.time
+        ctx.regs_mut().inc_pc(self.size);
+        self.cycles
     }
 
-    fn exec_nop<C: Context>(&self, ctx: &mut C) -> InstTime {
-        let props = self.props();
-        ctx.regs_mut().inc_pc(props.size);
-        props.time
+    fn exec_nop<C: Context>(&self, ctx: &mut C) -> Cycles {
+        ctx.regs_mut().inc_pc(self.size);
+        self.cycles
     }
 
-    fn exec_inc<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>) -> InstTime {
-        let props = self.props();
+    fn exec_inc<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>) -> Cycles {
         let val = dst.read(ctx);
         dst.write(ctx, D::inc(val));
-        ctx.regs_mut().inc_pc(props.size);
-        props.time
+        ctx.regs_mut().inc_pc(self.size);
+        self.cycles
     }
 
-    fn exec_dec<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>) -> InstTime {
-        let props = self.props();
+    fn exec_dec<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>) -> Cycles {
         let val = dst.read(ctx);
         dst.write(ctx, D::dec(val));
-        ctx.regs_mut().inc_pc(props.size);
-        props.time
+        ctx.regs_mut().inc_pc(self.size);
+        self.cycles
     }
 
-    fn exec_exaf<C: Context>(&self, ctx: &mut C) -> InstTime {
-        let props = self.props();
+    fn exec_exaf<C: Context>(&self, ctx: &mut C) -> Cycles {
         ctx.regs_mut().swap_af();
-        ctx.regs_mut().inc_pc(props.size);
-        props.time
+        ctx.regs_mut().inc_pc(self.size);
+        self.cycles
     }
 
-    fn exec_load<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> InstTime {
-        let props = self.props();
+    fn exec_load<C: Context, D: Data>(&self, ctx: &mut C, dst: &Dest<D>, src: &Src<D>) -> Cycles {
         let val = src.read(ctx);
         dst.write(ctx, val);
-        ctx.regs_mut().inc_pc(props.size);
-        props.time
+        ctx.regs_mut().inc_pc(self.size);
+        self.cycles
     }
 
-    fn exec_rlca<C: Context>(&self, ctx: &mut C) -> InstTime {
-        let props = self.props();
+    fn exec_rlca<C: Context>(&self, ctx: &mut C) -> Cycles {
         let orig = Reg8::A.read(ctx.regs());
         let dest = (orig << 1) | (orig >> 7);
         Reg8::A.write(ctx.regs_mut(), dest);
-        props.time
+        self.cycles
     }
 
-    fn exec_rrca<C: Context>(&self, ctx: &mut C) -> InstTime {
-        let props = self.props();
+    fn exec_rrca<C: Context>(&self, ctx: &mut C) -> Cycles {
         let orig = Reg8::A.read(ctx.regs());
         let dest = (orig >> 1) | (orig << 7);
         Reg8::A.write(ctx.regs_mut(), dest);
-        props.time
+        self.cycles
     }
 
 }
@@ -245,112 +232,82 @@ mod test {
             EncodeTest {
                 what: "nop",
                 input: vec![0x00],
-                expected: Inst::NOP,
+                expected: inst!(NOP),
             },
             EncodeTest {
                 what: "load bc,1234h",
                 input: vec![0x01, 0x34, 0x12],
-                expected: Inst::LD16(
-                    Dest::Reg(Reg16::BC), 
-                    Src::Liter(0x1234),
-                ), 
+                expected: inst!(LD BC, 0x1234), 
             },
             EncodeTest {
                 what: "load (bc),a",
                 input: vec![0x02],
-                expected: Inst::LD8(
-                    Dest::IndReg(Reg16::BC), 
-                    Src::Reg(Reg8::A),
-                ), 
+                expected: inst!(LD (BC), A), 
             },
             EncodeTest {
                 what: "inc bc",
                 input: vec![0x03],
-                expected: Inst::INC16(
-                    Dest::Reg(Reg16::BC), 
-                ), 
+                expected: inst!(INC BC), 
             },
             EncodeTest {
                 what: "inc b",
                 input: vec![0x04],
-                expected: Inst::INC8(
-                    Dest::Reg(Reg8::B), 
-                ), 
+                expected: inst!(INC B), 
             },
             EncodeTest {
                 what: "dec b",
                 input: vec![0x05],
-                expected: Inst::DEC8(
-                    Dest::Reg(Reg8::B), 
-                ), 
+                expected: inst!(DEC B), 
             },
             EncodeTest {
                 what: "ld b,12h",
                 input: vec![0x06, 0x12],
-                expected: Inst::LD8(
-                    Dest::Reg(Reg8::B), 
-                    Src::Liter(0x12), 
-                ), 
+                expected: inst!(LD B, 0x12), 
             },
             EncodeTest {
                 what: "rlca",
                 input: vec![0x07],
-                expected: Inst::RLCA, 
+                expected: inst!(RLCA), 
             },
             EncodeTest {
                 what: "ex af,af'",
                 input: vec![0x08],
-                expected: Inst::EXAF, 
+                expected: inst!(EX AF, AF_), 
             },
             EncodeTest {
                 what: "add hl,bc'",
                 input: vec![0x09],
-                expected: Inst::ADD16(
-                    Dest::Reg(Reg16::HL),
-                    Src::Reg(Reg16::BC),
-                ), 
+                expected: inst!(ADD HL, BC), 
             },
             EncodeTest {
                 what: "ld a,(bc)'",
                 input: vec![0x0a],
-                expected: Inst::LD8(
-                    Dest::Reg(Reg8::A),
-                    Src::IndReg(Reg16::BC),
-                ), 
+                expected: inst!(LD A, (BC)), 
             },
             EncodeTest {
                 what: "dec bc'",
                 input: vec![0x0b],
-                expected: Inst::DEC16(
-                    Dest::Reg(Reg16::BC),
-                ), 
+                expected: inst!(DEC BC), 
             },
             EncodeTest {
                 what: "inc c'",
                 input: vec![0x0c],
-                expected: Inst::INC8(
-                    Dest::Reg(Reg8::C),
-                ), 
+                expected: inst!(INC C), 
             },
             EncodeTest {
                 what: "dec c'",
                 input: vec![0x0d],
-                expected: Inst::DEC8(
-                    Dest::Reg(Reg8::C),
-                ), 
+                expected: inst!(DEC C), 
             },
             EncodeTest {
                 what: "ld c,12h'",
                 input: vec![0x0e, 0x12],
-                expected: Inst::LD8(
-                    Dest::Reg(Reg8::C),
-                    Src::Liter(0x12),
-                ), 
+                expected: inst!(LD C, 0x12), 
             },
             EncodeTest {
                 what: "rrca",
                 input: vec![0x0f],
-                expected: Inst::RRCA, 
+                expected: inst!(RRCA), 
             },
         ];
         for test in &tests {

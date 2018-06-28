@@ -51,17 +51,17 @@ impl<M: Memory16> CPU<M> {
 
 #[cfg(test)]
 mod test {
+    use std::io;
     use std::io::{Read, Write};
 
     use bus::{Addr16, Memory};
-    use cpu::z80::inst::Inst;
 
     use super::*;
 
     #[test]
     fn exec_nop() {
-        let mut cpu = sample_cpu();
-        cpu.exec_inst(&Inst::NOP);
+        let mut cpu = sample_cpu(&[0x00]);
+        cpu.exec_step();
         assert_eq!(Addr16::from(0x0001), cpu.regs.pc());
     }
 
@@ -70,8 +70,14 @@ mod test {
     }
 
     impl SampleMem {
-        fn new() -> SampleMem {
-            SampleMem { data: [0; 64*1024] }
+        fn new(program: &[u8]) -> SampleMem {
+            let mut mem = SampleMem { data: [0; 64*1024] };
+            {
+                let mut input = program;
+                let mut output: &mut[u8] = &mut mem.data;
+                io::copy(&mut input, &mut output).unwrap();
+            }
+            mem
         }
     }
 
@@ -91,7 +97,7 @@ mod test {
         }
     }
 
-    fn sample_cpu() -> CPU<SampleMem> {
-        CPU::new(SampleMem::new(), Frequency::from_mhz(20.0))
+    fn sample_cpu(program: &[u8]) -> CPU<SampleMem> {
+        CPU::new(SampleMem::new(program), Frequency::from_mhz(0.1))
     }
 }
