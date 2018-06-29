@@ -30,3 +30,9 @@ impl From<Address> for u16 {
         val.0 as u16
     }
 }
+
+impl From<Address> for usize {
+    fn from(val: Address) -> usize {
+        val.0 as usize
+    }
+}
