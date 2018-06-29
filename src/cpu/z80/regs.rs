@@ -1,6 +1,6 @@
 use std::mem;
 
-use bus::Addr16;
+use bus::Address;
 
 pub trait Register<T> {
     fn read(&self, regs: &Registers) -> T;
@@ -133,8 +133,8 @@ impl Registers {
         mem::swap(&mut self.hl, &mut self.hl_);
     }
 
-    pub fn pc(&self) -> Addr16 {
-        return Addr16::from(self.pc)
+    pub fn pc(&self) -> Address {
+        return Address::from(self.pc)
     }
 
     pub fn inc_pc(&mut self, val: usize) {

@@ -2,26 +2,20 @@ use std::io;
 
 use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
 
-use bus::{Address, Addr16};
+use bus::Address;
 
 pub trait Memory {
-    type Addr: Address;
-
-    fn read(&self, addr: Self::Addr, buf: &mut[u8]);
-    fn write(&mut self, addr: Self::Addr, buf: &[u8]);
+    fn read(&self, addr: Address, buf: &mut[u8]);
+    fn write(&mut self, addr: Address, buf: &[u8]);
 }
 
-pub fn read_from<M: Memory>(mem: &M, from: M::Addr) -> MemoryRead<M> {
+pub fn read_from<M: Memory>(mem: &M, from: Address) -> MemoryRead<M> {
     MemoryRead{mem: mem, from: from}
 }
 
-pub trait Memory16 : Memory<Addr=Addr16> {}
-
-impl<T: Memory<Addr=Addr16>> Memory16 for T {}
-
 pub struct MemoryRead<'a, M: Memory + 'a> {
     mem: &'a M,
-    from: M::Addr,
+    from: Address,
 }
 
 impl<'a, M: Memory + 'a> io::Read for MemoryRead<'a, M> {
@@ -34,32 +28,32 @@ impl<'a, M: Memory + 'a> io::Read for MemoryRead<'a, M> {
 }
 
 pub trait MemoryItem<O: ByteOrder> {
-    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> Self;
-    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: Self);
+    fn mem_read<M: Memory>(mem: &M, addr: Address) -> Self;
+    fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: Self);
 }
 
 impl<O: ByteOrder> MemoryItem<O> for u8 {
-    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> u8 {
+    fn mem_read<M: Memory>(mem: &M, addr: Address) -> u8 {
         let mut buf = [0];
         mem.read(addr, &mut buf);
         buf[0]
     }
 
-    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: u8) {
+    fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: u8) {
         let buf = [val];
         mem.write(addr, &buf);
     }
 }
 
 impl<O: ByteOrder> MemoryItem<O> for u16 {
-    fn mem_read<M: Memory>(mem: &M, addr: M::Addr) -> u16 {
+    fn mem_read<M: Memory>(mem: &M, addr: Address) -> u16 {
         let mut buf = [0, 0];
         mem.read(addr, &mut buf);
         let mut rbuf: &[u8] = &buf;
         rbuf.read_u16::<O>().unwrap()
     }
 
-    fn mem_write<M: Memory>(mem: &mut M, addr: M::Addr, val: u16) {
+    fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: u16) {
         let mut buf = [0, 0];
         {
             let mut wbuf: &mut [u8] = &mut buf;

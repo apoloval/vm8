@@ -1,17 +1,17 @@
-use bus::Memory16;
+use bus::Memory;
 
 use bus;
 use cpu::{Clock, Cycles, Frequency};
 use cpu::z80::inst::{Context, Inst};
 use cpu::z80::regs::Registers;
 
-pub struct CPU<M: Memory16> {
+pub struct CPU<M: Memory> {
     mem: M,
     regs: Registers,
     clock: Clock,
 }
 
-impl<M: Memory16> Context for CPU<M> {
+impl<M: Memory> Context for CPU<M> {
     type Mem = M;
     fn regs(&self) -> &Registers { &self.regs }
     fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
@@ -19,7 +19,7 @@ impl<M: Memory16> Context for CPU<M> {
     fn mem_mut(&mut self) -> &mut M { &mut self.mem }
 }
 
-impl<M: Memory16> CPU<M> {
+impl<M: Memory> CPU<M> {
     pub fn new(mem: M, freq: Frequency, adjust_period: Cycles) -> CPU<M> {
         CPU {
             mem: mem,
@@ -51,7 +51,7 @@ mod test {
     use std::io;
     use std::io::{Read, Write};
 
-    use bus::{Addr16, Memory};
+    use bus::{Address, Memory};
 
     use super::*;
 
@@ -61,7 +61,7 @@ mod test {
         for _ in 0..10000 {
             cpu.exec_step();
         }
-        assert_eq!(Addr16::from(10000), cpu.regs.pc());
+        assert_eq!(Address::from(10000), cpu.regs.pc());
     }
 
     struct SampleMem {
@@ -81,15 +81,13 @@ mod test {
     }
 
     impl Memory for SampleMem {
-        type Addr = Addr16;
-
-        fn read(&self, addr: Addr16, buf: &mut[u8]) {
+        fn read(&self, addr: Address, buf: &mut[u8]) {
             let from = u16::from(addr) as usize;
             let mut input: &[u8] = &self.data[from..];
             input.read(buf).unwrap();
         }
 
-        fn write(&mut self, addr: Addr16, buf: &[u8]) {
+        fn write(&mut self, addr: Address, buf: &[u8]) {
             let from = u16::from(addr) as usize;
             let mut input: &mut [u8] = &mut self.data[from..];
             input.write(buf).unwrap();

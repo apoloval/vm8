@@ -3,7 +3,7 @@ extern crate hemu;
 use std::io;
 use std::io::{Read, Write};
 
-use hemu::bus::{Addr16, Memory};
+use hemu::bus::{Address, Memory};
 use hemu::cpu;
 use hemu::cpu::z80;
 
@@ -24,15 +24,13 @@ impl ComputerMem {
 }
 
 impl Memory for ComputerMem {
-    type Addr = Addr16;
-
-    fn read(&self, addr: Addr16, buf: &mut[u8]) {
+    fn read(&self, addr: Address, buf: &mut[u8]) {
         let from = u16::from(addr) as usize;
         let mut input: &[u8] = &self.data[from..];
         input.read(buf).unwrap();
     }
 
-    fn write(&mut self, addr: Addr16, buf: &[u8]) {
+    fn write(&mut self, addr: Address, buf: &[u8]) {
         let from = u16::from(addr) as usize;
         let mut input: &mut [u8] = &mut self.data[from..];
         input.write(buf).unwrap();
