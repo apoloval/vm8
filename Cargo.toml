@@ -6,3 +6,10 @@ authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
 [dependencies]
 byteorder = "1.2"
 num-traits = "0.2"
+
+[lib]
+name = "hemu"
+
+[[bin]]
+name = "c80"
+path = "src/bin/c80/main.rs"

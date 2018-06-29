@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use bus::Memory16;
 
 use bus;
@@ -29,11 +27,13 @@ impl<M: Memory16> CPU<M> {
             clock: Clock::new(freq, adjust_period),
         }
     }
+
+    pub fn clock(&self) -> &Clock { &self.clock }
+
     pub fn exec_step(&mut self) {
-        let t0 = Instant::now();
         let inst = self.decode_inst();
         let cycles = inst.exec(self);
-        self.clock.walk(cycles, t0.elapsed());
+        self.clock.walk(cycles);
     }
 
     pub fn exec_inst(&mut self, inst: &Inst) {
@@ -97,6 +97,8 @@ mod test {
     }
 
     fn sample_cpu(program: &[u8]) -> CPU<SampleMem> {
-        CPU::new(SampleMem::new(program), Frequency::from_mhz(6.0), 10000)
+        // Test code runs in debug mode, which is highly inefficient.
+        // Use a low CPU frequency to avoid panics due to slow emulation.
+        CPU::new(SampleMem::new(program), Frequency::from_khz(100.0), 10000)
     }
 }
