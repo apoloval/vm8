@@ -123,31 +123,45 @@ macro_rules! inst {
     (RRCA) => (Inst{opcode: 0x0f, mnemo: Mnemo::RRCA, ops: Operands::Nulary, size: 1, cycles: 4});
 }
 
-impl Inst {
-    pub fn decode<R: io::Read>(input: &mut R) -> io::Result<Inst> {
-        let opcode = input.read_u8()?;
-        let inst = match opcode {
-            0x00 => inst!(NOP),
-            0x01 => inst!(LD BC, input.read_u16::<LittleEndian>()?),
-            0x02 => inst!(LD (BC), A), 
-            0x03 => inst!(INC BC), 
-            0x04 => inst!(INC B), 
-            0x05 => inst!(DEC B), 
-            0x06 => inst!(LD B, input.read_u8()?), 
-            0x07 => inst!(RLCA), 
-            0x08 => inst!(EX AF, AF_), 
-            0x09 => inst!(ADD HL, BC),
-            0x0a => inst!(LD A, (BC)), 
-            0x0b => inst!(DEC BC), 
-            0x0c => inst!(INC C), 
-            0x0d => inst!(DEC C), 
-            0x0e => inst!(LD C, input.read_u8()?), 
-            0x0f => inst!(RRCA), 
-            _ => unimplemented!("decoding of given opcode is not implemented"),
-        };
-        Ok(inst)
+type DecodeFn = Fn(&mut io::Read) -> io::Result<Inst>;
+
+pub struct Decoder {
+    main: Vec<Box<DecodeFn>>,
+}
+
+impl Decoder {
+    pub fn new() -> Decoder {
+        Decoder { main: Self::build_main_table() }
     }
 
+    pub fn decode<R: io::Read>(&self, input: &mut R) -> io::Result<Inst> {
+        let opcode = input.read_u8()? as usize;
+        self.main[opcode](input)
+    }
+
+    fn build_main_table() -> Vec<Box<DecodeFn>> {
+        vec! {
+            /* 0x00 */ Box::new(|_| { Ok(inst!(NOP)) }),
+            /* 0x01 */ Box::new(|r| { Ok(inst!(LD BC, r.read_u16::<LittleEndian>()?)) }),
+            /* 0x02 */ Box::new(|_| { Ok(inst!(LD (BC), A)) }),
+            /* 0x03 */ Box::new(|_| { Ok(inst!(INC BC)) }),
+            /* 0x04 */ Box::new(|_| { Ok(inst!(INC B)) }),
+            /* 0x05 */ Box::new(|_| { Ok(inst!(DEC B)) }),
+            /* 0x06 */ Box::new(|r| { Ok(inst!(LD B, r.read_u8()?)) }),
+            /* 0x07 */ Box::new(|_| { Ok(inst!(RLCA)) }),
+            /* 0x08 */ Box::new(|_| { Ok(inst!(EX AF, AF_)) }),
+            /* 0x09 */ Box::new(|_| { Ok(inst!(ADD HL, BC)) }),
+            /* 0x0a */ Box::new(|_| { Ok(inst!(LD A, (BC))) }),
+            /* 0x0b */ Box::new(|_| { Ok(inst!(DEC BC)) }),
+            /* 0x0c */ Box::new(|_| { Ok(inst!(INC C)) }),
+            /* 0x0d */ Box::new(|_| { Ok(inst!(DEC C)) }),
+            /* 0x0e */ Box::new(|r| { Ok(inst!(LD C, r.read_u8()?)) }),
+            /* 0x0f */ Box::new(|_| { Ok(inst!(RRCA)) }),            
+        }
+    }
+}
+
+impl Inst {    
     pub fn exec<C: Context>(&self, ctx: &mut C) -> Cycles {
         match self {
             Inst{mnemo: Mnemo::ADD, ops: Operands::Binary8(dst, src), .. } => self.exec_add(ctx, dst, src),
@@ -323,8 +337,9 @@ mod test {
 
     impl EncodeTest {
         fn run(&self) {
+            let decoder = Decoder::new();
             let mut read: &[u8] = &self.input;
-            let given = Inst::decode(&mut read).unwrap();
+            let given = decoder.decode(&mut read).unwrap();
             assert_eq!(self.expected, given, "decoding instruction:Dest {}", self.what);
         }
     }

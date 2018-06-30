@@ -2,13 +2,14 @@ use bus::Memory;
 
 use bus;
 use cpu::{Clock, Frequency};
-use cpu::z80::inst::{Context, Inst};
+use cpu::z80::inst::{Context, Decoder, Inst};
 use cpu::z80::regs::Registers;
 
 pub struct CPU<M: Memory> {
     mem: M,
     regs: Registers,
     clock: Clock,
+    decoder: Decoder,
 }
 
 impl<M: Memory> Context for CPU<M> {
@@ -25,6 +26,7 @@ impl<M: Memory> CPU<M> {
             mem: mem,
             regs: Registers::new(),
             clock: Clock::new(freq),
+            decoder: Decoder::new(),
         }
     }
 
@@ -42,7 +44,7 @@ impl<M: Memory> CPU<M> {
 
     fn decode_inst(&mut self) -> Inst {
         let mut mread = bus::read_from(&self.mem, self.regs.pc());
-        Inst::decode(&mut mread).expect("memory read should never fail")
+        self.decoder.decode(&mut mread).expect("memory read should never fail")
     }
 }
 
