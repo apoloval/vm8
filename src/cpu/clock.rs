@@ -46,7 +46,9 @@ pub struct Clock {
 }
 
 impl Clock {
-    pub fn new(freq: Frequency, adjust_period: Cycles) -> Clock {
+    pub fn new(freq: Frequency) -> Clock {
+        let cycle_period = freq.period();
+        let adjust_period = 10_000_000 / cycle_period.subsec_nanos() as Cycles;
         Clock { 
             cycle_period: freq.period(), 
             adjust_period, 

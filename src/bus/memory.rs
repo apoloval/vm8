@@ -66,14 +66,16 @@ impl<O: ByteOrder> MemoryItem<O> for u16 {
 
 pub struct MemoryBank {
     data: Vec<u8>,
+    readonly: bool,
 }
 
 impl MemoryBank {
     pub fn with_size(size: usize) -> MemoryBank {
-        MemoryBank { data: vec![0; size] }
+        MemoryBank { data: vec![0; size], readonly: false }
     }
 
     pub fn size(&self) -> usize { self.data.len() }
+    pub fn set_readonly(&mut self, val: bool) { self.readonly = val; }
 }
 
 impl Memory for MemoryBank {
@@ -93,18 +95,39 @@ impl Memory for MemoryBank {
     }
 
     fn write(&mut self, addr: Address, buf: &[u8]) {
-        let expected = buf.len();
-        let actual = {
-            let offset = usize::from(addr);
-            let limit = cmp::min(self.data[offset..].len(), buf.len());
-            let mut input: &[u8] = &buf[..limit];
-            let mut output: &mut[u8] = &mut self.data[offset..];
-            io::copy(&mut input, &mut output).unwrap() as usize
-        };
-        let remaining = expected - actual;
-        if remaining > 0 {
-            self.write(Address::from(0), &buf[actual..]);
+        if !self.readonly {
+            let expected = buf.len();
+            let actual = {
+                let offset = usize::from(addr);
+                let limit = cmp::min(self.data[offset..].len(), buf.len());
+                let mut input: &[u8] = &buf[..limit];
+                let mut output: &mut[u8] = &mut self.data[offset..];
+                io::copy(&mut input, &mut output).unwrap() as usize
+            };
+            let remaining = expected - actual;
+            if remaining > 0 {
+                self.write(Address::from(0), &buf[actual..]);
+            }
         }
+    }
+}
+
+pub trait MemoryController {
+    fn bank(&self, addr: Address) -> Option<&MemoryBank>;
+    fn bank_mut(&mut self, addr: Address) -> Option<&mut MemoryBank>;
+}
+
+impl<M: MemoryController> Memory for M {
+    fn read(&self, addr: Address, buf: &mut[u8]) {
+        if let Some(bank) = self.bank(addr) {
+            bank.read(addr, buf);
+        }        
+    }
+
+    fn write(&mut self, addr: Address, buf: &[u8]) {
+        if let Some(bank) = self.bank_mut(addr) {
+            bank.write(addr, buf);
+        }        
     }
 }
 

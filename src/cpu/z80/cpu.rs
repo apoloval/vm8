@@ -1,7 +1,7 @@
 use bus::Memory;
 
 use bus;
-use cpu::{Clock, Cycles, Frequency};
+use cpu::{Clock, Frequency};
 use cpu::z80::inst::{Context, Inst};
 use cpu::z80::regs::Registers;
 
@@ -20,11 +20,11 @@ impl<M: Memory> Context for CPU<M> {
 }
 
 impl<M: Memory> CPU<M> {
-    pub fn new(mem: M, freq: Frequency, adjust_period: Cycles) -> CPU<M> {
+    pub fn new(mem: M, freq: Frequency) -> CPU<M> {
         CPU {
             mem: mem,
             regs: Registers::new(),
-            clock: Clock::new(freq, adjust_period),
+            clock: Clock::new(freq),
         }
     }
 
@@ -97,6 +97,6 @@ mod test {
     fn sample_cpu(program: &[u8]) -> CPU<SampleMem> {
         // Test code runs in debug mode, which is highly inefficient.
         // Use a low CPU frequency to avoid panics due to slow emulation.
-        CPU::new(SampleMem::new(program), Frequency::from_khz(100.0), 10000)
+        CPU::new(SampleMem::new(program), Frequency::from_khz(100.0))
     }
 }
