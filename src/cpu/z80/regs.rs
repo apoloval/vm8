@@ -133,11 +133,7 @@ impl Registers {
         mem::swap(&mut self.hl, &mut self.hl_);
     }
 
-    pub fn pc(&self) -> Address {
-        return Address::from(self.pc)
-    }
-
-    pub fn inc_pc(&mut self, val: usize) {
-        self.pc += val as u16
-    }
+    pub fn pc(&self) -> Address { Address::from(self.pc) }
+    pub fn set_pc(&mut self, addr: Address) { self.pc = u16::from(addr) }
+    pub fn inc_pc(&mut self, val: usize) { self.pc += val as u16 }
 }

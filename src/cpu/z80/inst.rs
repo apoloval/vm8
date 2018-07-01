@@ -80,7 +80,7 @@ type Dest8 = Dest<Byte>;
 type Dest16 = Dest<Word>;
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Mnemo { ADD, DEC, EX, INC, LD, NOP, RLCA, RRCA }
+pub enum Mnemo { ADD, DEC, EX, INC, JP, LD, NOP, RLCA, RRCA }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Operands {
@@ -115,6 +115,7 @@ macro_rules! inst {
     (INC B) => (Inst{opcode: 0x04, mnemo: Mnemo::INC, ops: Operands::UnaryDest8(Dest::Reg(Reg8::B)), size: 1, cycles: 4});
     (INC C) => (Inst{opcode: 0x0c, mnemo: Mnemo::INC, ops: Operands::UnaryDest8(Dest::Reg(Reg8::C)), size: 1, cycles: 4});
     (INC BC) => (Inst{opcode: 0x03, mnemo: Mnemo::INC, ops: Operands::UnaryDest16(Dest::Reg(Reg16::BC)), size: 1, cycles: 6});
+    (JP $x:expr) => (Inst{opcode: 0xc3, mnemo: Mnemo::JP, ops: Operands::UnarySrc16(Src::Liter($x)), size: 3, cycles: 10});
     (LD A, (BC)) => (Inst{opcode: 0x0a, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::Reg(Reg8::A), Src::IndReg(Reg16::BC)), size: 1, cycles: 7});
     (LD (BC), A) => (Inst{opcode: 0x02, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::IndReg(Reg16::BC), Src::Reg(Reg8::A)), size: 1, cycles: 7});
     (LD B, $x:expr) => (Inst{opcode: 0x06, mnemo: Mnemo::LD, ops: Operands::Binary8(Dest::Reg(Reg8::B), Src::Liter($x)), size: 2, cycles: 7});
@@ -123,7 +124,6 @@ macro_rules! inst {
     (NOP) => (Inst{opcode: 0x00, mnemo: Mnemo::NOP, ops: Operands::Nulary, size: 1, cycles: 4});
     (RLCA) => (Inst{opcode: 0x07, mnemo: Mnemo::RLCA, ops: Operands::Nulary, size: 1, cycles: 4});
     (RRCA) => (Inst{opcode: 0x0f, mnemo: Mnemo::RRCA, ops: Operands::Nulary, size: 1, cycles: 4});
-    (RRCA) => (Inst{opcode: 0xc3, mnemo: Mnemo::JP, ops: Operands::UnaryDest16(Dest::), size: 1, cycles: 4});
 }
 
 type DecodeFn = Fn(&mut io::Read) -> io::Result<Inst>;
@@ -339,7 +339,7 @@ impl Decoder {
             /* 0xc0 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc1 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc2 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
-            /* 0xc3 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
+            /* 0xc3 */ Box::new(|r| { Ok(inst!(JP r.read_u16::<LittleEndian>()?)) }),
             /* 0xc4 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc5 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc6 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
@@ -413,6 +413,7 @@ impl Inst {
             Inst{mnemo: Mnemo::EX, ops: Operands::UnaryDest8(_), .. } => self.exec_exaf(ctx),
             Inst{mnemo: Mnemo::INC, ops: Operands::UnaryDest8(dst), .. } => self.exec_inc(ctx, dst),
             Inst{mnemo: Mnemo::INC, ops: Operands::UnaryDest16(dst), .. } => self.exec_inc(ctx, dst),
+            Inst{mnemo: Mnemo::JP, ops: Operands::UnarySrc16(src), .. } => self.exec_jp(ctx, src),
             Inst{mnemo: Mnemo::LD, ops: Operands::Binary16(dst, src), .. } => self.exec_load(ctx, dst, src),
             Inst{mnemo: Mnemo::NOP, .. } => self.exec_nop(ctx),
             Inst{mnemo: Mnemo::RLCA, .. } => self.exec_rlca(ctx),
@@ -438,6 +439,12 @@ impl Inst {
         let val = dst.read(ctx);
         dst.write(ctx, D::inc(val));
         ctx.regs_mut().inc_pc(self.size);
+        self.cycles
+    }
+
+    fn exec_jp<C: Context>(&self, ctx: &mut C, src: &Src16) -> Cycles {
+        let val = src.read(ctx);
+        ctx.regs_mut().set_pc(Address::from(val));
         self.cycles
     }
 
@@ -564,6 +571,11 @@ mod test {
                 what: "rrca",
                 input: vec![0x0f],
                 expected: inst!(RRCA), 
+            },
+            EncodeTest {
+                what: "jp 0x1234",
+                input: vec![0xc3, 0x34, 0x12],
+                expected: inst!(JP 0x1234), 
             },
         ];
         for test in &tests {
