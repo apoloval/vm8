@@ -10,9 +10,10 @@ struct ComputerMem {
 }
 
 impl ComputerMem {
-    fn new() -> ComputerMem {
+    fn new(program: &[u8]) -> ComputerMem {
         let mut rom = MemoryBank::with_size(16 * 1024);
         let ram = MemoryBank::with_size(64 * 1024);
+        rom.set_data(program).expect("program bytes are written");
         rom.set_readonly(true);
         ComputerMem { rom, ram }
     }
@@ -36,9 +37,14 @@ impl MemoryController for ComputerMem {
 }
 
 fn main() {
-    let mem = ComputerMem::new();
-    let mut cpu = z80::CPU::new(mem, cpu::Frequency::from_mhz(20.0));
-    for _ in 0..10_000_000 {
+    let program = &[
+        0x0c,               // INC C
+        0x0d,               // DEC C
+        0xc3, 0x00, 0x00,   // JP 0000h
+    ];
+    let mem = ComputerMem::new(program);
+    let mut cpu = z80::CPU::new(mem, cpu::Frequency::from_mhz(3.58));
+    for _ in 0..1_000_000 {
         cpu.exec_step();
     }
     let f = cpu.clock().native_freq().unwrap();

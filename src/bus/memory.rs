@@ -76,6 +76,12 @@ impl MemoryBank {
 
     pub fn size(&self) -> usize { self.data.len() }
     pub fn set_readonly(&mut self, val: bool) { self.readonly = val; }
+
+    pub fn set_data(&mut self, data: &[u8]) -> io::Result<u64> {
+        let mut input = data;
+        let output = &mut self.data;
+        io::copy(&mut input, output)
+    }
 }
 
 impl Memory for MemoryBank {
