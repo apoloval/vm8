@@ -58,7 +58,7 @@ impl Reg8 {
     }
 
     fn write_l(dst: &mut u16, val: u8) {
-        *dst = (*dst & 0x00ff) | (val as u16);
+        *dst = (*dst & 0xff00) | (val as u16);
     }
 }
 
@@ -86,6 +86,45 @@ impl Register<u16> for Reg16 {
             Reg16::IX => regs.ix = val,
             Reg16::IY => regs.iy = val,
         }
+    }
+}
+
+pub struct FlagUpdate {
+    set: u8,
+    reset: u8,
+}
+
+impl FlagUpdate {
+    pub fn new(opcode: u8) -> FlagUpdate { 
+        FlagUpdate{set: opcode & 0b00101000, reset: 0xff} 
+    }
+
+    #[allow(non_snake_case)]
+    pub fn C(self, val: u8) -> FlagUpdate { self.bit(0, val) }
+    
+    #[allow(non_snake_case)]
+    pub fn N(self, val: u8) -> FlagUpdate { self.bit(1, val) }
+    
+    #[allow(non_snake_case)]
+    pub fn PV(self, val: u8) -> FlagUpdate { self.bit(2, val) }
+    
+    #[allow(non_snake_case)]
+    pub fn H(self, val: u8) -> FlagUpdate { self.bit(4, val) }
+    
+    #[allow(non_snake_case)]
+    pub fn Z(self, val: u8) -> FlagUpdate { self.bit(6, val) }
+
+    #[allow(non_snake_case)]
+    pub fn S(self, val: u8) -> FlagUpdate { self.bit(7, val) }
+
+    pub fn apply(&self, flags: &mut u8) {
+        *flags |= self.set;
+        *flags &= self.reset;
+    }
+
+    fn bit(self, bit: i8, val: u8) -> FlagUpdate {
+        if val != 0 { FlagUpdate { set: self.set | (1 << bit), reset: self.reset } }
+        else { FlagUpdate { set: self.set, reset: self.reset & (!(1 << bit)) } }
     }
 }
 
@@ -133,7 +172,48 @@ impl Registers {
         mem::swap(&mut self.hl, &mut self.hl_);
     }
 
+    pub fn update_flags(&mut self, update: FlagUpdate) {
+        let mut val = self.af as u8;
+        update.apply(&mut val);
+        self.af = (self.af & 0xff00) | (val as u16);
+    }
+
     pub fn pc(&self) -> Address { Address::from(self.pc) }
     pub fn set_pc(&mut self, addr: Address) { self.pc = u16::from(addr) }
     pub fn inc_pc(&mut self, val: usize) { self.pc += val as u16 }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_flag_update() {
+        let mut flags: u8 = 0;
+        FlagUpdate::new(0b00101000).C(1).apply(&mut flags);
+        assert_eq!(0b00101001, flags);
+        FlagUpdate::new(0b00101000).N(1).apply(&mut flags);
+        assert_eq!(0b00101011, flags);
+        FlagUpdate::new(0b00101000).PV(1).apply(&mut flags);
+        assert_eq!(0b00101111, flags);
+        FlagUpdate::new(0b00101000).H(1).apply(&mut flags);
+        assert_eq!(0b00111111, flags);
+        FlagUpdate::new(0b00101000).Z(1).apply(&mut flags);
+        assert_eq!(0b01111111, flags);
+        FlagUpdate::new(0b00101000).S(1).apply(&mut flags);
+        assert_eq!(0b11111111, flags);
+
+        FlagUpdate::new(0b00101000).C(0).apply(&mut flags);
+        assert_eq!(0b11111110, flags);
+        FlagUpdate::new(0b00101000).N(0).apply(&mut flags);
+        assert_eq!(0b11111100, flags);
+        FlagUpdate::new(0b00101000).PV(0).apply(&mut flags);
+        assert_eq!(0b11111000, flags);
+        FlagUpdate::new(0b00101000).H(0).apply(&mut flags);
+        assert_eq!(0b11101000, flags);
+        FlagUpdate::new(0b00101000).Z(0).apply(&mut flags);
+        assert_eq!(0b10101000, flags);
+        FlagUpdate::new(0b00101000).S(0).apply(&mut flags);
+        assert_eq!(0b00101000, flags);
+    }
 }
