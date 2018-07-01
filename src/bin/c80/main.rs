@@ -38,7 +38,7 @@ impl MemoryController for ComputerMem {
 fn main() {
     let mem = ComputerMem::new();
     let mut cpu = z80::CPU::new(mem, cpu::Frequency::from_mhz(20.0));
-    for _ in 0..1_000_000 {
+    for _ in 0..10_000_000 {
         cpu.exec_step();
     }
     let f = cpu.clock().native_freq().unwrap();
