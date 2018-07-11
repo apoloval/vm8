@@ -2,7 +2,8 @@ use bus::{Address};
 use cpu::z80::data::Data;
 use cpu::z80::inst::ops::*;
 use cpu::z80::inst::*;
-use cpu::z80::regs::{Reg8, Register};
+use cpu::z80::reg;
+use cpu::z80::reg::{Read, Write};
 
 pub fn execute<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
     match inst {
@@ -69,16 +70,16 @@ fn exec_load<C: Context, D: Data>(inst: &Inst, ctx: &mut C, dst: &Dest<D>, src: 
 }
 
 fn exec_rlca<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-    let orig = Reg8::A.read(ctx.regs());
+    let orig = reg::Name8::A.read(ctx.regs());
     let dest = (orig << 1) | (orig >> 7);
-    Reg8::A.write(ctx.regs_mut(), dest);
+    reg::Name8::A.write(ctx.regs_mut(), dest);
     inst.cycles
 }
 
 fn exec_rrca<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-    let orig = Reg8::A.read(ctx.regs());
+    let orig = reg::Name8::A.read(ctx.regs());
     let dest = (orig >> 1) | (orig << 7);
-    Reg8::A.write(ctx.regs_mut(), dest);
+    reg::Name8::A.write(ctx.regs_mut(), dest);
     inst.cycles
 }
 

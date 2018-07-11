@@ -3,7 +3,7 @@ use bus::Memory;
 use bus;
 use cpu::{Clock, Frequency};
 use cpu::z80::inst::{Context, Decoder, Inst};
-use cpu::z80::regs::Registers;
+use cpu::z80::reg::Registers;
 
 pub struct CPU<M: Memory> {
     mem: M,

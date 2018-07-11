@@ -3,7 +3,7 @@ use std::io;
 use byteorder::{ReadBytesExt, LittleEndian};
 
 use cpu::z80::inst::{Dest, Inst, Mnemo, Operands, Src};
-use cpu::z80::regs::{Reg8, Reg16};
+use cpu::z80::reg;
 
 type DecodeFn = Fn(&mut io::Read) -> io::Result<Inst>;
 
@@ -284,7 +284,7 @@ impl Decoder {
 
 #[cfg(test)]
 mod test {
-    use cpu::z80::regs::{Reg16};
+    use cpu::z80::reg;
     use super::*;
 
     #[test]

@@ -1,5 +1,5 @@
 use bus::Memory;
-use cpu::z80::regs::Registers;
+use cpu::z80::reg::Registers;
 
 #[macro_use]
 mod defs;

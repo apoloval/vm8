@@ -43,7 +43,7 @@ fn main() {
         0xc3, 0x00, 0x00,   // JP 0000h
     ];
     let mem = ComputerMem::new(program);
-    let mut cpu = z80::CPU::new(mem, cpu::Frequency::from_mhz(3.58));
+    let mut cpu = z80::CPU::new(mem, cpu::Frequency::from_mhz(60.0));
     for _ in 0..1_000_000 {
         cpu.exec_step();
     }

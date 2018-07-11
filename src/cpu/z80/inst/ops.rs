@@ -1,7 +1,8 @@
 use bus::{Address, MemoryItem};
 use cpu::z80::data::{Data, Word, Byte};
 use cpu::z80::inst::Context;
-use cpu::z80::regs::{Reg16, Register};
+use cpu::z80::reg;
+use cpu::z80::reg::{Read, Write};
 
 pub trait OpRead<T> {
     fn read<C: Context>(&self, c: &C) -> T;
@@ -16,7 +17,7 @@ pub trait OpWrite<T> {
 pub enum Src<D: Data> {
     Liter(D::Value),
     Reg(D::Reg),
-    IndReg(Reg16),
+    IndReg(reg::Name16),
 }
 
 pub type Src8 = Src<Byte>;
@@ -39,7 +40,7 @@ impl<D: Data> Src<D> {
 #[derive(Debug, Eq, PartialEq)]
 pub enum Dest<D: Data> {
     Reg(D::Reg),
-    IndReg(Reg16),
+    IndReg(reg::Name16),
 }
 
 impl<D: Data> Dest<D> {

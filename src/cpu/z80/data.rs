@@ -2,12 +2,12 @@ use byteorder::{ByteOrder, LittleEndian};
 use num_traits::{Num, One};
 
 use bus::{MemoryItem};
-use cpu::z80::regs::{Reg8, Reg16, Register};
+use cpu::z80::reg;
 
 pub trait Data {
     type Ord: ByteOrder;
     type Value: Num + MemoryItem<Self::Ord> + Copy;
-    type Reg: Register<Self::Value>;
+    type Reg: reg::Read<Self::Value> + reg::Write<Self::Value>;
 
     fn inc(v: Self::Value) -> Self::Value { v + Self::Value::one() }
     fn dec(v: Self::Value) -> Self::Value { v - Self::Value::one() }
@@ -19,7 +19,7 @@ pub struct Byte;
 impl Data for Byte {
     type Ord = LittleEndian;
     type Value = u8;
-    type Reg = Reg8;
+    type Reg = reg::Name8;
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -28,5 +28,5 @@ pub struct Word;
 impl Data for Word {
     type Ord = LittleEndian;
     type Value = u16;
-    type Reg = Reg16;
+    type Reg = reg::Name16;
 }
