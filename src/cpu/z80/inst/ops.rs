@@ -30,14 +30,6 @@ impl Data for Word {
     type Reg = reg::Name16;
 }
 
-pub trait OpRead<T> {
-    fn read<C: Context>(&self, c: &C) -> T;
-}
-
-pub trait OpWrite<T> {
-    fn write<C: Context>(&self, c: &mut C, val: T);
-}
-
 // Src defines a source operand of a instruction
 #[derive(Debug, Eq, PartialEq)]
 pub enum Src<D: Data> {
