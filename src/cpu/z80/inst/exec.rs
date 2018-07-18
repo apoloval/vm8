@@ -1,5 +1,4 @@
 use bus::{Address};
-use cpu::z80::data::Data;
 use cpu::z80::inst::ops::*;
 use cpu::z80::inst::*;
 use cpu::z80::reg;

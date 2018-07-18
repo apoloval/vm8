@@ -1,7 +1,6 @@
 #[macro_use]
 pub mod inst;
 
-pub mod data;
 pub mod reg;
 
 mod cpu;

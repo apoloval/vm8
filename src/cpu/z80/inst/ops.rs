@@ -1,8 +1,37 @@
+use byteorder::{ByteOrder, LittleEndian};
+use num_traits::{Num, One};
+
 use bus::{Address, MemoryItem};
-use cpu::z80::data::{Data, Word, Byte};
 use cpu::z80::inst::Context;
 use cpu::z80::reg;
 use cpu::z80::reg::{Read, Write};
+
+pub trait Data {
+    type Ord: ByteOrder;
+    type Value: Num + MemoryItem<Self::Ord> + Copy;
+    type Reg: reg::Read<Self::Value> + reg::Write<Self::Value>;
+
+    fn inc(v: Self::Value) -> Self::Value { v + Self::Value::one() }
+    fn dec(v: Self::Value) -> Self::Value { v - Self::Value::one() }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Byte;
+
+impl Data for Byte {
+    type Ord = LittleEndian;
+    type Value = u8;
+    type Reg = reg::Name8;
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Word;
+
+impl Data for Word {
+    type Ord = LittleEndian;
+    type Value = u16;
+    type Reg = reg::Name16;
+}
 
 pub trait OpRead<T> {
     fn read<C: Context>(&self, c: &C) -> T;
