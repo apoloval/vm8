@@ -1,11 +1,10 @@
 use std::io;
 
-use byteorder::{ReadBytesExt, LittleEndian};
-
+use bus::BurstRead;
 use cpu::z80::inst::{Dest, Inst, Mnemo, Operands, Src};
 use cpu::z80::reg;
 
-type DecodeFn = Fn(&mut io::Read) -> io::Result<Inst>;
+type DecodeFn = Fn(&mut BurstRead) -> io::Result<Inst>;
 
 pub struct Decoder {
     main: Vec<Box<DecodeFn>>,
@@ -16,20 +15,20 @@ impl Decoder {
         Decoder { main: Self::build_main_table() }
     }
 
-    pub fn decode<R: io::Read>(&self, input: &mut R) -> io::Result<Inst> {
-        let opcode = input.read_u8()? as usize;
-        self.main[opcode](input)
+    pub fn decode<R: BurstRead>(&self, input: &mut R) -> io::Result<Inst> {
+        let opcode = input.read_byte();
+        self.main[opcode as usize](input)
     }
 
     fn build_main_table() -> Vec<Box<DecodeFn>> {
         vec! {
             /* 0x00 */ Box::new(|_| { Ok(inst!(NOP)) }),
-            /* 0x01 */ Box::new(|r| { Ok(inst!(LD BC, r.read_u16::<LittleEndian>()?)) }),
+            /* 0x01 */ Box::new(|r| { Ok(inst!(LD BC, r.read_word())) }),
             /* 0x02 */ Box::new(|_| { Ok(inst!(LD (BC), A)) }),
             /* 0x03 */ Box::new(|_| { Ok(inst!(INC BC)) }),
             /* 0x04 */ Box::new(|_| { Ok(inst!(INC B)) }),
             /* 0x05 */ Box::new(|_| { Ok(inst!(DEC B)) }),
-            /* 0x06 */ Box::new(|r| { Ok(inst!(LD B, r.read_u8()?)) }),
+            /* 0x06 */ Box::new(|r| { Ok(inst!(LD B, r.read_byte())) }),
             /* 0x07 */ Box::new(|_| { Ok(inst!(RLCA)) }),
             /* 0x08 */ Box::new(|_| { Ok(inst!(EX AF, AF_)) }),
             /* 0x09 */ Box::new(|_| { Ok(inst!(ADD HL, BC)) }),
@@ -37,7 +36,7 @@ impl Decoder {
             /* 0x0b */ Box::new(|_| { Ok(inst!(DEC BC)) }),
             /* 0x0c */ Box::new(|_| { Ok(inst!(INC C)) }),
             /* 0x0d */ Box::new(|_| { Ok(inst!(DEC C)) }),
-            /* 0x0e */ Box::new(|r| { Ok(inst!(LD C, r.read_u8()?)) }),
+            /* 0x0e */ Box::new(|r| { Ok(inst!(LD C, r.read_byte())) }),
             /* 0x0f */ Box::new(|_| { Ok(inst!(RRCA)) }),
             /* 0x10 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0x11 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
@@ -218,7 +217,7 @@ impl Decoder {
             /* 0xc0 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc1 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc2 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
-            /* 0xc3 */ Box::new(|r| { Ok(inst!(JP r.read_u16::<LittleEndian>()?)) }),
+            /* 0xc3 */ Box::new(|r| { Ok(inst!(JP r.read_word())) }),
             /* 0xc4 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc5 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),
             /* 0xc6 */ Box::new(|_| { Err(io::Error::from(io::ErrorKind::InvalidInput)) }),

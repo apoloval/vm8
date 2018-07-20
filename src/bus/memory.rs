@@ -1,30 +1,63 @@
-use std::cmp;
 use std::io;
+use std::marker::PhantomData;
 
-use byteorder::{ByteOrder, ReadBytesExt, WriteBytesExt};
+use byteorder::{ByteOrder, NativeEndian, ReadBytesExt};
 
 use bus::Address;
 
 pub trait Memory {
-    fn read(&self, addr: Address, buf: &mut[u8]);
-    fn write(&mut self, addr: Address, buf: &[u8]);
+    fn read_byte(&self, addr: Address) -> u8;
+    fn write_byte(&mut self, addr: Address, val: u8);
+
+    fn read_word<O: ByteOrder>(&self, addr: Address) -> u16 {
+        let data = [self.read_byte(addr), self.read_byte(addr + 1)];
+        O::read_u16(&data)
+    }
+
+    fn write_word<O: ByteOrder>(&mut self, addr: Address, val: u16) {
+        let mut data = [0; 2];
+        O::write_u16(&mut data, val);
+        self.write_byte(addr, data[0]);
+        self.write_byte(addr + 1, data[1]);
+    }
 }
 
-pub fn read_from<M: Memory>(mem: &M, from: Address) -> MemoryRead<M> {
-    MemoryRead{mem: mem, from: from}
+pub fn read_from<O: ByteOrder, M: Memory>(mem: &M, from: Address) -> ReadFrom<M, O> {
+    ReadFrom{mem: mem, from: from, order: PhantomData }
 }
 
-pub struct MemoryRead<'a, M: Memory + 'a> {
+pub trait BurstRead {
+    fn read_byte(&mut self) -> u8;
+    fn read_word(&mut self) -> u16;
+}
+
+impl<R> BurstRead for R where R: io::Read {
+    fn read_byte(&mut self) -> u8 {
+        self.read_u8().unwrap()
+    }
+
+    fn read_word(&mut self) -> u16 {
+        self.read_u16::<NativeEndian>().unwrap()
+    }
+}
+
+pub struct ReadFrom<'a, M: Memory + 'a, O: ByteOrder> {
     mem: &'a M,
     from: Address,
+    order: PhantomData<O>,
 }
 
-impl<'a, M: Memory + 'a> io::Read for MemoryRead<'a, M> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let nbytes = buf.len();
-        self.mem.read(self.from, buf);
-        self.from = self.from + nbytes;
-        Ok(nbytes)
+impl<'a, M: Memory + 'a, O: ByteOrder> BurstRead for ReadFrom<'a, M, O> {
+    fn read_byte(&mut self) -> u8 {
+        let byte = self.mem.read_byte(self.from);
+        self.from = self.from + 1;
+        byte
+    }
+
+    fn read_word(&mut self) -> u16 {
+        let word = self.mem.read_word::<O>(self.from);
+        self.from = self.from + 2;
+        word
     }
 }
 
@@ -35,32 +68,21 @@ pub trait MemoryItem<O: ByteOrder> {
 
 impl<O: ByteOrder> MemoryItem<O> for u8 {
     fn mem_read<M: Memory>(mem: &M, addr: Address) -> u8 {
-        let mut buf = [0];
-        mem.read(addr, &mut buf);
-        buf[0]
+        mem.read_byte(addr)
     }
 
     fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: u8) {
-        let buf = [val];
-        mem.write(addr, &buf);
+        mem.write_byte(addr, val);
     }
 }
 
 impl<O: ByteOrder> MemoryItem<O> for u16 {
     fn mem_read<M: Memory>(mem: &M, addr: Address) -> u16 {
-        let mut buf = [0, 0];
-        mem.read(addr, &mut buf);
-        let mut rbuf: &[u8] = &buf;
-        rbuf.read_u16::<O>().unwrap()
+        mem.read_word::<O>(addr)
     }
 
     fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: u16) {
-        let mut buf = [0, 0];
-        {
-            let mut wbuf: &mut [u8] = &mut buf;
-            wbuf.write_u16::<O>(val).unwrap();
-        }
-        mem.write(addr, &buf);
+        mem.write_word::<O>(addr, val);
     }
 }
 
@@ -85,37 +107,15 @@ impl MemoryBank {
 }
 
 impl Memory for MemoryBank {
-    fn read(&self, addr: Address, buf: &mut[u8]) {
-        let expected = buf.len();
-        let actual = {
-            let offset = usize::from(addr);
-            let limit = cmp::min(self.data.len(), offset + expected);
-            let mut input: &[u8] = &self.data[offset..limit];
-            let mut output: &mut[u8] = buf;
-            io::copy(&mut input, &mut output).unwrap() as usize
-        };
-        let remaining = expected - actual;
-        if remaining > 0 {
-            self.read(Address::from(0), &mut buf[actual..]);
-        }
+    fn read_byte(&self, addr: Address) -> u8 {
+        let offset = usize::from(addr) % self.data.len();
+        self.data[offset]
     }
 
-    fn write(&mut self, addr: Address, buf: &[u8]) {
-        if !self.readonly {
-            let expected = buf.len();
-            let actual = {
-                let offset = usize::from(addr);
-                let limit = cmp::min(self.data[offset..].len(), buf.len());
-                let mut input: &[u8] = &buf[..limit];
-                let mut output: &mut[u8] = &mut self.data[offset..];
-                io::copy(&mut input, &mut output).unwrap() as usize
-            };
-            let remaining = expected - actual;
-            if remaining > 0 {
-                self.write(Address::from(0), &buf[actual..]);
-            }
-        }
-    }
+    fn write_byte(&mut self, addr: Address, val: u8) {
+        let offset = usize::from(addr) % self.data.len();
+        self.data[offset] = val;
+    }    
 }
 
 pub trait MemoryController {
@@ -124,16 +124,17 @@ pub trait MemoryController {
 }
 
 impl<M: MemoryController> Memory for M {
-    fn read(&self, addr: Address, buf: &mut[u8]) {
-        if let Some(bank) = self.bank(addr) {
-            bank.read(addr, buf);
-        }        
+    fn read_byte(&self, addr: Address) -> u8 {
+        match self.bank(addr) {
+            Some(bank) => bank.read_byte(addr),
+            None => 0,
+        }
     }
 
-    fn write(&mut self, addr: Address, buf: &[u8]) {
+    fn write_byte(&mut self, addr: Address, val: u8) {
         if let Some(bank) = self.bank_mut(addr) {
-            bank.write(addr, buf);
-        }        
+            bank.write_byte(addr, val);
+        }
     }
 }
 
@@ -142,23 +143,12 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_memory_bank_read() {
+    fn test_memory_bank() {
         let mut bank = MemoryBank::with_size(64*1024);
-        bank.write(Address::from(0x0000), &[0x56, 0x78]);
-        bank.write(Address::from(0xfffe), &[0x12, 0x34]);
-        let mut buff = [0; 4];
-        bank.read(Address::from(0xfffe), &mut buff);
-        assert_eq!(buff, [0x12, 0x34, 0x56, 0x78]);
-    }
-
-    #[test]
-    fn test_memory_bank_write() {
-        let mut bank = MemoryBank::with_size(64*1024);
-        bank.write(Address::from(0xfffe), &[0x12, 0x34, 0x56, 0x78]);
-        let mut buff = [0; 2];
-        bank.read(Address::from(0xfffe), &mut buff);
-        assert_eq!(buff, [0x12, 0x34]);
-        bank.read(Address::from(0x0000), &mut buff);
-        assert_eq!(buff, [0x56, 0x78]);
+        bank.write_word::<NativeEndian>(Address::from(0x0000), 0x5678);
+        bank.write_word::<NativeEndian>(Address::from(0xfffe), 0x1234);
+        assert_eq!(0x1234, bank.read_word::<NativeEndian>(Address::from(0xfffe)));
+        assert_eq!(0x5678, bank.read_word::<NativeEndian>(Address::from(0x0000)));
+        assert_eq!(0x3456, bank.read_word::<NativeEndian>(Address::from(0xffff)));
     }
 }

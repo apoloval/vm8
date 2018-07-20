@@ -1,6 +1,7 @@
-use bus::Memory;
+use byteorder::LittleEndian;
 
 use bus;
+use bus::Memory;
 use cpu::{Clock, Frequency};
 use cpu::z80::inst::{Context, Decoder, Inst};
 use cpu::z80::reg::Registers;
@@ -43,7 +44,7 @@ impl<M: Memory> CPU<M> {
     }
 
     fn decode_inst(&mut self) -> Inst {
-        let mut mread = bus::read_from(&self.mem, self.regs.pc());
+        let mut mread = bus::read_from::<LittleEndian, M>(&self.mem, self.regs.pc());
         self.decoder.decode(&mut mread).expect("memory read should never fail")
     }
 }
@@ -51,7 +52,6 @@ impl<M: Memory> CPU<M> {
 #[cfg(test)]
 mod test {
     use std::io;
-    use std::io::{Read, Write};
 
     use bus::{Address, Memory};
 
@@ -83,16 +83,12 @@ mod test {
     }
 
     impl Memory for SampleMem {
-        fn read(&self, addr: Address, buf: &mut[u8]) {
-            let from = u16::from(addr) as usize;
-            let mut input: &[u8] = &self.data[from..];
-            input.read(buf).unwrap();
+        fn read_byte(&self, addr: Address) -> u8 {
+            self.data[usize::from(addr)]
         }
 
-        fn write(&mut self, addr: Address, buf: &[u8]) {
-            let from = u16::from(addr) as usize;
-            let mut input: &mut [u8] = &mut self.data[from..];
-            input.write(buf).unwrap();
+        fn write_byte(&mut self, addr: Address, val: u8) {
+            self.data[usize::from(addr)] = val;
         }
     }
 
