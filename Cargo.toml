@@ -1,11 +1,18 @@
 [package]
+authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
+build = "build.rs"
 name = "hemu"
 version = "0.1.0"
-authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
+
+[features]
+nightly = []
 
 [dependencies]
 byteorder = "1.2"
 num-traits = "0.2"
+
+[build-dependencies]
+rustc_version = "0.1.*"
 
 [lib]
 name = "hemu"

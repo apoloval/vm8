@@ -152,3 +152,31 @@ mod test {
         assert_eq!(0x3456, bank.read_word::<NativeEndian>(Address::from(0xffff)));
     }
 }
+
+#[cfg(all(feature = "nightly", test))]
+mod bench {
+    use super::*;
+
+    use test;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_memory_bank_read_64kb_by_byte(b: &mut Bencher) {
+        let bank = MemoryBank::with_size(64*1024);
+        b.iter(|| {
+            for i in 0..0xffff {
+                test::black_box(bank.read_byte(Address::from(i)));
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_memory_bank_read_word(b: &mut Bencher) {
+        let bank = MemoryBank::with_size(64*1024);
+        b.iter(|| {
+            for i in 0..0xffff {
+                test::black_box(bank.read_word::<NativeEndian>(Address::from(i)));
+            }
+        });
+    }
+}
