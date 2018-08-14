@@ -89,11 +89,12 @@ impl<O: ByteOrder> MemoryItem<O> for u16 {
 pub struct MemoryBank {
     data: Vec<u8>,
     readonly: bool,
+    addr_mask: usize,
 }
 
 impl MemoryBank {
     pub fn with_size(size: usize) -> MemoryBank {
-        MemoryBank { data: vec![0; size], readonly: false }
+        MemoryBank { data: vec![0; size], readonly: false, addr_mask: Self::addr_mask_from_size(size) }
     }
 
     pub fn size(&self) -> usize { self.data.len() }
@@ -104,16 +105,25 @@ impl MemoryBank {
         let output = &mut self.data;
         io::copy(&mut input, output)
     }
+
+    fn addr_mask_from_size(mut size: usize) -> usize {
+        let mut mask = 0;
+        while (size - 1) > 0 {
+            size = size >> 1;
+            mask = (mask << 1) | 1;
+        }
+        mask
+    }
 }
 
 impl Memory for MemoryBank {
     fn read_byte(&self, addr: Address) -> u8 {
-        let offset = usize::from(addr) % self.data.len();
+        let offset = usize::from(addr) & self.addr_mask;
         self.data[offset]
     }
 
     fn write_byte(&mut self, addr: Address, val: u8) {
-        let offset = usize::from(addr) % self.data.len();
+        let offset = usize::from(addr) & self.addr_mask;
         self.data[offset] = val;
     }    
 }
@@ -142,14 +152,16 @@ impl<M: MemoryController> Memory for M {
 mod test {
     use super::*;
 
+    use byteorder::BigEndian;
+
     #[test]
     fn test_memory_bank() {
         let mut bank = MemoryBank::with_size(64*1024);
-        bank.write_word::<NativeEndian>(Address::from(0x0000), 0x5678);
-        bank.write_word::<NativeEndian>(Address::from(0xfffe), 0x1234);
-        assert_eq!(0x1234, bank.read_word::<NativeEndian>(Address::from(0xfffe)));
-        assert_eq!(0x5678, bank.read_word::<NativeEndian>(Address::from(0x0000)));
-        assert_eq!(0x3456, bank.read_word::<NativeEndian>(Address::from(0xffff)));
+        bank.write_word::<BigEndian>(Address::from(0x0000), 0x5678);
+        bank.write_word::<BigEndian>(Address::from(0xfffe), 0x1234);
+        assert_eq!(0x1234, bank.read_word::<BigEndian>(Address::from(0xfffe)));
+        assert_eq!(0x5678, bank.read_word::<BigEndian>(Address::from(0x0000)));
+        assert_eq!(0x3456, bank.read_word::<BigEndian>(Address::from(0xffff)));
     }
 }
 
