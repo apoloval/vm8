@@ -3,86 +3,6 @@ use std::ops::{Deref, DerefMut};
 
 use bus::Address;
 
-pub trait Read<T> {
-    fn read(&self, regs: &Registers) -> T;
-}
-
-pub trait Write<T> {
-    fn write(&self, regs: &mut Registers, val: T);
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Name8 { A, B, C, D, E, H, L, IXH, IXL, IYH, IYL }
-
-impl Read<u8> for Name8 {
-    fn read(&self, regs: &Registers) -> u8 {
-        unsafe {
-            match self {
-                Name8::A => regs.af.as_byte.h,
-                Name8::B => regs.bc.as_byte.h,
-                Name8::C => regs.bc.as_byte.l,
-                Name8::D => regs.de.as_byte.h,
-                Name8::E => regs.de.as_byte.l,
-                Name8::H => regs.hl.as_byte.h,
-                Name8::L => regs.hl.as_byte.l,
-                Name8::IXH => regs.ix.as_byte.h,
-                Name8::IXL => regs.ix.as_byte.l,
-                Name8::IYH => regs.iy.as_byte.h,
-                Name8::IYL => regs.iy.as_byte.l,
-            }
-        }
-    }
-}
-
-impl Write<u8> for Name8 {
-    fn write(&self, regs: &mut Registers, val: u8) {
-        unsafe {
-            match self {
-                Name8::A => regs.af.as_byte.h = val,
-                Name8::B => regs.bc.as_byte.h = val,
-                Name8::C => regs.bc.as_byte.l = val,
-                Name8::D => regs.de.as_byte.h = val,
-                Name8::E => regs.de.as_byte.l = val,
-                Name8::H => regs.hl.as_byte.h = val,
-                Name8::L => regs.hl.as_byte.l = val,
-                Name8::IXH => regs.ix.as_byte.h = val,
-                Name8::IXL => regs.ix.as_byte.l = val,
-                Name8::IYH => regs.iy.as_byte.h = val,
-                Name8::IYL => regs.iy.as_byte.l = val,
-            }
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Name16 { AF, BC, DE, HL, IX, IY }
-
-impl Read<u16> for Name16 {
-    fn read(&self, regs: &Registers) -> u16 {
-        match self {
-            Name16::AF => *regs.af,
-            Name16::BC => *regs.bc,
-            Name16::DE => *regs.de,
-            Name16::HL => *regs.hl,
-            Name16::IX => *regs.ix,
-            Name16::IY => *regs.iy,
-        }
-    }
-}
-
-impl Write<u16> for Name16 {
-    fn write(&self, regs: &mut Registers, val: u16) {
-        match self {
-            Name16::AF => *regs.af = val,
-            Name16::BC => *regs.bc = val,
-            Name16::DE => *regs.de = val,
-            Name16::HL => *regs.hl = val,
-            Name16::IX => *regs.ix = val,
-            Name16::IY => *regs.iy = val,
-        }
-    }
-}
-
 pub struct FlagUpdate {
     set: u8,
     reset: u8,
@@ -128,14 +48,14 @@ impl FlagUpdate {
 
 #[derive(Clone, Copy)]
 pub struct Name8Pair {
-    l: u8,
-    h: u8,
+    pub l: u8,
+    pub h: u8,
 }
 
 #[derive(Clone, Copy)]
 pub union Register {
-    word: u16,
-    as_byte: Name8Pair,
+    pub word: u16,
+    pub as_byte: Name8Pair,
 }
 
 impl Default for Register {

@@ -6,7 +6,7 @@ use hemu::cpu;
 use hemu::cpu::{Processor};
 use hemu::cpu::z80;
 
-const MAX_CYCLES: usize = 2_000_000;
+const MAX_CYCLES: usize = 10_000_000;
 
 fn main() {
     let program = &[

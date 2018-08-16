@@ -1,8 +1,7 @@
 use std::io;
 
 use bus::BurstRead;
-use cpu::z80::inst::{Dest, Inst, Mnemo, Operands, Src};
-use cpu::z80::reg;
+use cpu::z80::inst::Inst;
 
 type DecodeFn = fn(&mut BurstRead) -> io::Result<Inst>;
 
@@ -283,7 +282,6 @@ impl Decoder {
 
 #[cfg(test)]
 mod test {
-    use cpu::z80::reg;
     use super::*;
 
     #[test]
