@@ -183,12 +183,62 @@ mod bench {
     }
 
     #[bench]
-    fn bench_memory_bank_read_word(b: &mut Bencher) {
+    fn bench_memory_bank_read_64kb_by_word(b: &mut Bencher) {
         let bank = MemoryBank::with_size(64*1024);
         b.iter(|| {
             for i in 0..0xffff {
                 test::black_box(bank.read_word::<NativeEndian>(Address::from(i)));
             }
         });
+    }
+
+    #[bench]
+    fn bench_memory_controller_read_64kb_by_byte(b: &mut Bencher) {
+        let bank = MultiBankMemory::new();
+        b.iter(|| {
+            for i in 0..0xffff {
+                test::black_box(bank.read_byte(Address::from(i)));
+            }
+        });
+    }
+
+    #[bench]
+    fn bench_memory_controller_read_64kb_by_word(b: &mut Bencher) {
+        let bank = MultiBankMemory::new();
+        b.iter(|| {
+            for i in 0..0xffff {
+                test::black_box(bank.read_word::<NativeEndian>(Address::from(i)));
+            }
+        });
+    }
+
+    struct MultiBankMemory {
+        rom: MemoryBank,
+        ram: MemoryBank,
+    }
+
+    impl MultiBankMemory {
+        fn new() -> Self {
+            let rom = MemoryBank::with_size(16 * 1024);
+            let ram = MemoryBank::with_size(64 * 1024);
+            Self { rom, ram }
+        }
+    }
+
+    impl MemoryController for MultiBankMemory {
+        fn bank(&self, addr: Address) -> Option<&MemoryBank> {
+            match usize::from(addr) {
+                0x0000 ... 0x3fff => Some(&self.rom),
+                0x4000 ... 0xffff => Some(&self.ram),
+                _ => None,
+            }
+        }
+
+        fn bank_mut(&mut self, addr: Address) -> Option<&mut MemoryBank> {
+            match usize::from(addr) {
+                0x4000 ... 0xffff => Some(&mut self.ram),
+                _ => None,
+            }
+        }
     }
 }
