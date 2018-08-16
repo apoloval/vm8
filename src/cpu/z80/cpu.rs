@@ -2,14 +2,13 @@ use byteorder::LittleEndian;
 
 use bus;
 use bus::Memory;
-use cpu::{Clock, Frequency};
+use cpu::{ExecutionPlan, ExecutionResult, Processor};
 use cpu::z80::inst::{Context, Decoder, Inst};
 use cpu::z80::reg::Registers;
 
 pub struct CPU<M: Memory> {
     mem: M,
     regs: Registers,
-    clock: Clock,
     decoder: Decoder,
 }
 
@@ -21,26 +20,25 @@ impl<M: Memory> Context for CPU<M> {
     fn mem_mut(&mut self) -> &mut M { &mut self.mem }
 }
 
+impl<M: Memory> Processor for CPU<M> {
+    fn execute(&mut self, plan: &ExecutionPlan) -> ExecutionResult {
+        let mut result = ExecutionResult::default();
+        while !plan.is_completed(&result) {
+            let inst = self.decode_inst();
+            result.total_cycles += inst.exec(self);
+            result.total_instructions += 1;
+        }
+        result
+    }
+}
+
 impl<M: Memory> CPU<M> {
-    pub fn new(mem: M, freq: Frequency) -> CPU<M> {
-        CPU {
+    pub fn new(mem: M) -> Self {
+        Self {
             mem: mem,
             regs: Registers::new(),
-            clock: Clock::new(freq),
             decoder: Decoder::new(),
         }
-    }
-
-    pub fn clock(&self) -> &Clock { &self.clock }
-
-    pub fn exec_step(&mut self) {
-        let inst = self.decode_inst();
-        let cycles = inst.exec(self);
-        self.clock.walk(cycles);
-    }
-
-    pub fn exec_inst(&mut self, inst: &Inst) {
-        inst.exec(self);
     }
 
     fn decode_inst(&mut self) -> Inst {
@@ -60,9 +58,8 @@ mod test {
     #[test]
     fn exec_nop() {
         let mut cpu = sample_cpu(&[0x00]);
-        for _ in 0..10000 {
-            cpu.exec_step();
-        }
+        let plan = ExecutionPlan::with_max_instructions(10000);
+        cpu.execute(&plan);
         assert_eq!(Address::from(10000), cpu.regs.pc());
     }
 
@@ -95,6 +92,6 @@ mod test {
     fn sample_cpu(program: &[u8]) -> CPU<SampleMem> {
         // Test code runs in debug mode, which is highly inefficient.
         // Use a low CPU frequency to avoid panics due to slow emulation.
-        CPU::new(SampleMem::new(program), Frequency::from_khz(100.0))
+        CPU::new(SampleMem::new(program))
     }
 }
