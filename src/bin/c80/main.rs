@@ -1,8 +1,7 @@
 extern crate hemu;
 
-use std::time::Instant;
-
 use hemu::bus::MemoryBank;
+use hemu::clock::{Clock, Frequency};
 use hemu::cpu;
 use hemu::cpu::{Processor};
 use hemu::cpu::z80;
@@ -20,12 +19,9 @@ fn main() {
     let mut cpu = z80::CPU::new(mem);
 
     let plan = cpu::ExecutionPlan::with_max_cycles(MAX_CYCLES);
-    let t0 = Instant::now();
+    let mut clock = Clock::new(Frequency::from_mhz(3.54));
     let exec_res = cpu.execute(&plan);
-    let t1 = Instant::now();
-    let duration = t1 - t0;
-    let duration_secs: f64 = duration.as_secs() as f64 + (duration.subsec_nanos() as f64 / 1_000_000_000.0);
-    let freq = exec_res.total_cycles as f64 / duration_secs;
+    let native_freq = clock.sync(exec_res.total_cycles);
 
-    println!("Program executed {} cycles in {}s ({}Mhz)", exec_res.total_cycles, duration_secs, freq / 1_000_000.0);
+    println!("Program executed {} cycles at native freq of {})", exec_res.total_cycles, native_freq);
 }
