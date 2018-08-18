@@ -393,3 +393,35 @@ mod test {
         }
     }
 }
+
+#[cfg(all(feature = "nightly", test))] 
+mod bench { 
+    use super::*; 
+ 
+    use test; 
+    use test::Bencher; 
+ 
+    #[bench] 
+    fn bench_decode_100_1byte_instructions(b: &mut Bencher) { 
+        let decoder = Decoder::new();
+        let input = vec![0x00]; 
+        b.iter(||{ 
+            for _ in 0..100 { 
+                let mut read: &[u8] = &input; 
+                test::black_box(decoder.decode(&mut read).unwrap()); 
+            } 
+        }) 
+    }     
+ 
+    #[bench] 
+    fn bench_decode_100_2byte_instructions(b: &mut Bencher) { 
+        let decoder = Decoder::new();
+        let input = vec![0x0e, 0x12]; 
+        b.iter(||{ 
+            for _ in 0..100 { 
+                let mut read: &[u8] = &input; 
+                test::black_box(decoder.decode(&mut read).unwrap()); 
+            } 
+        }) 
+    }     
+} 
