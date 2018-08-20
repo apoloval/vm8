@@ -1,7 +1,6 @@
 use std::io;
-use std::marker::PhantomData;
 
-use byteorder::{ByteOrder, NativeEndian, ReadBytesExt};
+use byteorder::ByteOrder;
 
 use bus::Address;
 
@@ -19,70 +18,6 @@ pub trait Memory {
         O::write_u16(&mut data, val);
         self.write_byte(addr, data[0]);
         self.write_byte(addr + 1, data[1]);
-    }
-}
-
-pub fn read_from<O: ByteOrder, M: Memory>(mem: &M, from: Address) -> ReadFrom<M, O> {
-    ReadFrom{mem: mem, from: from, order: PhantomData }
-}
-
-pub trait BurstRead {
-    fn read_byte(&mut self) -> u8;
-    fn read_word(&mut self) -> u16;
-}
-
-impl<R> BurstRead for R where R: io::Read {
-    fn read_byte(&mut self) -> u8 {
-        self.read_u8().unwrap()
-    }
-
-    fn read_word(&mut self) -> u16 {
-        self.read_u16::<NativeEndian>().unwrap()
-    }
-}
-
-pub struct ReadFrom<'a, M: Memory + 'a, O: ByteOrder> {
-    mem: &'a M,
-    from: Address,
-    order: PhantomData<O>,
-}
-
-impl<'a, M: Memory + 'a, O: ByteOrder> BurstRead for ReadFrom<'a, M, O> {
-    fn read_byte(&mut self) -> u8 {
-        let byte = self.mem.read_byte(self.from);
-        self.from = self.from + 1;
-        byte
-    }
-
-    fn read_word(&mut self) -> u16 {
-        let word = self.mem.read_word::<O>(self.from);
-        self.from = self.from + 2;
-        word
-    }
-}
-
-pub trait MemoryItem<O: ByteOrder> {
-    fn mem_read<M: Memory>(mem: &M, addr: Address) -> Self;
-    fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: Self);
-}
-
-impl<O: ByteOrder> MemoryItem<O> for u8 {
-    fn mem_read<M: Memory>(mem: &M, addr: Address) -> u8 {
-        mem.read_byte(addr)
-    }
-
-    fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: u8) {
-        mem.write_byte(addr, val);
-    }
-}
-
-impl<O: ByteOrder> MemoryItem<O> for u16 {
-    fn mem_read<M: Memory>(mem: &M, addr: Address) -> u16 {
-        mem.read_word::<O>(addr)
-    }
-
-    fn mem_write<M: Memory>(mem: &mut M, addr: Address, val: u16) {
-        mem.write_word::<O>(addr, val);
     }
 }
 
@@ -171,6 +106,8 @@ mod bench {
 
     use test;
     use test::Bencher;
+
+    use byteorder::NativeEndian;
 
     #[bench]
     fn bench_memory_bank_read_64kb_by_byte(b: &mut Bencher) {

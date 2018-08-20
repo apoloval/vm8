@@ -5,7 +5,7 @@ use cpu::z80::reg::Registers;
 mod defs;
 
 mod dec;
-pub use self::dec::Decoder;
+pub use self::dec::decode;
 
 mod exec;
 use self::exec::execute;

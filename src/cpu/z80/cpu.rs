@@ -1,15 +1,11 @@
-use byteorder::LittleEndian;
-
-use bus;
 use bus::Memory;
 use cpu::{ExecutionPlan, ExecutionResult, Processor};
-use cpu::z80::inst::{Context, Decoder, Inst};
+use cpu::z80::inst::{Context, Inst, decode};
 use cpu::z80::reg::Registers;
 
 pub struct CPU<M: Memory> {
     mem: M,
     regs: Registers,
-    decoder: Decoder,
 }
 
 impl<M: Memory> Context for CPU<M> {
@@ -37,13 +33,11 @@ impl<M: Memory> CPU<M> {
         Self {
             mem: mem,
             regs: Registers::new(),
-            decoder: Decoder::new(),
         }
     }
 
     fn decode_inst(&mut self) -> Inst {
-        let mut mread = bus::read_from::<LittleEndian, M>(&self.mem, self.regs.pc());
-        self.decoder.decode(&mut mread).expect("memory read should never fail")
+        decode(&self.mem, self.regs.pc())
     }
 }
 
