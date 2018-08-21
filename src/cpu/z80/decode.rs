@@ -1,10 +1,10 @@
 use byteorder::LittleEndian;
 
-use bus::{Address, Memory};
-use cpu::z80::Inst;
+use bus::ReadFromBytes;
+use cpu::z80::{Inst, MemoryBus};
 
-pub fn decode<M: Memory>(mem: &M, addr: Address) -> Inst {
-    let opcode = mem.read_byte(addr);
+pub fn decode<M: MemoryBus>(mem: &M, addr: u16) -> Inst {
+    let opcode = mem.read(addr);
     match opcode {
         0x00 => { inst!(NOP) },
         0x01 => { inst!(LD BC, mem.read_word::<LittleEndian>(addr + 1)) },
@@ -12,7 +12,7 @@ pub fn decode<M: Memory>(mem: &M, addr: Address) -> Inst {
         0x03 => { inst!(INC BC) },
         0x04 => { inst!(INC B) },
         0x05 => { inst!(DEC B) },
-        0x06 => { inst!(LD B, mem.read_byte(addr + 1)) },
+        0x06 => { inst!(LD B, mem.read(addr + 1)) },
         0x07 => { inst!(RLCA) },
         0x08 => { inst!(EX AF, AF_) },
         0x09 => { inst!(ADD HL, BC) },
@@ -20,7 +20,7 @@ pub fn decode<M: Memory>(mem: &M, addr: Address) -> Inst {
         0x0b => { inst!(DEC BC) },
         0x0c => { inst!(INC C) },
         0x0d => { inst!(DEC C) },
-        0x0e => { inst!(LD C, mem.read_byte(addr + 1)) },
+        0x0e => { inst!(LD C, mem.read(addr + 1)) },
         0x0f => { inst!(RRCA) },
         0xc3 => { inst!(JP mem.read_word::<LittleEndian>(addr + 1)) },               
         _ => { unimplemented!("decoded not implemented for the given opcode"); },        
@@ -29,12 +29,12 @@ pub fn decode<M: Memory>(mem: &M, addr: Address) -> Inst {
 
 #[cfg(test)]
 mod test {
+    use cpu::z80;
+
     use super::*;
 
-    use bus::MemoryBank;
-
     #[test]
-    fn should_encode() {
+    fn should_decode() {
         let tests = [
             DecodeTest {
                 what: "NOP",
@@ -135,9 +135,10 @@ mod test {
 
     impl DecodeTest {
         fn run(&self) {
-            let mut mem = MemoryBank::with_size(64*1024);
-            mem.set_data(&self.input).unwrap();
-            let given = decode(&mem, Address::from(0));
+            let mut input: &[u8] = &self.input;
+            println!(">>> The input is: {:?}", input);
+            let mem = z80::MemoryBank::from_data(&mut input).unwrap();
+            let given = decode(&mem, 0);
             assert_eq!(self.expected, given, "decoding instruction:Dest {}", self.what);
         }
     }
@@ -145,33 +146,33 @@ mod test {
 
 #[cfg(all(feature = "nightly", test))] 
 mod bench { 
-    use super::*; 
- 
     use test; 
     use test::Bencher; 
 
-    use bus::{Address, MemoryBank};
+    use cpu::z80;
+    
+    use super::*; 
  
     #[bench] 
     fn bench_decode_100_1byte_instructions(b: &mut Bencher) { 
-        let input = vec![0x00]; 
-        let mut mem = MemoryBank::with_size(64*1024);
-        mem.set_data(&input).unwrap();
+        let input = &[0x00]; 
+        let mut reader: &[u8] = input;
+        let mem = z80::MemoryBank::from_data(&mut reader).unwrap();
         b.iter(||{ 
             for _ in 1..100 { 
-                test::black_box(decode(&mem, Address::from(0))); 
+                test::black_box(decode(&mem, 0)); 
             } 
         }) 
     }     
  
     #[bench] 
     fn bench_decode_100_2byte_instructions(b: &mut Bencher) { 
-        let input = vec![0x0e, 0x12]; 
-        let mut mem = MemoryBank::with_size(64*1024);
-        mem.set_data(&input).unwrap();
+        let input = &[0x0e, 0x12];
+        let mut reader: &[u8] = input;
+        let mem = z80::MemoryBank::from_data(&mut reader).unwrap();
         b.iter(||{ 
             for _ in 1..100 { 
-                test::black_box(decode(&mem, Address::from(0))); 
+                test::black_box(decode(&mem, 0)); 
             } 
         }) 
     }     

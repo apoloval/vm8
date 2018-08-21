@@ -1,8 +1,6 @@
 use std::mem;
 use std::ops::{Deref, DerefMut};
 
-use bus::Address;
-
 #[derive(Clone, Copy)]
 pub struct Name8Pair {
     pub l: u8,
@@ -24,13 +22,13 @@ impl Default for Register {
 impl Deref for Register {
     type Target = u16;
     fn deref(&self) -> &u16 {
-        return unsafe { &self.word };
+        unsafe { &self.word }
     }
 }
 
 impl DerefMut for Register {
     fn deref_mut(&mut self) -> &mut u16 {
-        return unsafe { &mut self.word };
+        unsafe { &mut self.word }
     }
 }
 
@@ -85,12 +83,6 @@ impl Registers {
     pub fn set_flags(&mut self, val: u8) {
         unsafe { self.af.as_byte.l = val; }
     }
-
-    #[inline]
-    pub fn pc(&self) -> Address { Address::from(*self.pc) }
-
-    #[inline]
-    pub fn set_pc(&mut self, addr: Address) { *self.pc = u16::from(addr) }
 
     #[inline]
     pub fn inc_pc(&mut self, val: usize) { *self.pc += val as u16 }

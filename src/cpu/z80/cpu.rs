@@ -1,13 +1,12 @@
-use bus::Memory;
 use cpu::{ExecutionPlan, ExecutionResult, Processor};
-use cpu::z80::{Context, Registers, decode, execute};
+use cpu::z80::{Context, MemoryBus, Registers, decode, execute};
 
-pub struct CPU<M: Memory> {
+pub struct CPU<M: MemoryBus> {
     mem: M,
     regs: Registers,
 }
 
-impl<M: Memory> Context for CPU<M> {
+impl<M: MemoryBus> Context for CPU<M> {
     type Mem = M;
     fn regs(&self) -> &Registers { &self.regs }
     fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
@@ -15,11 +14,11 @@ impl<M: Memory> Context for CPU<M> {
     fn mem_mut(&mut self) -> &mut M { &mut self.mem }
 }
 
-impl<M: Memory> Processor for CPU<M> {
+impl<M: MemoryBus> Processor for CPU<M> {
     fn execute(&mut self, plan: &ExecutionPlan) -> ExecutionResult {
         let mut result = ExecutionResult::default();
         while !plan.is_completed(&result) {
-            let inst = decode(&self.mem, self.regs.pc());
+            let inst = decode(&self.mem, *self.regs.pc);
             result.total_cycles += execute(&inst, self);
             result.total_instructions += 1;
         }
@@ -27,7 +26,7 @@ impl<M: Memory> Processor for CPU<M> {
     }
 }
 
-impl<M: Memory> CPU<M> {
+impl<M: MemoryBus> CPU<M> {
     pub fn new(mem: M) -> Self {
         Self {
             mem: mem,
@@ -38,9 +37,7 @@ impl<M: Memory> CPU<M> {
 
 #[cfg(test)]
 mod test {
-    use std::io;
-
-    use bus::{Address, Memory};
+    use cpu::z80;
 
     use super::*;
 
@@ -49,38 +46,13 @@ mod test {
         let mut cpu = sample_cpu(&[0x00]);
         let plan = ExecutionPlan::with_max_instructions(10000);
         cpu.execute(&plan);
-        assert_eq!(Address::from(10000), cpu.regs.pc());
+        assert_eq!(10000, *cpu.regs.pc);
     }
 
-    struct SampleMem {
-        data: [u8; 64*1024],
-    }
-
-    impl SampleMem {
-        fn new(program: &[u8]) -> SampleMem {
-            let mut mem = SampleMem { data: [0; 64*1024] };
-            {
-                let mut input = program;
-                let mut output: &mut[u8] = &mut mem.data;
-                io::copy(&mut input, &mut output).unwrap();
-            }
-            mem
-        }
-    }
-
-    impl Memory for SampleMem {
-        fn read_byte(&self, addr: Address) -> u8 {
-            self.data[usize::from(addr)]
-        }
-
-        fn write_byte(&mut self, addr: Address, val: u8) {
-            self.data[usize::from(addr)] = val;
-        }
-    }
-
-    fn sample_cpu(program: &[u8]) -> CPU<SampleMem> {
+    fn sample_cpu(program: &[u8]) -> CPU<z80::MemoryBank> {
         // Test code runs in debug mode, which is highly inefficient.
         // Use a low CPU frequency to avoid panics due to slow emulation.
-        CPU::new(SampleMem::new(program))
+        let mut input = program;
+        CPU::new(z80::MemoryBank::from_data(&mut input).unwrap())
     }
 }

@@ -1,9 +1,9 @@
-use bus::{Address, Memory};
-use cpu::z80::{Cycles, Inst, Registers};
+use bus::Bus;
+use cpu::z80::{Cycles, Inst, MemoryBus, Registers};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
-    type Mem: Memory;
+    type Mem: MemoryBus;
     fn regs(&self) -> &Registers;
     fn regs_mut(&mut self) -> &mut Registers;
     fn mem(&self) -> &Self::Mem;
@@ -40,7 +40,7 @@ macro_rules! read_arg {
     // 16-bits registers
     ($ctx:expr, $inst:expr, BC) => (*($ctx.regs().bc));
     ($ctx:expr, $inst:expr, HL) => (*($ctx.regs().hl));
-    ($ctx:expr, $inst:expr, INDBC) => ($ctx.mem().read_byte(Address::from(*($ctx.regs().bc))));
+    ($ctx:expr, $inst:expr, INDBC) => ($ctx.mem().read(*($ctx.regs().bc)));
     // literals
     ($ctx:expr, $inst:expr, L8) => ($inst.extra8);
     ($ctx:expr, $inst:expr, L16) => ($inst.extra16);
@@ -55,8 +55,8 @@ macro_rules! write_arg {
     ($ctx:expr, HL, $val:expr) => (*($ctx.regs_mut().hl) = $val);
     ($ctx:expr, BC, $val:expr) => (*($ctx.regs_mut().bc) = $val);    
     ($ctx:expr, INDBC, $val:expr) => ({
-        let addr = Address::from(*($ctx.regs().bc));
-        $ctx.mem_mut().write_byte(addr, $val)
+        let addr = *($ctx.regs().bc);
+        $ctx.mem_mut().write(addr, $val)
     });
 }
 
@@ -217,13 +217,12 @@ fn exec_rrca<C: Context>(ctx: &mut C, inst: &Inst) -> Cycles {
 
 #[cfg(all(feature = "nightly", test))]
 mod bench {
-    use super::*;
-
     use test;
     use test::Bencher;
 
-    use bus::MemoryBank;
-    use cpu::z80::CPU;
+    use cpu::z80;
+
+    use super::*;
 
     #[bench]
     fn bench_exec_100_nops(b: &mut Bencher) {
@@ -236,8 +235,8 @@ mod bench {
     }
 
     fn exec_inst(b: &mut Bencher, inst: &Inst) {
-        let mem = MemoryBank::with_size(64*1024);
-        let mut cpu = CPU::new(mem);
+        let mem = z80::MemoryBank::new();
+        let mut cpu = z80::CPU::new(mem);
         b.iter(|| {
             for _ in 1..100 {
                 test::black_box(execute(inst, &mut cpu));
