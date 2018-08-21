@@ -1,7 +1,6 @@
 use bus::Memory;
 use cpu::{ExecutionPlan, ExecutionResult, Processor};
-use cpu::z80::inst::{Context, Inst, decode};
-use cpu::z80::reg::Registers;
+use cpu::z80::{Context, Registers, decode, execute};
 
 pub struct CPU<M: Memory> {
     mem: M,
@@ -20,8 +19,8 @@ impl<M: Memory> Processor for CPU<M> {
     fn execute(&mut self, plan: &ExecutionPlan) -> ExecutionResult {
         let mut result = ExecutionResult::default();
         while !plan.is_completed(&result) {
-            let inst = self.decode_inst();
-            result.total_cycles += inst.exec(self);
+            let inst = decode(&self.mem, self.regs.pc());
+            result.total_cycles += execute(&inst, self);
             result.total_instructions += 1;
         }
         result
@@ -34,10 +33,6 @@ impl<M: Memory> CPU<M> {
             mem: mem,
             regs: Registers::new(),
         }
-    }
-
-    fn decode_inst(&mut self) -> Inst {
-        decode(&self.mem, self.regs.pc())
     }
 }
 

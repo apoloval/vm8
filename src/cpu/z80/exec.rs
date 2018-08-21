@@ -1,5 +1,14 @@
-use bus::{Address};
-use cpu::z80::inst::*;
+use bus::{Address, Memory};
+use cpu::z80::{Cycles, Inst, Registers};
+
+// Context trait defines a context where instructions are executed
+pub trait Context {
+    type Mem: Memory;
+    fn regs(&self) -> &Registers;
+    fn regs_mut(&mut self) -> &mut Registers;
+    fn mem(&self) -> &Self::Mem;
+    fn mem_mut(&mut self) -> &mut Self::Mem;
+}
 
 pub fn execute<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
     match inst.opcode {

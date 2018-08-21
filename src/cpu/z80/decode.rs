@@ -1,7 +1,7 @@
 use byteorder::LittleEndian;
 
 use bus::{Address, Memory};
-use cpu::z80::inst::Inst;
+use cpu::z80::Inst;
 
 pub fn decode<M: Memory>(mem: &M, addr: Address) -> Inst {
     let opcode = mem.read_byte(addr);
