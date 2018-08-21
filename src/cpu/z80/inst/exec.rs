@@ -1,6 +1,5 @@
 use bus::{Address};
 use cpu::z80::inst::*;
-use cpu::z80::reg::FlagUpdate;
 
 pub fn execute<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
     match inst.opcode {
@@ -52,6 +51,34 @@ macro_rules! write_arg {
     });
 }
 
+macro_rules! flags_bitmask_set {
+    (C)         => (0b00000001);
+    (N)         => (0b00000010);
+    (PV)        => (0b00000100);
+    (H)         => (0b00010000);
+    (Z)         => (0b01000000);
+    (S)         => (0b10000000);
+    ($($a:ident),+) => ($(flags_bitmask_reset!($a))|+);
+}
+
+macro_rules! flags_bitmask_reset {
+    (C)         => (0b11111110);
+    (N)         => (0b11111101);
+    (PV)        => (0b11111011);
+    (H)         => (0b11101111);
+    (Z)         => (0b10111111);
+    (S)         => (0b01111111);
+    ($($a:ident),+) => ($(flags_bitmask_reset!($a))&+);
+}
+
+macro_rules! flags_apply {
+    ($a:expr, ) => ($a);
+    ($a:expr, $f:ident:0 $($rest:tt)*) => (flags_apply!($a & flags_bitmask_reset!($f), $($rest)*));
+    ($a:expr, $f:ident:1 $($rest:tt)*) => (flags_apply!($a | flags_bitmask_set!($f), $($rest)*));
+    ($a:expr, $f:ident:[$c:expr] $($rest:tt)*) => (flags_apply!(if $c { $a | flags_bitmask_set!($f) } else { $a & flags_bitmask_reset!($f) }, $($rest)*));
+    ($a:expr, [$($f:ident),+]:[$c:expr] $($rest:tt)*) => (flags_apply!(if $c { $a | flags_bitmask_set!($($f),+) } else { $a & flags_bitmask_reset!($($f),+) }, $($rest)*));
+}
+
 macro_rules! exec_func {
     ($name:ident, ADD8, $dst:tt, $src:tt) => (
         fn $name<C: Context>(ctx: &mut C, inst: &Inst) -> Cycles {
@@ -60,14 +87,8 @@ macro_rules! exec_func {
             let c = (a as u16) + (b as u16);
             write_arg!(ctx, $dst, c as u8);
             ctx.regs_mut().inc_pc(inst.size);
-            let flags = FlagUpdate::new()
-                .C(c > 0xff)
-                .H(c > 0xff)
-                .N(false)
-                .PV(c > 0xff)
-                .S(c > 0xff)
-                .Z(c == 0);
-            ctx.regs_mut().update_flags(flags);
+            let flags = flags_apply!(ctx.regs().flags(), [C,H,PV,S]:[c > 0xff] Z:[c == 0] N:0)
+            ctx.regs_mut().set_flags(flags);
             inst.cycles
         }
     );
@@ -78,11 +99,10 @@ macro_rules! exec_func {
             let c = (a as u32) + (b as u32);
             write_arg!(ctx, $dst, c as u16);
             ctx.regs_mut().inc_pc(inst.size);
-            let flags = FlagUpdate::new()
-                .C(c > 0xffff)
-                .N(true)
-                .H(c > 0x00ff);
-            ctx.regs_mut().update_flags(flags);
+
+            let flags = flags_apply!(ctx.regs().flags(), [C,H]:[c>0xffff] N:1);
+            ctx.regs_mut().set_flags(flags);
+
             inst.cycles
         }
     );
@@ -91,8 +111,8 @@ macro_rules! exec_func {
             let val = read_arg!(ctx, inst, $dst);
             write_arg!(ctx, $dst, val + 1);
             ctx.regs_mut().inc_pc(inst.size);
-            let flags = FlagUpdate::with_opcode(inst.opcode).N(true).PV(val == 0xff);
-            ctx.regs_mut().update_flags(flags);
+            let flags = flags_apply!(ctx.regs().flags(), N:1 PV:[val == 0xff]);
+            ctx.regs_mut().set_flags(flags);
             inst.cycles
         }
     );
@@ -109,8 +129,8 @@ macro_rules! exec_func {
             let val = read_arg!(ctx, inst, $dst);
             write_arg!(ctx, $dst, val - 1);
             ctx.regs_mut().inc_pc(inst.size);
-            let flags = FlagUpdate::with_opcode(inst.opcode).N(false).PV(val == 0);
-            ctx.regs_mut().update_flags(flags);
+            let flags = flags_apply!(ctx.regs().flags(), N:0 PV:[val == 0]);
+            ctx.regs_mut().set_flags(flags);
             inst.cycles
         }
     );
@@ -169,11 +189,8 @@ fn exec_rlca<C: Context>(ctx: &mut C, inst: &Inst) -> Cycles {
     let dest = (orig << 1) | carry;
     write_arg!(ctx, A, dest);
     ctx.regs_mut().inc_pc(inst.size);
-    let flags = FlagUpdate::with_opcode(inst.opcode)
-        .C(carry > 0)
-        .H(false)
-        .N(false);
-    ctx.regs_mut().update_flags(flags);
+    let flags = flags_apply!(ctx.regs().flags(), C:[carry > 0] H:0 N:0);
+    ctx.regs_mut().set_flags(flags);
 
     inst.cycles
 }
@@ -184,11 +201,8 @@ fn exec_rrca<C: Context>(ctx: &mut C, inst: &Inst) -> Cycles {
     let dest = (orig >> 1) | carry;
     write_arg!(ctx, A, dest);
     ctx.regs_mut().inc_pc(inst.size);
-    let flags = FlagUpdate::with_opcode(inst.opcode)
-        .C(carry > 0)
-        .H(false)
-        .N(false);
-    ctx.regs_mut().update_flags(flags);
+    let flags = flags_apply!(ctx.regs().flags(), C:[carry > 0] H:0 N:0);
+    ctx.regs_mut().set_flags(flags);
     inst.cycles
 }
 
