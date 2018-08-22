@@ -1,7 +1,20 @@
 use cpu::{ExecutionPlan, ExecutionResult, Processor};
 use cpu::z80::{Context, MemoryBus, Registers, exec_step};
 
+pub struct Options {
+    pub m1_wait_cycles: usize,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            m1_wait_cycles: 0,
+        }
+    }
+}
+
 pub struct CPU<M: MemoryBus> {
+    opts: Options,
     mem: M,
     regs: Registers,
 }
@@ -18,7 +31,7 @@ impl<M: MemoryBus> Processor for CPU<M> {
     fn execute(&mut self, plan: &ExecutionPlan) -> ExecutionResult {
         let mut result = ExecutionResult::default();
         while !plan.is_completed(&result) {
-            result.total_cycles += exec_step(self);
+            result.total_cycles += exec_step(self) + self.opts.m1_wait_cycles;
             result.total_instructions += 1;
         }
         result
@@ -26,8 +39,9 @@ impl<M: MemoryBus> Processor for CPU<M> {
 }
 
 impl<M: MemoryBus> CPU<M> {
-    pub fn new(mem: M) -> Self {
+    pub fn new(opts: Options, mem: M) -> Self {
         Self {
+            opts: opts,
             mem: mem,
             regs: Registers::new(),
         }
@@ -52,6 +66,6 @@ mod test {
         // Test code runs in debug mode, which is highly inefficient.
         // Use a low CPU frequency to avoid panics due to slow emulation.
         let mut input = program;
-        CPU::new(z80::MemoryBank::from_data(&mut input).unwrap())
+        CPU::new(Options::default(), z80::MemoryBank::from_data(&mut input).unwrap())
     }
 }

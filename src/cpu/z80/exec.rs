@@ -264,7 +264,7 @@ mod bench {
 
     fn exec_inst(b: &mut Bencher, inst: &Inst) {
         let mem = z80::MemoryBank::new();
-        let mut cpu = z80::CPU::new(mem);
+        let mut cpu = z80::CPU::new(z80::Options::default(), mem);
         b.iter(|| {
             for _ in 1..100 {
                 test::black_box(execute(inst, &mut cpu));

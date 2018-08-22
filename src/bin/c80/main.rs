@@ -8,6 +8,9 @@ use hemu::cpu::z80;
 const MAX_CYCLES: usize = 10_000_000;
 
 fn main() {
+    let mut opts = z80::Options::default();
+    opts.m1_wait_cycles = 1;
+
     let program = &[
         0x0c,               // INC C
         0x0d,               // DEC C
@@ -15,7 +18,7 @@ fn main() {
     ];
     let mut input: &[u8] = program;
     let mem = z80::MemoryBank::from_data(&mut input).unwrap();
-    let mut cpu = z80::CPU::new(mem);
+    let mut cpu = z80::CPU::new(opts, mem);
 
     let plan = cpu::ExecutionPlan::with_max_cycles(MAX_CYCLES);
     let mut clock = Clock::new(Frequency::from_mhz(3.54));
