@@ -1,5 +1,5 @@
 use cpu::{ExecutionPlan, ExecutionResult, Processor};
-use cpu::z80::{Context, MemoryBus, Registers, decode, execute};
+use cpu::z80::{Context, MemoryBus, Registers, exec_step};
 
 pub struct CPU<M: MemoryBus> {
     mem: M,
@@ -18,8 +18,7 @@ impl<M: MemoryBus> Processor for CPU<M> {
     fn execute(&mut self, plan: &ExecutionPlan) -> ExecutionResult {
         let mut result = ExecutionResult::default();
         while !plan.is_completed(&result) {
-            let inst = decode(&self.mem, *self.regs.pc);
-            result.total_cycles += execute(&inst, self);
+            result.total_cycles += exec_step(self);
             result.total_instructions += 1;
         }
         result
