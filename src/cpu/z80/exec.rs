@@ -14,22 +14,22 @@ pub trait Context {
 
 pub fn execute<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
     match inst.opcode {
-        0x00 => exec_nop(inst, ctx),
-        0x01 => exec_ld_bc_l16(inst, ctx),
-        0x02 => exec_ld_indbc_a(inst, ctx),
-        0x03 => exec_inc_bc(inst, ctx),
-        0x04 => exec_inc_b(inst, ctx),
-        0x05 => exec_dec_b(inst, ctx),
-        0x06 => exec_ld_b_l8(inst, ctx),
-        0x07 => exec_rlca(inst, ctx),
-        0x08 => exec_exaf(inst, ctx),
-        0x09 => exec_add_hl_bc(inst, ctx),
-        0x0a => exec_ld_a_indbc(inst, ctx),
-        0x0b => exec_dec_bc(inst, ctx),
-        0x0c => exec_inc_c(inst, ctx),
-        0x0d => exec_dec_c(inst, ctx),
-        0x0e => exec_ld_c_l8(inst, ctx),
-        0x0f => exec_rrca(inst, ctx),
+        0x00 => exec_nop(ctx),
+        0x01 => exec_ld_bc_l16(ctx),
+        0x02 => exec_ld_indbc_a(ctx),
+        0x03 => exec_inc_bc(ctx),
+        0x04 => exec_inc_b(ctx),
+        0x05 => exec_dec_b(ctx),
+        0x06 => exec_ld_b_l8(ctx),
+        0x07 => exec_rlca(ctx),
+        0x08 => exec_exaf(ctx),
+        0x09 => exec_add_hl_bc(ctx),
+        0x0a => exec_ld_a_indbc(ctx),
+        0x0b => exec_dec_bc(ctx),
+        0x0c => exec_inc_c(ctx),
+        0x0d => exec_dec_c(ctx),
+        0x0e => exec_ld_c_l8(ctx),
+        0x0f => exec_rrca(ctx),
         _ => unimplemented!("cannot execute illegal instruction"),
     }       
 }
@@ -38,39 +38,73 @@ pub fn exec_step<C: Context>(ctx: &mut C) -> Cycles {
     let pc = *ctx.regs().pc;
     let opcode = ctx.mem().read(pc);
     match opcode {
-        0x00 => exec_nop(&inst!(NOP), ctx),
-        0x01 => exec_ld_bc_l16(&inst!(LD BC, ctx.mem().read_word::<LittleEndian>(pc + 1)), ctx),
-        0x02 => exec_ld_indbc_a(&inst!(LD (BC), A), ctx),
-        0x03 => exec_inc_bc(&inst!(INC BC), ctx),
-        0x04 => exec_inc_b(&inst!(INC B), ctx),
-        0x05 => exec_dec_b(&inst!(DEC B), ctx),
-        0x06 => exec_ld_b_l8(&inst!(LD B, ctx.mem().read(pc + 1)), ctx),
-        0x07 => exec_rlca(&inst!(RLCA), ctx),
-        0x08 => exec_exaf(&inst!(EX AF, AF_), ctx),
-        0x09 => exec_add_hl_bc(&inst!(ADD HL, BC), ctx),
-        0x0a => exec_ld_a_indbc(&inst!(LD A, (BC)), ctx),
-        0x0b => exec_dec_bc(&inst!(DEC BC), ctx),
-        0x0c => exec_inc_c(&inst!(INC C), ctx),
-        0x0d => exec_dec_c(&inst!(DEC C), ctx),
-        0x0e => exec_ld_c_l8(&inst!(LD C, ctx.mem().read(pc + 1)), ctx),
-        0x0f => exec_rrca(&inst!(RRCA), ctx),
-        0xc3 => exec_jp_l16(&inst!(JP ctx.mem().read_word::<LittleEndian>(pc + 1)), ctx),
+        0x00 => exec_nop(ctx),
+        0x01 => exec_ld_bc_l16(ctx),
+        0x02 => exec_ld_indbc_a(ctx),
+        0x03 => exec_inc_bc(ctx),
+        0x04 => exec_inc_b(ctx),
+        0x05 => exec_dec_b(ctx),
+        0x06 => exec_ld_b_l8(ctx),
+        0x07 => exec_rlca(ctx),
+        0x08 => exec_exaf(ctx),
+        0x09 => exec_add_hl_bc(ctx),
+        0x0a => exec_ld_a_indbc(ctx),
+        0x0b => exec_dec_bc(ctx),
+        0x0c => exec_inc_c(ctx),
+        0x0d => exec_dec_c(ctx),
+        0x0e => exec_ld_c_l8(ctx),
+        0x0f => exec_rrca(ctx),
+        0xc3 => exec_jp_l16(ctx),
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
 }
 
 macro_rules! read_arg {
     // 8-bits registers
-    ($ctx:expr, $inst:expr, A) => (unsafe { $ctx.regs().af.as_byte.h });
-    ($ctx:expr, $inst:expr, B) => (unsafe { $ctx.regs().bc.as_byte.h });
-    ($ctx:expr, $inst:expr, C) => (unsafe { $ctx.regs().bc.as_byte.l });
+    ($ctx:expr, A) => (unsafe { $ctx.regs().af.as_byte.h });
+    ($ctx:expr, B) => (unsafe { $ctx.regs().bc.as_byte.h });
+    ($ctx:expr, C) => (unsafe { $ctx.regs().bc.as_byte.l });
     // 16-bits registers
-    ($ctx:expr, $inst:expr, BC) => (*($ctx.regs().bc));
-    ($ctx:expr, $inst:expr, HL) => (*($ctx.regs().hl));
-    ($ctx:expr, $inst:expr, INDBC) => ($ctx.mem().read(*($ctx.regs().bc)));
+    ($ctx:expr, BC) => (*($ctx.regs().bc));
+    ($ctx:expr, HL) => (*($ctx.regs().hl));
+    ($ctx:expr, INDBC) => ($ctx.mem().read(*($ctx.regs().bc)));
     // literals
-    ($ctx:expr, $inst:expr, L8) => ($inst.extra8);
-    ($ctx:expr, $inst:expr, L16) => ($inst.extra16);
+    ($ctx:expr, L8) => ({
+        let pc = *$ctx.regs().pc;
+        $ctx.mem().read(pc + 1)
+    });
+    ($ctx:expr, L16) => ({
+        let pc = *$ctx.regs().pc;
+        $ctx.mem().read_word::<LittleEndian>(pc + 1)
+    });
+}
+
+macro_rules! arg_size {
+    (L8) => (1);
+    (L16) => (2);
+    ($a:tt) => (0);
+}
+
+macro_rules! fetch_cycles {
+    (INDBC) => (3);
+    (L8) => (3);
+    (L16) => (6);
+    ($a:tt) => (0);
+}
+
+macro_rules! inst_cycles {
+    (ADD8) => (4);
+    (ADD16) => (11);
+    (DEC8) => (4);
+    (DEC16) => (6);
+    (EXAF) => (4);
+    (JP) => (4);
+    (INC8) => (4);
+    (INC16) => (6);
+    (LOAD) => (4);    
+    (NOP) => (4);
+    (RLCA) => (4);
+    (RRCA) => (4);
 }
 
 macro_rules! write_arg {
@@ -117,80 +151,80 @@ macro_rules! flags_apply {
 
 macro_rules! exec_func {
     ($name:ident, ADD8, $dst:tt, $src:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let a = read_arg!(ctx, inst, $src);
-            let b = read_arg!(ctx, inst, $dst);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let a = read_arg!(ctx, $src);
+            let b = read_arg!(ctx, $dst);
             let c = (a as u16) + (b as u16);
             write_arg!(ctx, $dst, c as u8);
-            ctx.regs_mut().inc_pc(inst.size);
+            ctx.regs_mut().inc_pc(1 + arg_size!($src) + arg_size!($dst));
             let flags = flags_apply!(ctx.regs().flags(), [C,H,PV,S]:[c > 0xff] Z:[c == 0] N:0)
             ctx.regs_mut().set_flags(flags);
-            inst.cycles
+            inst_cycles!(ADD8) + fetch_cycles!($src) + fetch_cycles!($dst)
         }
     );
     ($name:ident, ADD16, $dst:tt, $src:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let a = read_arg!(ctx, inst, $dst);
-            let b = read_arg!(ctx, inst, $src);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let a = read_arg!(ctx, $dst);
+            let b = read_arg!(ctx, $src);
             let c = (a as u32) + (b as u32);
             write_arg!(ctx, $dst, c as u16);
-            ctx.regs_mut().inc_pc(inst.size);
+            ctx.regs_mut().inc_pc(1 + arg_size!($src) + arg_size!($dst));
 
             let flags = flags_apply!(ctx.regs().flags(), [C,H]:[c>0xffff] N:1);
             ctx.regs_mut().set_flags(flags);
 
-            inst.cycles
+            inst_cycles!(ADD16) + fetch_cycles!($src) + fetch_cycles!($dst)
         }
     );
     ($name:ident, INC8, $dst:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let val = read_arg!(ctx, inst, $dst);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let val = read_arg!(ctx, $dst);
             write_arg!(ctx, $dst, val + 1);
-            ctx.regs_mut().inc_pc(inst.size);
+            ctx.regs_mut().inc_pc(1 + arg_size!($dst));
             let flags = flags_apply!(ctx.regs().flags(), N:1 PV:[val == 0xff]);
             ctx.regs_mut().set_flags(flags);
-            inst.cycles
+            inst_cycles!(INC8) + fetch_cycles!($dst)
         }
     );
     ($name:ident, INC16, $dst:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let val = read_arg!(ctx, inst, $dst);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let val = read_arg!(ctx, $dst);
             write_arg!(ctx, $dst, val + 1);
-            ctx.regs_mut().inc_pc(inst.size);
-            inst.cycles
+            ctx.regs_mut().inc_pc(1 + arg_size!($dst));
+            inst_cycles!(INC16) + fetch_cycles!($dst)
         }
     );
     ($name:ident, DEC8, $dst:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let val = read_arg!(ctx, inst, $dst);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let val = read_arg!(ctx, $dst);
             write_arg!(ctx, $dst, val - 1);
-            ctx.regs_mut().inc_pc(inst.size);
+            ctx.regs_mut().inc_pc(1 + arg_size!($dst));
             let flags = flags_apply!(ctx.regs().flags(), N:0 PV:[val == 0]);
             ctx.regs_mut().set_flags(flags);
-            inst.cycles
+            inst_cycles!(DEC8) + fetch_cycles!($dst)
         }
     );
     ($name:ident, DEC16, $dst:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let val = read_arg!(ctx, inst, $dst);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let val = read_arg!(ctx, $dst);
             write_arg!(ctx, $dst, val - 1);
-            ctx.regs_mut().inc_pc(inst.size);
-            inst.cycles
+            ctx.regs_mut().inc_pc(1 + arg_size!($dst));
+            inst_cycles!(DEC16) + fetch_cycles!($dst)
         }
     );
     ($name:ident, JP, $src:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let val = read_arg!(ctx, inst, $src);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let val = read_arg!(ctx, $src);
             *ctx.regs_mut().pc = val;
-            inst.cycles
+            inst_cycles!(JP) + fetch_cycles!($src)
         }
     );
     ($name:ident, LOAD, $dst:tt, $src:tt) => (
-        fn $name<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-            let val = read_arg!(ctx, inst, $src);
+        fn $name<C: Context>(ctx: &mut C) -> Cycles {
+            let val = read_arg!(ctx, $src);
             write_arg!(ctx, $dst, val);
-            ctx.regs_mut().inc_pc(inst.size);
-            inst.cycles
+            ctx.regs_mut().inc_pc(1 + arg_size!($src) + arg_size!($dst));
+            inst_cycles!(LOAD) + fetch_cycles!($src) + fetch_cycles!($dst)
         }
     );
 }
@@ -209,38 +243,38 @@ exec_func!(exec_ld_c_l8, LOAD, C, L8);
 exec_func!(exec_ld_bc_l16, LOAD, BC, L16);
 exec_func!(exec_ld_indbc_a, LOAD, INDBC, A);
 
-fn exec_nop<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-    ctx.regs_mut().inc_pc(inst.size);
-    inst.cycles
+fn exec_nop<C: Context>(ctx: &mut C) -> Cycles {
+    ctx.regs_mut().inc_pc(1);
+    inst_cycles!(NOP)
 }
 
-fn exec_exaf<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
+fn exec_exaf<C: Context>(ctx: &mut C) -> Cycles {
     ctx.regs_mut().swap_af();
-    ctx.regs_mut().inc_pc(inst.size);
-    inst.cycles
+    ctx.regs_mut().inc_pc(1);
+    inst_cycles!(EXAF)
 }
 
-fn exec_rlca<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-    let orig = read_arg!(ctx, inst, A);
+fn exec_rlca<C: Context>(ctx: &mut C) -> Cycles {
+    let orig = read_arg!(ctx, A);
     let carry = orig >> 7;
     let dest = (orig << 1) | carry;
     write_arg!(ctx, A, dest);
-    ctx.regs_mut().inc_pc(inst.size);
+    ctx.regs_mut().inc_pc(1);
     let flags = flags_apply!(ctx.regs().flags(), C:[carry > 0] H:0 N:0);
     ctx.regs_mut().set_flags(flags);
 
-    inst.cycles
+    inst_cycles!(RLCA)
 }
 
-fn exec_rrca<C: Context>(inst: &Inst, ctx: &mut C) -> Cycles {
-    let orig = read_arg!(ctx, inst, A);
+fn exec_rrca<C: Context>(ctx: &mut C) -> Cycles {
+    let orig = read_arg!(ctx, A);
     let carry = orig << 7;
     let dest = (orig >> 1) | carry;
     write_arg!(ctx, A, dest);
-    ctx.regs_mut().inc_pc(inst.size);
+    ctx.regs_mut().inc_pc(1);
     let flags = flags_apply!(ctx.regs().flags(), C:[carry > 0] H:0 N:0);
     ctx.regs_mut().set_flags(flags);
-    inst.cycles
+    inst_cycles!(RRCA)
 }
 
 #[cfg(all(feature = "nightly", test))]
