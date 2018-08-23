@@ -13,6 +13,14 @@ pub union Register {
     pub as_byte: Name8Pair,
 }
 
+impl Register {
+    pub fn low(&self) -> u8 { unsafe { self.as_byte.l } }
+    pub fn high(&self) -> u8 { unsafe { self.as_byte.h } }
+    
+    pub fn set_low(&mut self, val: u8) { unsafe { self.as_byte.l = val } }
+    pub fn set_high(&mut self, val: u8) { unsafe { self.as_byte.h = val } }
+}
+
 impl Default for Register {
     fn default() -> Register {
         Register { word: 0 }
