@@ -2,10 +2,12 @@ use byteorder::LittleEndian;
 
 use bus::{Bus, ReadFromBytes, WriteFromBytes};
 use cpu::z80::{Cycles, MemoryBus, Registers};
+use cpu::z80::alu::ALU;
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
     type Mem: MemoryBus;
+    fn alu(&self) -> &ALU;
     fn regs(&self) -> &Registers;
     fn regs_mut(&mut self) -> &mut Registers;
     fn mem(&self) -> &Self::Mem;
@@ -85,11 +87,11 @@ trait Execute : Context + Sized {
 
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
         let fetch = D::read_arg(self);
-        let flags = self.regs().flags();
-        let (result, new_flags) = Self::alu_add8(fetch.data, 1, flags);
+        let mut flags = self.regs().flags();
+        let result = self.alu().add8(fetch.data, 1, &mut flags);
         D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
-        self.regs_mut().set_flags(new_flags);
+        self.regs_mut().set_flags(flags);
     }
 
     fn exec_inc16<D: Src16 + Dest16>(&mut self) {

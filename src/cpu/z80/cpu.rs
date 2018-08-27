@@ -1,5 +1,6 @@
 use cpu::{ExecutionPlan, ExecutionResult, Processor};
 use cpu::z80::{Context, MemoryBus, Registers, exec_step};
+use cpu::z80::alu::ALU;
 
 pub struct Options {
     pub m1_wait_cycles: usize,
@@ -17,10 +18,12 @@ pub struct CPU<M: MemoryBus> {
     opts: Options,
     mem: M,
     regs: Registers,
+    alu: ALU,
 }
 
 impl<M: MemoryBus> Context for CPU<M> {
     type Mem = M;
+    fn alu(&self) -> &ALU { &self.alu }
     fn regs(&self) -> &Registers { &self.regs }
     fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
     fn mem(&self) -> &M { &self.mem }
@@ -44,6 +47,7 @@ impl<M: MemoryBus> CPU<M> {
             opts: opts,
             mem: mem,
             regs: Registers::new(),
+            alu: ALU::new(),
         }
     }
 }

@@ -7,6 +7,7 @@ pub mod inst;
 #[macro_use]
 pub mod flags;
 
+mod alu;
 mod cpu;
 mod error;
 mod exec;
