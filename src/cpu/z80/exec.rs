@@ -66,6 +66,18 @@ trait Execute : Context + Sized {
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
     }
 
+    fn exec_djnz<S: Src8>(&mut self) -> bool {
+        let b = self.regs().bc.high() - 1;
+        if b > 0 {
+            let s = S::read_arg(self);
+            let pc = *self.regs().pc;
+            *self.regs_mut().pc = pc + (s.data as i8 as u16);
+            true
+        } else {
+            false
+        }
+    }
+
     fn exec_exaf(&mut self) {
         self.regs_mut().swap_af();
         self.regs_mut().inc_pc(1);
@@ -73,10 +85,11 @@ trait Execute : Context + Sized {
 
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
         let fetch = D::read_arg(self);
-        D::write_arg(self, fetch.data + 1);
+        let flags = self.regs().flags();
+        let (result, new_flags) = Self::alu_add8(fetch.data, 1, flags);
+        D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
-        let flags = flags_apply!(self.regs().flags(), N:1 PV:[fetch.data == 0xff]);
-        self.regs_mut().set_flags(flags);
+        self.regs_mut().set_flags(new_flags);
     }
 
     fn exec_inc16<D: Src16 + Dest16>(&mut self) {
@@ -121,6 +134,18 @@ trait Execute : Context + Sized {
         let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
         self.regs_mut().set_flags(flags);
     }
+
+    fn alu_add8(a: u8, b: u8, flags: u8) -> (u8, u8) {
+        let c = ((a as u16) + (b as u16)) as u8;
+        let new_flags = flags_apply!(flags,
+            S:[(c & 0x80) != 0]
+            Z:[c == 0]
+            H:[((a & 0x0f) + (b & 0x0f)) & 0x10 != 0]
+            PV:[(a ^ b ^ 0x80) & (b ^ c) & 0x80 != 0]
+            N:0
+            C:[c < a]);
+        (c as u8, new_flags)
+    }
 }
 
 impl<T> Execute for T where T: Context + Sized {}
@@ -164,7 +189,7 @@ macro_rules! def_reg8_arg {
             type Item = u8;
 
             #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> { 
+            fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
                 Fetch { data: ctx.regs().$r16.$r8r(), mem_bytes: 0 }
             }
         }
@@ -186,7 +211,7 @@ macro_rules! def_reg16_arg {
             type Item = u16;
 
             #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> { 
+            fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> {
                 Fetch { data: *ctx.regs().$r16, mem_bytes: 0 }
             }
         }
@@ -208,10 +233,10 @@ macro_rules! def_indreg16_arg {
             type Item = u8;
 
             #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> { 
+            fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
                 let addr = *ctx.regs().$r16;
                 let data = ctx.mem().read(addr);
-                Fetch { data: data, mem_bytes: 1 }
+                Fetch { data: data, mem_bytes: 0 }
             }
         }
 
@@ -219,7 +244,7 @@ macro_rules! def_indreg16_arg {
             type Item = u8;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) { 
+            fn write_arg<C: Context>(ctx: &mut C, val: u8) {
                 let addr = *ctx.regs().$r16;
                 ctx.mem_mut().write(addr, val);
             }
@@ -245,7 +270,7 @@ impl Src for L8 {
     type Item = u8;
 
     #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> { 
+    fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
         let pc = *ctx.regs().pc;
         Fetch { data: ctx.mem().read(pc + 1), mem_bytes: 1 }
     }
@@ -256,13 +281,117 @@ impl Src for L16 {
     type Item = u16;
 
     #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> { 
+    fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> {
         let pc = *ctx.regs().pc;
         Fetch { data: ctx.mem().read_word::<LittleEndian>(pc + 1), mem_bytes: 2 }
     }
 }
 
 /********************************************************/
+
+mod test {
+    use cpu::z80;
+
+    use super::*;
+
+    #[test]
+    fn test_exec_nop() {
+        let mut test = ExecTest::for_inst(&inst!(NOP));
+        test.exec_step();
+        assert_eq!(0x0001, *test.cpu.regs().pc);
+        assert_eq!(0x00, test.cpu.regs().flags());
+    }
+
+    #[test]
+    fn test_exec_ld_bc_l16() {
+        let mut test = ExecTest::for_inst(&inst!(LD BC, 0x1234));
+        test.exec_step();
+        assert_eq!(0x0003, *test.cpu.regs().pc);
+        assert_eq!(0x1234, *test.cpu.regs().bc);
+        assert_eq!(0x00, test.cpu.regs().flags());
+    }
+
+    #[test]
+    fn test_exec_ld_indbc_a() {
+        let mut test = ExecTest::for_inst(&inst!(LD (BC), A));
+        test.cpu.regs_mut().af.set_high(0x42);
+        *test.cpu.regs_mut().bc = 0x1234;
+        test.exec_step();
+        assert_eq!(0x0001, *test.cpu.regs().pc);
+        assert_eq!(0x42, test.cpu.mem().read_word::<LittleEndian>(0x1234));
+        assert_eq!(0x00, test.cpu.regs().flags());
+    }
+
+    #[test]
+    fn test_exec_inc_bc() {
+        let mut test = ExecTest::for_inst(&inst!(INC BC));
+        *test.cpu.regs_mut().bc = 0x1234;
+        test.exec_step();
+        assert_eq!(0x0001, *test.cpu.regs().pc);
+        assert_eq!(0x1235, *test.cpu.regs().bc);
+        assert_eq!(0x00, test.cpu.regs().flags());
+    }
+
+    #[test]
+    fn test_exec_inc_b() {
+        let mut test = ExecTest::for_inst(&inst!(INC B));
+        test.cpu.regs_mut().bc.set_high(0x12);
+        test.exec_step();
+        assert_eq!(0x0001, *test.cpu.regs().pc);
+        assert_eq!(0x13, test.cpu.regs().bc.high());
+        assert_eq!(0b00000000, test.cpu.regs().flags());
+
+        // Result is 0 (zero flag, carry flag, half-carry)
+        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0xff) }, 0b_0101_0001);
+
+        // Result is 128 (sign flag, overflow, half-carry)
+        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x7f) }, 0b_1001_0100);
+    }
+
+    /*
+    #[test]
+    fn test_exec_dec_b() {
+        let mut test = ExecTest::for_inst(&inst!(DEC B));
+        test.cpu.regs_mut().bc.set_high(0x12);
+        test.exec_step();
+        assert_eq!(0x0001, *test.cpu.regs().pc);
+        assert_eq!(0x11, test.cpu.regs().bc.high());
+        assert_eq!(0b00000010, test.cpu.regs().flags());
+
+        // Result is 0 (zero flag)
+        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x01) }, 0b01000000);
+
+        // Result is -1 (sign flag, overflow)
+        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x7f) }, 0b10000100);
+
+        // Result is 16 (half-carry)
+        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x0f) }, 0b00010000);
+    }
+    */
+
+    struct ExecTest {
+        pub cpu: z80::CPU<z80::MemoryBank>,
+    }
+
+    impl ExecTest {
+        fn for_inst(mut inst: &[u8]) -> Self {
+            let mem = z80::MemoryBank::from_data(&mut inst).unwrap();
+            let cpu = z80::CPU::new(z80::Options::default(), mem);
+            Self { cpu }
+        }
+
+        fn exec_step(&mut self) {
+            *self.cpu.regs_mut().pc = 0x00;
+            exec_step(&mut self.cpu);
+        }
+
+        fn test_flags<F: FnOnce(&mut z80::CPU<z80::MemoryBank>)>(&mut self, pre: F, expected_flags: u8) {
+            pre(&mut self.cpu);
+            self.exec_step();
+            assert_eq!(expected_flags, self.cpu.regs().flags());
+        }
+    }
+}
 
 #[cfg(all(feature = "nightly", test))]
 mod bench {

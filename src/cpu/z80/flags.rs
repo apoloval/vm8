@@ -22,6 +22,16 @@ macro_rules! flags_apply {
     ($a:expr, ) => ($a);
     ($a:expr, $f:ident:0 $($rest:tt)*) => (flags_apply!($a & flags_bitmask_reset!($f), $($rest)*));
     ($a:expr, $f:ident:1 $($rest:tt)*) => (flags_apply!($a | flags_bitmask_set!($f), $($rest)*));
-    ($a:expr, $f:ident:[$c:expr] $($rest:tt)*) => (flags_apply!(if $c { $a | flags_bitmask_set!($f) } else { $a & flags_bitmask_reset!($f) }, $($rest)*));
+    ($a:expr, $f:ident:[$c:expr] $($rest:tt)*) => (flags_apply!((if $c { $a | flags_bitmask_set!($f) } else { $a & flags_bitmask_reset!($f) }) as u8, $($rest)*));
     ($a:expr, [$($f:ident),+]:[$c:expr] $($rest:tt)*) => (flags_apply!(if $c { $a | flags_bitmask_set!($($f),+) } else { $a & flags_bitmask_reset!($($f),+) }, $($rest)*));
+}
+
+macro_rules! flags_apply_add8 {
+    ($flags:expr, $a:expr, $b:expr, $r:expr) => (flags_apply!($flags,
+            S:[($r & 0x00ff) >= 0x80]
+            Z:[$r == 0]
+            H:[($a & 0x0f) + ($b & 0x0f) >= 0x10]
+            PV:[$before < 0x80 && $after >= 0x80]
+            N:0
+            C:[$r > 0xff]))
 }

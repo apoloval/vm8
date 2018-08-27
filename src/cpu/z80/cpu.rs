@@ -47,25 +47,3 @@ impl<M: MemoryBus> CPU<M> {
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-    use cpu::z80;
-
-    use super::*;
-
-    #[test]
-    fn exec_nop() {
-        let mut cpu = sample_cpu(&[0x00]);
-        let plan = ExecutionPlan::with_max_instructions(10000);
-        cpu.execute(&plan);
-        assert_eq!(10000, *cpu.regs.pc);
-    }
-
-    fn sample_cpu(program: &[u8]) -> CPU<z80::MemoryBank> {
-        // Test code runs in debug mode, which is highly inefficient.
-        // Use a low CPU frequency to avoid panics due to slow emulation.
-        let mut input = program;
-        CPU::new(Options::default(), z80::MemoryBank::from_data(&mut input).unwrap())
-    }
-}

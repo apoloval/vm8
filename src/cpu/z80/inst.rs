@@ -3,8 +3,9 @@ pub type Size = usize;
 pub type Cycles = usize;
 
 #[cfg(target_endian = "little")]
-macro_rules! u16_bytes {
-    ($v:expr) => (($v & 0x00ff), ($v & 0xff00 >> 8))
+macro_rules! encode_literal {
+    ($v:expr => 0) => (($v & 0x00ff) as u8);
+    ($v:expr => 1) => ((($v & 0xff00) >> 8) as u8);
 }
 
 macro_rules! inst {
@@ -16,12 +17,12 @@ macro_rules! inst {
     (INC B)             => ([0x04]);
     (INC C)             => ([0x0c]);
     (INC BC)            => ([0x03]);
-    (JP $x:expr)        => ([0xc3, u16_bytes!($x)]);
+    (JP $x:expr)        => ([0xc3, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (LD A, (BC))        => ([0x0a]);
     (LD (BC), A)        => ([0x02]);
     (LD B, $x:expr)     => ([0x06, $x]);
     (LD C, $x:expr)     => ([0x0e, $x]);
-    (LD BC, $x:expr)    => ([0x01, $x]);
+    (LD BC, $x:expr)    => ([0x01, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (NOP)               => ([0x00]);
     (RLCA)              => ([0x07]);
     (RRCA)              => ([0x0f]);
