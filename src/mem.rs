@@ -36,3 +36,14 @@ impl<A: bus::Address> bus::Bus for MemoryBank<A> {
         self.data[offset] = val;
     }
 }
+
+impl<A: bus::Address> io::Write for MemoryBank<A> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let mut buff: &mut [u8] = &mut self.data;
+        buff.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.data.flush()
+    }
+}

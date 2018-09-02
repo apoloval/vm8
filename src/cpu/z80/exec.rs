@@ -96,7 +96,8 @@ trait Execute : Context + Sized {
 
     fn exec_inc16<D: Src16 + Dest16>(&mut self) {
         let fetch = D::read_arg(self);
-        D::write_arg(self, fetch.data + 1);
+        let result = (fetch.data as u32 + 1) as u16;
+        D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
     }
 
@@ -292,6 +293,9 @@ impl Src for L16 {
 /********************************************************/
 
 mod test {
+    use std::fmt;
+    use std::io::Write;
+
     use cpu::z80;
 
     use super::*;
@@ -305,28 +309,34 @@ mod test {
     }
 
     #[test]
-    fn test_exec_ld_bc_l16() {
-        let mut test = ExecTest::for_inst(&inst!(LD BC, 0x1234));
-        test.exec_step();
-        assert_eq!(0x0003, *test.cpu.regs().pc);
-        assert_eq!(0x1234, *test.cpu.regs().bc);
-        assert_eq!(0x00, test.cpu.regs().flags());
+    fn test_exec_ld_bc_l16() {        
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(2, 
+            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD BC, val)).unwrap(); },
+            |cpu| *cpu.regs().bc,
+        );
     }
 
     #[test]
     fn test_exec_ld_indbc_a() {
         let mut test = ExecTest::for_inst(&inst!(LD (BC), A));
-        test.cpu.regs_mut().af.set_high(0x42);
-        *test.cpu.regs_mut().bc = 0x1234;
-        test.exec_step();
-        assert_eq!(0x0001, *test.cpu.regs().pc);
-        assert_eq!(0x42, test.cpu.mem().read_word::<LittleEndian>(0x1234));
-        assert_eq!(0x00, test.cpu.regs().flags());
+        test.assert_behaves_like_ld(0, 
+            |val, cpu| {
+                cpu.regs_mut().af.set_high(val);
+                *cpu.regs_mut().bc = 0x1234;
+            },
+            |cpu| cpu.mem().read(0x1234),
+        );
     }
 
     #[test]
     fn test_exec_inc_bc() {
         let mut test = ExecTest::for_inst(&inst!(INC BC));
+        test.assert_behaves_like_inc16(
+            |v, cpu| *cpu.regs_mut().bc = v, 
+            |cpu| *cpu.regs().bc);
+
+
         *test.cpu.regs_mut().bc = 0x1234;
         test.exec_step();
         assert_eq!(0x0001, *test.cpu.regs().pc);
@@ -337,49 +347,40 @@ mod test {
     #[test]
     fn test_exec_inc_b() {
         let mut test = ExecTest::for_inst(&inst!(INC B));
-        test.cpu.regs_mut().bc.set_high(0x12);
-        test.exec_step();
-        assert_eq!(0x0001, *test.cpu.regs().pc);
-        assert_eq!(0x13, test.cpu.regs().bc.high());
-        assert_eq!(0b00000000, test.cpu.regs().flags());
+        test.assert_behaves_like_inc8(
+            |v, cpu| cpu.regs_mut().bc.set_high(v), 
+            |cpu| cpu.regs().bc.high());        
+    }    
 
-        // Result is 0 (zero flag, carry flag, half-carry)
-        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0xff) }, 0b_0101_0001);
-
-        // Result is 128 (sign flag, overflow, half-carry)
-        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x7f) }, 0b_1001_0100);
-    }
-
-    /*
-    #[test]
-    fn test_exec_dec_b() {
-        let mut test = ExecTest::for_inst(&inst!(DEC B));
-        test.cpu.regs_mut().bc.set_high(0x12);
-        test.exec_step();
-        assert_eq!(0x0001, *test.cpu.regs().pc);
-        assert_eq!(0x11, test.cpu.regs().bc.high());
-        assert_eq!(0b00000010, test.cpu.regs().flags());
-
-        // Result is 0 (zero flag)
-        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x01) }, 0b01000000);
-
-        // Result is -1 (sign flag, overflow)
-        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x7f) }, 0b10000100);
-
-        // Result is 16 (half-carry)
-        test.test_flags(|cpu| { cpu.regs_mut().bc.set_high(0x0f) }, 0b00010000);
-    }
-    */
+    type CPU = z80::CPU<z80::MemoryBank>;
 
     struct ExecTest {
-        pub cpu: z80::CPU<z80::MemoryBank>,
+        pub cpu: CPU,
+    }
+
+    trait Data : fmt::Display + fmt::Debug + Copy + PartialEq {
+        fn sample() -> Self;
+    }
+
+    impl Data for u8 {
+        fn sample() -> u8 { 0x42 }
+    }
+
+    impl Data for u16 {
+        fn sample() -> u16 { 0x4231 }
     }
 
     impl ExecTest {
-        fn for_inst(mut inst: &[u8]) -> Self {
-            let mem = z80::MemoryBank::from_data(&mut inst).unwrap();
+        fn new() -> Self {
+            let mem = z80::MemoryBank::new();
             let cpu = z80::CPU::new(z80::Options::default(), mem);
             Self { cpu }
+        }
+
+        fn for_inst(mut inst: &[u8]) -> Self {
+            let mut test = Self::new();
+            Write::write(test.cpu.mem_mut(), inst).unwrap();
+            test
         }
 
         fn exec_step(&mut self) {
@@ -387,10 +388,93 @@ mod test {
             exec_step(&mut self.cpu);
         }
 
-        fn test_flags<F: FnOnce(&mut z80::CPU<z80::MemoryBank>)>(&mut self, pre: F, expected_flags: u8) {
-            pre(&mut self.cpu);
+        fn assert_behaves_like_ld<S, G, D>(&mut self, opsize: usize, set: S, get: G) 
+        where S: Fn(D, &mut CPU), G: Fn(&CPU) -> D, D: Data {
+            let input = D::sample();
+            set(input, &mut self.cpu);
+            
             self.exec_step();
-            assert_eq!(expected_flags, self.cpu.regs().flags());
+
+            let output = get(&self.cpu);
+            let expected_pc = 1 + opsize as u16;
+            let actual_pc = *self.cpu.regs().pc;
+            let flags = self.cpu.regs().flags();
+            
+            assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
+            assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
+            assert_eq!(0x00, flags, "expected no flags affected, but H{:08b} found", flags);
+        }
+
+        fn assert_behaves_like_inc8<S, G>(&mut self, set: S, get: G) 
+        where S: Fn(u8, &mut CPU), G: Fn(&CPU) -> u8 {
+            for input in 0..=255 {
+                set(input, &mut self.cpu);
+                self.exec_step();
+                let expected = if input < 0xff { input + 1 } else { 0 };
+                let actual = get(&self.cpu);
+                
+                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(expected, actual);
+
+                let flags = self.cpu.regs().flags();
+                let pre = &format!("inc {}", input);
+
+                // Check flags
+                self.assert_sflag_if(&pre, actual & 0x80 != 0);
+                self.assert_zflag_if(&pre, actual == 0);
+                self.assert_hflag_if(&pre, input & 0x0f == 0x0f);
+                self.assert_pvflag_if(&pre, input == 0x7f);
+                self.assert_nflag_if(&pre, false);
+                self.assert_cflag_if(&pre, input == 0xff);
+            }
+        }
+
+        fn assert_behaves_like_inc16<S, G>(&mut self, set: S, get: G) 
+        where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
+            for input in 0..=65535 {
+                set(input, &mut self.cpu);
+                self.exec_step();
+                let expected = if input < 0xffff { input + 1 } else { 0 };
+                let actual = get(&self.cpu);
+                
+                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(expected, actual);
+            }
+        }
+
+        fn assert_sflag_if(&self, pre: &str, active: bool) {
+            self.assert_flag_if(pre, active, "S", 0x80);
+        }
+
+        fn assert_zflag_if(&self, pre: &str, active: bool) {
+            self.assert_flag_if(pre, active, "Z", 0x40);
+        }
+
+        fn assert_hflag_if(&self, pre: &str, active: bool) {
+            self.assert_flag_if(pre, active, "H", 0x10);
+        }
+
+        fn assert_pvflag_if(&self, pre: &str, active: bool) {
+            self.assert_flag_if(pre, active, "PV", 0x04);
+        }
+
+        fn assert_nflag_if(&self, pre: &str, active: bool) {
+            self.assert_flag_if(pre, active, "N", 0x02);
+        }
+
+        fn assert_cflag_if(&self, pre: &str, active: bool) {
+            self.assert_flag_if(pre, active, "C", 0x01);
+        }
+
+        fn assert_flag_if(&self, pre: &str, active: bool, name: &str, mask: u8) {
+            let flags = self.cpu.regs().flags();
+            if active {
+                assert!(flags & mask != 0, 
+                    "{}: expected {} flag to be set in 0b{:08b}", pre, name, flags);
+            } else {
+                assert!(flags & mask == 0, 
+                    "{}: expected {} flag to be unset in 0b{:08b}", pre, name, flags);
+            }
         }
     }
 }
