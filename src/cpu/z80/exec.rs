@@ -56,9 +56,10 @@ trait Execute : Context + Sized {
 
     fn exec_dec8<D: Src8 + Dest8>(&mut self) {
         let fetch = D::read_arg(self);
-        D::write_arg(self, fetch.data - 1);
+        let mut flags = self.regs().flags();
+        let result = self.alu().sub8(fetch.data, 1, &mut flags);
+        D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
-        let flags = flags_apply!(self.regs().flags(), N:0 PV:[fetch.data == 0]);
         self.regs_mut().set_flags(flags);
     }
 
@@ -350,7 +351,15 @@ mod test {
         test.assert_behaves_like_inc8(
             |v, cpu| cpu.regs_mut().bc.set_high(v), 
             |cpu| cpu.regs().bc.high());        
-    }    
+    }
+
+    #[test]
+    fn test_exec_dec_b() {
+        let mut test = ExecTest::for_inst(&inst!(DEC B));
+        test.assert_behaves_like_dec8(
+            |v, cpu| cpu.regs_mut().bc.set_high(v), 
+            |cpu| cpu.regs().bc.high());        
+    }
 
     type CPU = z80::CPU<z80::MemoryBank>;
 
@@ -439,6 +448,29 @@ mod test {
                 
                 assert_eq!(0x0001, *self.cpu.regs().pc);
                 assert_eq!(expected, actual);
+            }
+        }
+
+        fn assert_behaves_like_dec8<S, G>(&mut self, set: S, get: G) 
+        where S: Fn(u8, &mut CPU), G: Fn(&CPU) -> u8 {
+            for input in 0..=255 {
+                set(input, &mut self.cpu);
+                self.exec_step();
+                let expected = if input > 0 { input - 1 } else { 0xff };
+                let actual = get(&self.cpu);
+                
+                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(expected, actual);
+
+                let pre = &format!("dec {}", input);
+
+                // Check flags
+                self.assert_sflag_if(&pre, actual & 0x80 != 0);
+                self.assert_zflag_if(&pre, actual == 0);
+                self.assert_hflag_if(&pre, input & 0x0f == 0x00);
+                self.assert_pvflag_if(&pre, input == 0x80);
+                self.assert_nflag_if(&pre, true);
+                self.assert_cflag_if(&pre, input == 0x00);
             }
         }
 
