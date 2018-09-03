@@ -11,6 +11,9 @@ nightly = []
 byteorder = "1.2"
 num-traits = "0.2"
 
+[dev-dependencies]
+rand = "0.5"
+
 [build-dependencies]
 rustc_version = "0.1.*"
 

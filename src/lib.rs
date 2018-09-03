@@ -6,6 +6,9 @@ extern crate test;
 extern crate byteorder;
 extern crate num_traits;
 
+#[cfg(test)]
+extern crate rand;
+
 pub mod bus;
 pub mod clock;
 pub mod cpu;

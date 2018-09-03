@@ -293,9 +293,13 @@ impl Src for L16 {
 
 /********************************************************/
 
+#[cfg(test)]
 mod test {
     use std::fmt;
     use std::io::Write;
+
+    use rand;
+    use rand::prelude::*;
 
     use cpu::z80;
 
@@ -372,11 +376,11 @@ mod test {
     }
 
     impl Data for u8 {
-        fn sample() -> u8 { 0x42 }
+        fn sample() -> u8 { rand::random() }
     }
 
     impl Data for u16 {
-        fn sample() -> u16 { 0x4231 }
+        fn sample() -> u16 { rand::random() }
     }
 
     impl ExecTest {
@@ -399,19 +403,21 @@ mod test {
 
         fn assert_behaves_like_ld<S, G, D>(&mut self, opsize: usize, set: S, get: G) 
         where S: Fn(D, &mut CPU), G: Fn(&CPU) -> D, D: Data {
-            let input = D::sample();
-            set(input, &mut self.cpu);
-            
-            self.exec_step();
+            for _ in 0..=255 {
+                let input = D::sample();
+                set(input, &mut self.cpu);
+                
+                self.exec_step();
 
-            let output = get(&self.cpu);
-            let expected_pc = 1 + opsize as u16;
-            let actual_pc = *self.cpu.regs().pc;
-            let flags = self.cpu.regs().flags();
-            
-            assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
-            assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
-            assert_eq!(0x00, flags, "expected no flags affected, but H{:08b} found", flags);
+                let output = get(&self.cpu);
+                let expected_pc = 1 + opsize as u16;
+                let actual_pc = *self.cpu.regs().pc;
+                let flags = self.cpu.regs().flags();
+                
+                assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
+                assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
+                assert_eq!(0x00, flags, "expected no flags affected, but H{:08b} found", flags);
+            }
         }
 
         fn assert_behaves_like_inc8<S, G>(&mut self, set: S, get: G) 
@@ -440,7 +446,8 @@ mod test {
 
         fn assert_behaves_like_inc16<S, G>(&mut self, set: S, get: G) 
         where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            for input in 0..=65535 {
+            for _ in 0..=256 {
+                let input = u16::sample();
                 set(input, &mut self.cpu);
                 self.exec_step();
                 let expected = if input < 0xffff { input + 1 } else { 0 };
