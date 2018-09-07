@@ -42,6 +42,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x0f => { ctx.exec_rrca();              04 },
         0x10 => { if ctx.exec_djnz() { 13 } else { 8 } },
         0x11 => { ctx.exec_ld::<DE, L16>();     10 },
+        0x12 => { ctx.exec_ld::<IND_DE, A>();   07 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -281,6 +282,7 @@ def_reg16_arg!(DE, de, set_de);
 def_reg16_arg!(HL, hl, set_hl);
 
 def_indreg16_arg!(IND_BC, bc);
+def_indreg16_arg!(IND_DE, de);
 def_indreg16_arg!(IND_HL, hl);
 
 struct L8;
@@ -544,6 +546,18 @@ mod test {
         test.assert_behaves_like_ld(2, 
             |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD DE, val)).unwrap(); },
             |cpu| cpu.regs().de(),
+        );
+    }
+
+    #[test]
+    fn test_exec_ld_indde_a() {
+        let mut test = ExecTest::for_inst(&inst!(LD (DE), A));
+        test.assert_behaves_like_ld(0, 
+            |val, cpu| {
+                cpu.regs_mut().set_a(val);
+                cpu.regs_mut().set_de(0x1234);
+            },
+            |cpu| cpu.mem().read_from(0x1234),
         );
     }
 
