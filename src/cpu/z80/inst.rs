@@ -31,6 +31,7 @@ macro_rules! inst {
     (LD (BC), A)        => ([0x02]);
     (LD (DE), A)        => ([0x12]);
     (NOP)               => ([0x00]);
+    (RLA)               => ([0x17]);
     (RLCA)              => ([0x07]);
     (RRCA)              => ([0x0f]);
 }

@@ -110,6 +110,13 @@ impl Registers {
     #[inline] pub fn set_flags(&mut self, val: u8) { self.af.set_low(val) }
     #[inline] pub fn set_pc(&mut self, val: u16) { *self.pc = val }
 
+    #[inline] pub fn flag_s(&self) -> u8 { self.flags() & 0x80 >> 7 }
+    #[inline] pub fn flag_z(&self) -> u8 { self.flags() & 0x40 >> 6 }
+    #[inline] pub fn flag_h(&self) -> u8 { self.flags() & 0x10 >> 4 }
+    #[inline] pub fn flag_pv(&self) -> u8 { self.flags() & 0x04 >> 2 }
+    #[inline] pub fn flag_n(&self) -> u8 { self.flags() & 0x02 >> 1 }
+    #[inline] pub fn flag_c(&self) -> u8 { self.flags() & 0x01 }
+
     // Swap the primary and alternative registers AF/AF'
     #[inline]
     pub fn swap_af(&mut self) {

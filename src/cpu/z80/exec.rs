@@ -47,6 +47,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x14 => { ctx.exec_inc8::<D>();         04 },
         0x15 => { ctx.exec_dec8::<D>();         04 },
         0x16 => { ctx.exec_ld::<D, L8>();       07 },
+        0x17 => { ctx.exec_rla();               04 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -135,6 +136,17 @@ trait Execute : Context + Sized {
 
     fn exec_nop(&mut self) {
         self.regs_mut().inc_pc(1);
+    }
+
+    fn exec_rla(&mut self) {
+        let orig = self.regs().a();
+        let carry = orig >> 7;
+        let prev_carry = self.regs().flag_c();
+        let dest = (orig << 1) | prev_carry;
+        self.regs_mut().set_a(dest);
+        self.regs_mut().inc_pc(1);
+        let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
+        self.regs_mut().set_flags(flags);
     }
 
     fn exec_rlca(&mut self) {
@@ -601,6 +613,32 @@ mod test {
             |cpu| cpu.regs().d(),
         );
     }
+
+    #[test]
+    fn test_exec_rla() {
+        let mut test = ExecTest::for_inst(&inst!(RLA));
+        for input in 0..=255 {
+            let prev_carry = test.cpu.regs().flag_c();
+            test.cpu.regs_mut().set_a(input);
+            test.exec_step();
+
+            let pre = format!("RLA b{:08b}", input);
+            let carry = (input & 0b10000000) >> 7;
+            let expected = (input << 1) | prev_carry;
+            let given = test.cpu.regs().a();
+            assert_eq!(0x0001, test.cpu.regs().pc());
+            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
+
+            test.assert_sflag_unaffected(&pre);
+            test.assert_zflag_unaffected(&pre);
+            test.assert_hflag_if(&pre, false);
+            test.assert_pvflag_unaffected(&pre);
+            test.assert_nflag_if(&pre, false);
+            test.assert_cflag_if(&pre, carry > 0);
+        }
+    }
+
+    /*********************************************************/
 
     type CPU = z80::CPU<z80::MemoryBank>;
 
