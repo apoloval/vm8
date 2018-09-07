@@ -20,16 +20,31 @@ impl ALU {
     }
 
     #[inline]
-    pub fn add8(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
-        let c = ((a as u16) + (b as u16)) as u8;
+    pub fn add8(&self, a: u8, b: u8) -> u8 {
+        ((a as u16) + (b as u16)) as u8
+    }
+
+    #[inline]
+    pub fn add8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
+        let c = self.add8(a, b);
         let index = Self::pre_flags_index(a, c);
         *flags = self.pre_flags[index].add;
         c
     }
 
     #[inline]
-    pub fn sub8(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
-        let c = ((a as i16) - (b as i16)) as u8;
+    pub fn add16(&self, a: u16, b: u16) -> u16 {
+        ((a as u32) + (b as u32)) as u16
+    }
+
+    #[inline]
+    pub fn sub8(&self, a: u8, b: u8) -> u8 {
+        ((a as i16) - (b as i16)) as u8
+    }
+
+    #[inline]
+    pub fn sub8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
+        let c = self.sub8(a, b);
         let index = Self::pre_flags_index(a, c);
         *flags = self.pre_flags[index].sub;
         c
@@ -70,5 +85,26 @@ impl ALU {
     #[inline]
     fn pre_flags_index(oldval: u8, newval: u8) -> usize {
         ((oldval as usize) << 8) | (newval as usize)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_alu_add8() {
+        let alu = ALU::new();
+        assert_eq!(3, alu.add8(1, 2));
+        assert_eq!(-1 as i8 as u8, alu.add8(1, -2 as i8 as u8));
+        assert_eq!(-1 as i8 as u8, alu.add8(1, -2 as i8 as u8));
+    }
+
+    #[test]
+    fn test_alu_add16() {
+        let alu = ALU::new();
+        assert_eq!(3, alu.add16(1, 2));
+        assert_eq!(-1 as i16 as u16, alu.add16(1, -2 as i16 as u16));
+        assert_eq!(-1 as i16 as u16, alu.add16(1, -2 as i16 as u16));
     }
 }

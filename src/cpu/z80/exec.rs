@@ -1,6 +1,6 @@
 use byteorder::LittleEndian;
 
-use bus::{Bus, ReadFromBytes, WriteFromBytes};
+use bus::{Bus, ReadFromBytes};
 use cpu::z80::{Cycles, MemoryBus, Registers};
 use cpu::z80::alu::ALU;
 
@@ -12,11 +12,17 @@ pub trait Context {
     fn regs_mut(&mut self) -> &mut Registers;
     fn mem(&self) -> &Self::Mem;
     fn mem_mut(&mut self) -> &mut Self::Mem;
+
+    fn read_from_pc(&self, offset: usize) -> u8 {
+        let pc = self.regs().pc();
+        let pos = ((pc as usize) + offset) as u16;
+        self.mem().read_from(pos)
+    }
 }
 
 pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
     let pc = ctx.regs().pc();
-    let opcode = ctx.mem().read_from(pc);
+    let opcode = ctx.read_from_pc(0);
     match opcode {
         0x00 => { ctx.exec_nop();               04 },
         0x01 => { ctx.exec_ld::<BC, L16>();     10 },
@@ -34,6 +40,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x0d => { ctx.exec_dec8::<C>();         04 },
         0x0e => { ctx.exec_ld::<C, L8>();       07 },
         0x0f => { ctx.exec_rrca();              04 },
+        0x10 => { if ctx.exec_djnz() { 13 } else { 8 } },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -60,7 +67,7 @@ trait Execute : Context + Sized {
     fn exec_dec8<D: Src8 + Dest8>(&mut self) {
         let fetch = D::read_arg(self);
         let mut flags = self.regs().flags();
-        let result = self.alu().sub8(fetch.data, 1, &mut flags);
+        let result = self.alu().sub8_with_flags(fetch.data, 1, &mut flags);
         D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
         self.regs_mut().set_flags(flags);
@@ -72,14 +79,16 @@ trait Execute : Context + Sized {
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
     }
 
-    fn exec_djnz<S: Src8>(&mut self) -> bool {
-        let b = self.regs().b() - 1;
+    fn exec_djnz(&mut self) -> bool {
+        let b = self.alu().sub8(self.regs().b(), 1);
+        self.regs_mut().set_b(b);
         if b > 0 {
-            let s = S::read_arg(self);
+            let s = self.read_from_pc(1);
             let pc = self.regs().pc();
-            self.regs_mut().inc_pc(s.data as i8 as usize);
+            self.regs_mut().inc_pc(s as i8 as usize);
             true
         } else {
+            self.regs_mut().inc_pc(2);
             false
         }
     }
@@ -92,7 +101,7 @@ trait Execute : Context + Sized {
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
         let fetch = D::read_arg(self);
         let mut flags = self.regs().flags();
-        let result = self.alu().add8(fetch.data, 1, &mut flags);
+        let result = self.alu().add8_with_flags(fetch.data, 1, &mut flags);
         D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + fetch.mem_bytes);
         self.regs_mut().set_flags(flags);
@@ -498,6 +507,32 @@ mod test {
             test.assert_pvflag_unaffected(&pre);
             test.assert_nflag_if(&pre, false);
             test.assert_cflag_if(&pre, carry > 0);
+        }
+    }
+
+    #[test]
+    fn test_exec_djnz_l8() {
+        let mut test = ExecTest::new();
+        for input in 0..=255 {
+            let dest = u8::sample();
+            test.cpu.mem_mut().write(&inst!(DJNZ dest)).unwrap();
+            test.cpu.regs_mut().set_b(input);
+            test.exec_step();
+
+            let expected = test.cpu.alu().sub8(input, 1);
+            let actual = test.cpu.regs().b();
+            assert_eq!(expected, actual);
+
+            let expected_pc = if expected > 0 {
+                test.cpu.alu().add16(0, dest as i8 as u16)
+            } else {
+                2
+            };
+
+            let actual_pc = test.cpu.regs().pc();
+            assert_eq!(expected_pc, actual_pc);
+
+            test.assert_all_flags_unaffected("DJNZ");
         }
     }
 
