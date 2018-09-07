@@ -139,33 +139,32 @@ trait Execute : Context + Sized {
     }
 
     fn exec_rla(&mut self) {
+        let mut flags = self.regs().flags();
         let orig = self.regs().a();
-        let carry = orig >> 7;
-        let prev_carry = self.regs().flag_c();
-        let dest = (orig << 1) | prev_carry;
+        let carry = self.regs().flag_c();
+        let dest = self.alu().rotate_left(orig, carry, &mut flags);
         self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
-        let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
         self.regs_mut().set_flags(flags);
     }
 
     fn exec_rlca(&mut self) {
+        let mut flags = self.regs().flags();
         let orig = self.regs().a();
-        let carry = orig >> 7;
-        let dest = (orig << 1) | carry;
+        let carry = (orig & 0x80) >> 7;
+        let dest = self.alu().rotate_left(orig, carry, &mut flags);
         self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
-        let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
         self.regs_mut().set_flags(flags);
     }
 
     fn exec_rrca(&mut self) {
+        let mut flags = self.regs().flags();
         let orig = self.regs().a();
-        let carry = orig << 7;
-        let dest = (orig >> 1) | carry;
+        let carry = orig & 0x01;
+        let dest = self.alu().rotate_right(orig, carry, &mut flags);
         self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
-        let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
         self.regs_mut().set_flags(flags);
     }
 

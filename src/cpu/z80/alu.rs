@@ -50,6 +50,20 @@ impl ALU {
         c
     }
 
+    #[inline]
+    pub fn rotate_left(&self, val: u8, carry: u8, flags: &mut u8) -> u8 {
+        let new_carry = val >> 7;
+        *flags = flags_apply!(*flags, C:[new_carry > 0] H:0 N:0);
+        (val << 1) | carry
+    }
+
+    #[inline]
+    pub fn rotate_right(&self, val: u8, carry: u8, flags: &mut u8) -> u8 {
+        let new_carry = val & 0x01;
+        *flags = flags_apply!(*flags, C:[new_carry > 0] H:0 N:0);
+        (val >> 1) | (carry << 7)
+    }
+
     fn init_pre_flags() -> PreFlagsTable {
         let mut pre_flags = vec![PreFlags::default(); 256*256];        
         for a in 0..=255 {
