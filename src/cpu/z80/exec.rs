@@ -41,6 +41,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x0e => { ctx.exec_ld::<C, L8>();       07 },
         0x0f => { ctx.exec_rrca();              04 },
         0x10 => { if ctx.exec_djnz() { 13 } else { 8 } },
+        0x11 => { ctx.exec_ld::<DE, L16>();     10 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -276,6 +277,7 @@ def_reg8_arg!(L, l, set_l);
 
 def_reg16_arg!(AF, af, set_af);
 def_reg16_arg!(BC, bc, set_bc);
+def_reg16_arg!(DE, de, set_de);
 def_reg16_arg!(HL, hl, set_hl);
 
 def_indreg16_arg!(IND_BC, bc);
@@ -534,6 +536,15 @@ mod test {
 
             test.assert_all_flags_unaffected("DJNZ");
         }
+    }
+
+    #[test]
+    fn test_exec_ld_de_l16() {        
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(2, 
+            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD DE, val)).unwrap(); },
+            |cpu| cpu.regs().de(),
+        );
     }
 
     type CPU = z80::CPU<z80::MemoryBank>;
