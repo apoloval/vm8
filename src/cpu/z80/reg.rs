@@ -49,10 +49,10 @@ pub struct Registers {
     pub hl: Register,
 
     // Alternative 16-bits registers
-    af_: Register,
-    bc_: Register,
-    de_: Register,
-    hl_: Register,
+    pub af_: Register,
+    pub bc_: Register,
+    pub de_: Register,
+    pub hl_: Register,
 
     // Index registers
     pub ix: Register,

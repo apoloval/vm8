@@ -26,12 +26,12 @@ impl<A: bus::Address> bus::Bus for MemoryBank<A> {
     type Addr = A;
     type Data = u8;
 
-    fn read(&self, addr: A) -> u8 {
+    fn read_from(&self, addr: A) -> u8 {
         let offset: usize = addr.into();
         self.data[offset]
     }
 
-    fn write(&mut self, addr: A, val: u8) {
+    fn write_to(&mut self, addr: A, val: u8) {
         let offset: usize = addr.into();
         self.data[offset] = val;
     }
