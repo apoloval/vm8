@@ -12,6 +12,7 @@ macro_rules! inst {
     (ADD HL, BC)        => ([0x09]);
     (DEC B)             => ([0x05]);
     (DEC C)             => ([0x0d]);
+    (DEC D)             => ([0x15]);
     (DEC BC)            => ([0x0b]);
     (DJNZ $x:expr)      => ([0x10, $x]);
     (EX AF, AF_)        => ([0x08]);

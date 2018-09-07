@@ -45,6 +45,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x12 => { ctx.exec_ld::<IND_DE, A>();   07 },
         0x13 => { ctx.exec_inc16::<DE>();       06 },
         0x14 => { ctx.exec_inc8::<D>();         04 },
+        0x15 => { ctx.exec_dec8::<D>();         04 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -580,6 +581,15 @@ mod test {
             |v, cpu| cpu.regs_mut().set_d(v), 
             |cpu| cpu.regs().d(),
         );
+    }
+
+    #[test]
+    fn test_exec_dec_d() {
+        let mut test = ExecTest::for_inst(&inst!(DEC D));
+        test.assert_behaves_like_dec8(
+            |v, cpu| cpu.regs_mut().set_d(v), 
+            |cpu| cpu.regs().d(),
+        );        
     }
 
     type CPU = z80::CPU<z80::MemoryBank>;
