@@ -43,30 +43,72 @@ impl DerefMut for Register {
 #[derive(Default)]
 pub struct Registers {
     // Primary 16-bits registers
-    pub af: Register,
-    pub bc: Register,
-    pub de: Register,
-    pub hl: Register,
+    af: Register,
+    bc: Register,
+    de: Register,
+    hl: Register,
 
     // Alternative 16-bits registers
-    pub af_: Register,
-    pub bc_: Register,
-    pub de_: Register,
-    pub hl_: Register,
+    af_: Register,
+    bc_: Register,
+    de_: Register,
+    hl_: Register,
 
     // Index registers
-    pub ix: Register,
-    pub iy: Register,
+    ix: Register,
+    iy: Register,
 
     // Control registers
-    pub sp: Register,
-    pub pc: Register,
+    sp: Register,
+    pc: Register,
 }
 
 impl Registers {
     pub fn new() -> Registers {
         Self::default()
     }
+
+    #[inline] pub fn af(&self) -> u16 { *self.af }
+    #[inline] pub fn bc(&self) -> u16 { *self.bc }
+    #[inline] pub fn de(&self) -> u16 { *self.de }
+    #[inline] pub fn hl(&self) -> u16 { *self.hl }
+
+    #[inline] pub fn set_af(&mut self, val: u16) { *self.af = val }
+    #[inline] pub fn set_bc(&mut self, val: u16) { *self.bc = val  }
+    #[inline] pub fn set_de(&mut self, val: u16) { *self.de = val  }
+    #[inline] pub fn set_hl(&mut self, val: u16) { *self.hl = val  }
+
+    #[inline] pub fn a(&self) -> u8 { self.af.high() }
+    #[inline] pub fn b(&self) -> u8 { self.bc.high() }
+    #[inline] pub fn c(&self) -> u8 { self.bc.low() }
+    #[inline] pub fn d(&self) -> u8 { self.de.high() }
+    #[inline] pub fn e(&self) -> u8 { self.de.low() }
+    #[inline] pub fn h(&self) -> u8 { self.hl.high() }
+    #[inline] pub fn l(&self) -> u8 { self.hl.low() }
+
+    #[inline] pub fn set_a(&mut self, val: u8) { self.af.set_high(val) }
+    #[inline] pub fn set_b(&mut self, val: u8) { self.bc.set_high(val) }
+    #[inline] pub fn set_c(&mut self, val: u8) { self.bc.set_low(val) }
+    #[inline] pub fn set_d(&mut self, val: u8) { self.de.set_high(val) }
+    #[inline] pub fn set_e(&mut self, val: u8) { self.de.set_low(val) }
+    #[inline] pub fn set_h(&mut self, val: u8) { self.hl.set_high(val) }
+    #[inline] pub fn set_l(&mut self, val: u8) { self.hl.set_low(val) }
+
+    #[inline] pub fn af_(&self) -> u16 { *self.af_ }
+    #[inline] pub fn bc_(&self) -> u16 { *self.bc_ }
+    #[inline] pub fn de_(&self) -> u16 { *self.de_ }
+    #[inline] pub fn hl_(&self) -> u16 { *self.hl_ }
+
+    #[inline] pub fn set_af_(&mut self, val: u16) { *self.af_ = val }
+    #[inline] pub fn set_bc_(&mut self, val: u16) { *self.bc_ = val  }
+    #[inline] pub fn set_de_(&mut self, val: u16) { *self.de_ = val  }
+    #[inline] pub fn set_hl_(&mut self, val: u16) { *self.hl_ = val  }
+
+    #[inline] pub fn flags(&self) -> u8 { self.af.low() }
+    #[inline] pub fn pc(&self) -> u16 { *self.pc }
+
+    #[inline] pub fn set_flags(&mut self, val: u8) { self.af.set_low(val) }
+    #[inline] pub fn set_pc(&mut self, val: u16) { *self.pc = val }
 
     // Swap the primary and alternative registers AF/AF'
     #[inline]
@@ -80,16 +122,6 @@ impl Registers {
         mem::swap(&mut self.bc, &mut self.bc_);
         mem::swap(&mut self.de, &mut self.de_);
         mem::swap(&mut self.hl, &mut self.hl_);
-    }
-
-    #[inline]
-    pub fn flags(&self) -> u8 {
-        unsafe { self.af.as_byte.l }
-    }
-
-    #[inline]
-    pub fn set_flags(&mut self, val: u8) {
-        unsafe { self.af.as_byte.l = val; }
     }
 
     #[inline]

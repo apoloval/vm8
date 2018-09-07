@@ -15,7 +15,7 @@ pub trait Context {
 }
 
 pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
-    let pc = *ctx.regs().pc;
+    let pc = ctx.regs().pc();
     let opcode = ctx.mem().read_from(pc);
     match opcode {
         0x00 => { ctx.exec_nop();               04 },
@@ -73,11 +73,11 @@ trait Execute : Context + Sized {
     }
 
     fn exec_djnz<S: Src8>(&mut self) -> bool {
-        let b = self.regs().bc.high() - 1;
+        let b = self.regs().b() - 1;
         if b > 0 {
             let s = S::read_arg(self);
-            let pc = *self.regs().pc;
-            *self.regs_mut().pc = pc + (s.data as i8 as u16);
+            let pc = self.regs().pc();
+            self.regs_mut().inc_pc(s.data as i8 as usize);
             true
         } else {
             false
@@ -108,7 +108,7 @@ trait Execute : Context + Sized {
     fn exec_jp<S: Src16>(&mut self) {
         // TODO: cover more cases of jumps
         let s = S::read_arg(self);
-        *self.regs_mut().pc = s.data;
+        self.regs_mut().set_pc(s.data);
     }
 
     fn exec_ld<D: Dest, S: Src>(&mut self)
@@ -123,20 +123,20 @@ trait Execute : Context + Sized {
     }
 
     fn exec_rlca(&mut self) {
-        let orig = self.regs().af.high();
+        let orig = self.regs().a();
         let carry = orig >> 7;
         let dest = (orig << 1) | carry;
-        self.regs_mut().af.set_high(dest);
+        self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
         let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
         self.regs_mut().set_flags(flags);
     }
 
     fn exec_rrca(&mut self) {
-        let orig = self.regs().af.high();
+        let orig = self.regs().a();
         let carry = orig << 7;
         let dest = (orig >> 1) | carry;
-        self.regs_mut().af.set_high(dest);
+        self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
         let flags = flags_apply!(self.regs().flags(), C:[carry > 0] H:0 N:0);
         self.regs_mut().set_flags(flags);
@@ -189,7 +189,7 @@ trait Dest16 : Dest<Item=u16> {}
 impl<T> Dest16 for T where T: Dest<Item=u16> {}
 
 macro_rules! def_reg8_arg {
-    ($reg:tt, $r16:ident, $r8r:ident, $r8w:ident) => (
+    ($reg:tt, $r8r:ident, $r8w:ident) => (
         struct $reg;
 
         impl Src for $reg {
@@ -197,7 +197,7 @@ macro_rules! def_reg8_arg {
 
             #[inline]
             fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
-                Fetch { data: ctx.regs().$r16.$r8r(), mem_bytes: 0 }
+                Fetch { data: ctx.regs().$r8r(), mem_bytes: 0 }
             }
         }
 
@@ -205,13 +205,13 @@ macro_rules! def_reg8_arg {
             type Item = u8;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) { ctx.regs_mut().$r16.$r8w(val) }
+            fn write_arg<C: Context>(ctx: &mut C, val: u8) { ctx.regs_mut().$r8w(val) }
         }
     );
 }
 
 macro_rules! def_reg16_arg {
-    ($reg:tt, $r16:ident) => (
+    ($reg:tt, $r16r:ident, $r16w:ident) => (
         struct $reg;
 
         impl Src for $reg {
@@ -219,7 +219,7 @@ macro_rules! def_reg16_arg {
 
             #[inline]
             fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> {
-                Fetch { data: *ctx.regs().$r16, mem_bytes: 0 }
+                Fetch { data: ctx.regs().$r16r(), mem_bytes: 0 }
             }
         }
 
@@ -227,7 +227,7 @@ macro_rules! def_reg16_arg {
             type Item = u16;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u16) { *ctx.regs_mut().$r16 = val }
+            fn write_arg<C: Context>(ctx: &mut C, val: u16) { ctx.regs_mut().$r16w(val) }
         }
     );
 }
@@ -241,7 +241,7 @@ macro_rules! def_indreg16_arg {
 
             #[inline]
             fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
-                let addr = *ctx.regs().$r16;
+                let addr = ctx.regs().$r16();
                 let data = ctx.mem().read_from(addr);
                 Fetch { data: data, mem_bytes: 0 }
             }
@@ -252,22 +252,22 @@ macro_rules! def_indreg16_arg {
 
             #[inline]
             fn write_arg<C: Context>(ctx: &mut C, val: u8) {
-                let addr = *ctx.regs().$r16;
+                let addr = ctx.regs().$r16();
                 ctx.mem_mut().write_to(addr, val);
             }
         }
     );
 }
 
-def_reg8_arg!(A, af, high, set_high);
-def_reg8_arg!(B, bc, high, set_high);
-def_reg8_arg!(C, bc, low, set_low);
-def_reg8_arg!(H, hl, high, set_high);
-def_reg8_arg!(L, hl, low, set_low);
+def_reg8_arg!(A, a, set_a);
+def_reg8_arg!(B, b, set_b);
+def_reg8_arg!(C, c, set_c);
+def_reg8_arg!(H, h, set_h);
+def_reg8_arg!(L, l, set_l);
 
-def_reg16_arg!(AF, af);
-def_reg16_arg!(BC, bc);
-def_reg16_arg!(HL, hl);
+def_reg16_arg!(AF, af, set_af);
+def_reg16_arg!(BC, bc, set_bc);
+def_reg16_arg!(HL, hl, set_hl);
 
 def_indreg16_arg!(IND_BC, bc);
 def_indreg16_arg!(IND_HL, hl);
@@ -278,7 +278,7 @@ impl Src for L8 {
 
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
-        let pc = *ctx.regs().pc;
+        let pc = ctx.regs().pc();
         Fetch { data: ctx.mem().read_from(pc + 1), mem_bytes: 1 }
     }
 }
@@ -289,7 +289,7 @@ impl Src for L16 {
 
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> {
-        let pc = *ctx.regs().pc;
+        let pc = ctx.regs().pc();
         Fetch { data: ctx.mem().read_word_from::<LittleEndian>(pc + 1), mem_bytes: 2 }
     }
 }
@@ -312,7 +312,7 @@ mod test {
     fn test_exec_nop() {
         let mut test = ExecTest::for_inst(&inst!(NOP));
         test.exec_step();
-        assert_eq!(0x0001, *test.cpu.regs().pc);
+        assert_eq!(0x0001, test.cpu.regs().pc());
         test.assert_all_flags_unaffected("nop");
     }
 
@@ -321,7 +321,7 @@ mod test {
         let mut test = ExecTest::new();
         test.assert_behaves_like_ld(2, 
             |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD BC, val)).unwrap(); },
-            |cpu| *cpu.regs().bc,
+            |cpu| cpu.regs().bc(),
         );
     }
 
@@ -330,8 +330,8 @@ mod test {
         let mut test = ExecTest::for_inst(&inst!(LD (BC), A));
         test.assert_behaves_like_ld(0, 
             |val, cpu| {
-                cpu.regs_mut().af.set_high(val);
-                *cpu.regs_mut().bc = 0x1234;
+                cpu.regs_mut().set_a(val);
+                cpu.regs_mut().set_bc(0x1234);
             },
             |cpu| cpu.mem().read_from(0x1234),
         );
@@ -341,8 +341,8 @@ mod test {
     fn test_exec_inc_bc() {
         let mut test = ExecTest::for_inst(&inst!(INC BC));
         test.assert_behaves_like_inc16(
-            |v, cpu| *cpu.regs_mut().bc = v, 
-            |cpu| *cpu.regs().bc,
+            |v, cpu| cpu.regs_mut().set_bc(v),
+            |cpu| cpu.regs().bc(),
         );
     }
 
@@ -350,8 +350,8 @@ mod test {
     fn test_exec_inc_b() {
         let mut test = ExecTest::for_inst(&inst!(INC B));
         test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().bc.set_high(v), 
-            |cpu| cpu.regs().bc.high(),
+            |v, cpu| cpu.regs_mut().set_b(v), 
+            |cpu| cpu.regs().b(),
         );
     }
 
@@ -359,8 +359,8 @@ mod test {
     fn test_exec_dec_b() {
         let mut test = ExecTest::for_inst(&inst!(DEC B));
         test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().bc.set_high(v), 
-            |cpu| cpu.regs().bc.high(),
+            |v, cpu| cpu.regs_mut().set_b(v), 
+            |cpu| cpu.regs().b(),
         );        
     }
 
@@ -369,7 +369,7 @@ mod test {
         let mut test = ExecTest::new();
         test.assert_behaves_like_ld(1, 
             |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD B, val)).unwrap(); },
-            |cpu| cpu.regs().bc.high(),
+            |cpu| cpu.regs().b(),
         );
     }
 
@@ -377,14 +377,14 @@ mod test {
     fn test_exec_rlca() {
         let mut test = ExecTest::for_inst(&inst!(RLCA));
         for input in 0..=255 {
-            test.cpu.regs_mut().af.set_high(input);
+            test.cpu.regs_mut().set_a(input);
             test.exec_step();
 
             let pre = format!("RLCA b{:08b}", input);
             let carry = (input & 0b10000000) >> 7;
             let expected = (input << 1) | carry;
-            let given = test.cpu.regs().af.high();
-            assert_eq!(0x0001, *test.cpu.regs().pc);
+            let given = test.cpu.regs().a();
+            assert_eq!(0x0001, test.cpu.regs().pc());
             assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
 
             test.assert_sflag_unaffected(&pre);
@@ -403,16 +403,16 @@ mod test {
             let input = u16::sample();
             let input_ = u16::sample();;
 
-            *test.cpu.regs_mut().af = input;
-            *test.cpu.regs_mut().af_ = input_;
+            test.cpu.regs_mut().set_af(input);
+            test.cpu.regs_mut().set_af_(input_);
             test.exec_step();
 
             let pre = "EX AF, AF'";
             let expected = input_;
             let expected_ = input;
-            let given = *test.cpu.regs().af;
-            let given_ = *test.cpu.regs().af_;
-            assert_eq!(0x0001, *test.cpu.regs().pc);
+            let given = test.cpu.regs().af();
+            let given_ = test.cpu.regs().af_();
+            assert_eq!(0x0001, test.cpu.regs().pc());
             assert_eq!(expected, given, "expected AF {} on {}, {} given", expected, pre, given);
             assert_eq!(expected_, given_, "expected AF' {} on {}, {} given", expected_, pre, given_);
         }
@@ -423,10 +423,10 @@ mod test {
         let mut test = ExecTest::for_inst(&inst!(ADD HL, BC));
         test.asset_behaves_like_add16(
             |a, b, cpu| {
-                *cpu.regs_mut().hl = a;
-                *cpu.regs_mut().bc = b;
+                cpu.regs_mut().set_hl(a);
+                cpu.regs_mut().set_bc(b);
             },
-            |cpu| *cpu.regs().hl,
+            |cpu| cpu.regs().hl(),
         );        
     }
 
@@ -436,9 +436,9 @@ mod test {
         test.assert_behaves_like_ld(0, 
             |val, cpu| { 
                 cpu.mem_mut().write_to(0x1234, val);
-                *cpu.regs_mut().bc = 0x1234;
+                cpu.regs_mut().set_bc(0x1234);
             },
-            |cpu| cpu.regs().af.high(),
+            |cpu| cpu.regs().a(),
         );
     }
 
@@ -446,8 +446,8 @@ mod test {
     fn test_exec_dec_bc() {
         let mut test = ExecTest::for_inst(&inst!(DEC BC));
         test.assert_behaves_like_dec16(
-            |v, cpu| *cpu.regs_mut().bc = v, 
-            |cpu| *cpu.regs().bc,
+            |v, cpu| cpu.regs_mut().set_bc(v), 
+            |cpu| cpu.regs().bc(),
         );
     }
 
@@ -455,8 +455,8 @@ mod test {
     fn test_exec_inc_c() {
         let mut test = ExecTest::for_inst(&inst!(INC C));
         test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().bc.set_low(v), 
-            |cpu| cpu.regs().bc.low(),
+            |v, cpu| cpu.regs_mut().set_c(v), 
+            |cpu| cpu.regs().c(),
         );
     }
 
@@ -464,8 +464,8 @@ mod test {
     fn test_exec_dec_c() {
         let mut test = ExecTest::for_inst(&inst!(DEC C));
         test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().bc.set_low(v), 
-            |cpu| cpu.regs().bc.low(),
+            |v, cpu| cpu.regs_mut().set_c(v), 
+            |cpu| cpu.regs().c(),
         );        
     }
 
@@ -474,7 +474,7 @@ mod test {
         let mut test = ExecTest::new();
         test.assert_behaves_like_ld(1, 
             |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD C, val)).unwrap(); },
-            |cpu| cpu.regs().bc.low(),
+            |cpu| cpu.regs().c(),
         );
     }
 
@@ -482,14 +482,14 @@ mod test {
     fn test_exec_rrca() {
         let mut test = ExecTest::for_inst(&inst!(RRCA));
         for input in 0..=255 {
-            test.cpu.regs_mut().af.set_high(input);
+            test.cpu.regs_mut().set_a(input);
             test.exec_step();
 
             let pre = format!("RRCA b{:08b}", input);
             let carry = input & 0b00000001;
             let expected = (input >> 1) | (carry << 7);
-            let given = test.cpu.regs().af.high();
-            assert_eq!(0x0001, *test.cpu.regs().pc);
+            let given = test.cpu.regs().a();
+            assert_eq!(0x0001, test.cpu.regs().pc());
             assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
 
             test.assert_sflag_unaffected(&pre);
@@ -536,7 +536,7 @@ mod test {
         }
 
         fn exec_step(&mut self) {
-            *self.cpu.regs_mut().pc = 0x00;
+            self.cpu.regs_mut().set_pc(0x0000);
             self.prev_flags = self.cpu.regs().flags();
             exec_step(&mut self.cpu);
         }
@@ -551,7 +551,7 @@ mod test {
 
                 let output = get(&self.cpu);
                 let expected_pc = 1 + opsize as u16;
-                let actual_pc = *self.cpu.regs().pc;
+                let actual_pc = self.cpu.regs().pc();
                 let flags = self.cpu.regs().flags();
                 
                 assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
@@ -569,7 +569,7 @@ mod test {
                 let expected = if input < 0xff { input + 1 } else { 0 };
                 let actual = get(&self.cpu);
                 
-                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(0x0001, self.cpu.regs().pc());
                 assert_eq!(expected, actual);
 
                 let flags = self.cpu.regs().flags();
@@ -594,7 +594,7 @@ mod test {
                 let expected = if input < 0xffff { input + 1 } else { 0 };
                 let actual = get(&self.cpu);
                 
-                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(0x0001, self.cpu.regs().pc());
                 assert_eq!(expected, actual);
 
                 self.assert_all_flags_unaffected("INC (16-bits)");
@@ -609,7 +609,7 @@ mod test {
                 let expected = if input > 0 { input - 1 } else { 0xff };
                 let actual = get(&self.cpu);
                 
-                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(0x0001, self.cpu.regs().pc());
                 assert_eq!(expected, actual);
 
                 let pre = &format!("dec {}", input);
@@ -633,7 +633,7 @@ mod test {
                 let expected = if input > 0 { input - 1 } else { 0xffff };
                 let actual = get(&self.cpu);
                 
-                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(0x0001, self.cpu.regs().pc());
                 assert_eq!(expected, actual);
 
                 self.assert_all_flags_unaffected("DEC (16-bits)");
@@ -651,7 +651,7 @@ mod test {
                 let expected = c as u16;
                 let actual = get(&self.cpu);
                 
-                assert_eq!(0x0001, *self.cpu.regs().pc);
+                assert_eq!(0x0001, self.cpu.regs().pc());
                 assert_eq!(expected, actual);
 
                 let pre = &format!("add b{:08b}, b{:08b}", a, b);
