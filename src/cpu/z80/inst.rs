@@ -40,5 +40,6 @@ macro_rules! inst {
     (NOP)               => ([0x00]);
     (RLA)               => ([0x17]);
     (RLCA)              => ([0x07]);
+    (RRA)               => ([0x1f]);
     (RRCA)              => ([0x0f]);
 }

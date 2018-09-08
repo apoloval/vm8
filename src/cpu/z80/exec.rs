@@ -55,6 +55,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1c => { ctx.exec_inc8::<E>();         04 },
         0x1d => { ctx.exec_dec8::<E>();         04 },
         0x1e => { ctx.exec_ld::<E, L8>();       07 },
+        0x1f => { ctx.exec_rra();               04 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -164,6 +165,16 @@ trait Execute : Context + Sized {
         let orig = self.regs().a();
         let carry = (orig & 0x80) >> 7;
         let dest = self.alu().rotate_left(orig, carry, &mut flags);
+        self.regs_mut().set_a(dest);
+        self.regs_mut().inc_pc(1);
+        self.regs_mut().set_flags(flags);
+    }
+
+    fn exec_rra(&mut self) {
+        let mut flags = self.regs().flags();
+        let orig = self.regs().a();
+        let carry = self.regs().flag_c();
+        let dest = self.alu().rotate_right(orig, carry, &mut flags);
         self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
         self.regs_mut().set_flags(flags);
@@ -624,6 +635,30 @@ mod test {
             let pre = format!("RLA b{:08b}", input);
             let carry = (input & 0b10000000) >> 7;
             let expected = (input << 1) | prev_carry;
+            let given = test.cpu.regs().a();
+            assert_eq!(0x0001, test.cpu.regs().pc());
+            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
+
+            test.assert_sflag_unaffected(&pre);
+            test.assert_zflag_unaffected(&pre);
+            test.assert_hflag_if(&pre, false);
+            test.assert_pvflag_unaffected(&pre);
+            test.assert_nflag_if(&pre, false);
+            test.assert_cflag_if(&pre, carry > 0);
+        }
+    }
+
+    #[test]
+    fn test_exec_rra() {
+        let mut test = ExecTest::for_inst(&inst!(RRA));
+        for input in 0..=255 {
+            let prev_carry = test.cpu.regs().flag_c();
+            test.cpu.regs_mut().set_a(input);
+            test.exec_step();
+
+            let pre = format!("RRA b{:08b}", input);
+            let carry = input & 0b00000001;
+            let expected = (input >> 1) | (prev_carry << 7);
             let given = test.cpu.regs().a();
             assert_eq!(0x0001, test.cpu.regs().pc());
             assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
