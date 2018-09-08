@@ -48,6 +48,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x15 => { ctx.exec_dec8::<D>();         04 },
         0x16 => { ctx.exec_ld::<D, L8>();       07 },
         0x17 => { ctx.exec_rla();               04 },
+        0x18 => { ctx.exec_jr::<L8>();          12 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -125,6 +126,12 @@ trait Execute : Context + Sized {
         // TODO: cover more cases of jumps
         let s = S::read_arg(self);
         self.regs_mut().set_pc(s.data);
+    }
+
+    fn exec_jr<S: Src8>(&mut self) {
+        // TODO: cover more cases of jumps
+        let s = S::read_arg(self);
+        self.regs_mut().inc_pc(s.data as i8 as usize);
     }
 
     fn exec_ld<D: Dest, S: Src>(&mut self)
@@ -634,6 +641,22 @@ mod test {
             test.assert_pvflag_unaffected(&pre);
             test.assert_nflag_if(&pre, false);
             test.assert_cflag_if(&pre, carry > 0);
+        }
+    }
+
+    #[test]
+    fn test_exec_jr_l8() {
+        let mut test = ExecTest::new();
+        for input in 0..=255 {
+            let dest = u8::sample();
+            test.cpu.mem_mut().write(&inst!(JR dest)).unwrap();
+            test.exec_step();
+
+            let expected_pc = test.cpu.alu().add16(0, dest as i8 as u16);
+            let actual_pc = test.cpu.regs().pc();
+            assert_eq!(expected_pc, actual_pc);
+
+            test.assert_all_flags_unaffected("JR");
         }
     }
 
