@@ -51,6 +51,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x18 => { ctx.exec_jr::<L8>();          12 },
         0x19 => { ctx.exec_add16::<HL, DE>();   11 },
         0x1a => { ctx.exec_ld::<A, IND_DE>();   07 },
+        0x1b => { ctx.exec_dec16::<DE>();       06 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -684,7 +685,14 @@ mod test {
         );
     }
 
-
+    #[test]
+    fn test_exec_dec_de() {
+        let mut test = ExecTest::for_inst(&inst!(DEC DE));
+        test.assert_behaves_like_dec16(
+            |v, cpu| cpu.regs_mut().set_de(v), 
+            |cpu| cpu.regs().de(),
+        );
+    }
 
     /*********************************************************/
 
