@@ -131,6 +131,6 @@ impl Registers {
         mem::swap(&mut self.hl, &mut self.hl_);
     }
 
-    #[inline]
-    pub fn inc_pc(&mut self, val: usize) { *self.pc += val as u16 }
+    #[inline] pub fn inc_pc(&mut self, val: usize) { *self.pc += val as u16 }
+    #[inline] pub fn inc_pc8(&mut self, val: u8) { self.inc_pc(val as i8 as usize) }
 }

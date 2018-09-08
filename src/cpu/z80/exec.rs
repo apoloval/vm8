@@ -93,7 +93,7 @@ trait Execute : Context + Sized {
         if b > 0 {
             let s = self.read_from_pc(1);
             let pc = self.regs().pc();
-            self.regs_mut().inc_pc(s as i8 as usize);
+            self.regs_mut().inc_pc8(s);
             true
         } else {
             self.regs_mut().inc_pc(2);
@@ -123,15 +123,13 @@ trait Execute : Context + Sized {
     }
 
     fn exec_jp<S: Src16>(&mut self) {
-        // TODO: cover more cases of jumps
         let s = S::read_arg(self);
         self.regs_mut().set_pc(s.data);
     }
 
     fn exec_jr<S: Src8>(&mut self) {
-        // TODO: cover more cases of jumps
         let s = S::read_arg(self);
-        self.regs_mut().inc_pc(s.data as i8 as usize);
+        self.regs_mut().inc_pc8(s.data);
     }
 
     fn exec_ld<D: Dest, S: Src>(&mut self)
