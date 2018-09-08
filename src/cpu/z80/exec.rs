@@ -56,6 +56,8 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1d => { ctx.exec_dec8::<E>();         04 },
         0x1e => { ctx.exec_ld::<E, L8>();       07 },
         0x1f => { ctx.exec_rra();               04 },
+        0x20 => { ctx.exec_jr_cond::<NZFLAG, L8>(); 12 },
+
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -137,6 +139,18 @@ trait Execute : Context + Sized {
     fn exec_jr<S: Src8>(&mut self) {
         let s = S::read_arg(self);
         self.regs_mut().inc_pc8(s.data);
+    }
+
+    fn exec_jr_cond<C: Cond, S: Src8>(&mut self) -> usize {
+        let cond = C::condition_met(self);
+        if cond {
+            let s = S::read_arg(self);
+            self.regs_mut().inc_pc8(s.data);
+            12
+        } else {
+            self.regs_mut().inc_pc8(2);
+            7
+        }
     }
 
     fn exec_ld<D: Dest, S: Src>(&mut self)
@@ -345,6 +359,28 @@ impl Src for L16 {
         Fetch { data: ctx.mem().read_word_from::<LittleEndian>(pc + 1), mem_bytes: 2 }
     }
 }
+
+trait Cond {
+    fn condition_met<C: Context>(ctx: &C) -> bool;
+}
+
+macro_rules! def_cond {
+    ($name:ident, $flagget:ident, $flagvalue:expr) => {
+        struct $name;
+
+        impl Cond for $name {
+            fn condition_met<C: Context>(ctx: &C) -> bool {
+                let flag = ctx.regs().$flagget();
+                flag == $flagvalue
+            }
+        }
+    }
+}
+
+def_cond!(ZFLAG, flag_z, 1);
+def_cond!(NZFLAG, flag_z, 0);
+def_cond!(CFLAG, flag_c, 1);
+def_cond!(NCFLAG, flag_c, 0);
 
 /********************************************************/
 
@@ -704,6 +740,48 @@ mod test {
 
     #[test]
     fn test_exec_jr_l8() {
+        let mut test = ExecTest::new();
+        for input in 0..=255 {
+            let dest = u8::sample();
+            test.cpu.mem_mut().write(&inst!(JR dest)).unwrap();
+            test.exec_step();
+
+            let expected_pc = test.cpu.alu().add16(0, dest as i8 as u16);
+            let actual_pc = test.cpu.regs().pc();
+            assert_eq!(expected_pc, actual_pc);
+
+            test.assert_all_flags_unaffected("JR");
+        }
+    }
+
+    macro_rules! test_jr_cond_l8 {
+        ($fname:ident, $condname:ident, $flagget:ident, $flagval:expr) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::new();
+                for dest in 0..=255 {
+                    let cond = test.cpu.regs().$flagget() == $flagval;
+                    test.cpu.mem_mut().write(&inst!(JR $condname, dest)).unwrap();
+                    test.exec_step();
+
+                    let expected_pc = if cond { 
+                        test.cpu.alu().add16(0, dest as i8 as u16)
+                    } else {
+                        2
+                    };
+                    let actual_pc = test.cpu.regs().pc();
+                    assert_eq!(expected_pc, actual_pc);
+
+                    test.assert_all_flags_unaffected("JR");
+                }
+            }
+        }
+    }
+
+    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, 0);
+
+    #[test]
+    fn test_exec_jr_cond_l8() {
         let mut test = ExecTest::new();
         for input in 0..=255 {
             let dest = u8::sample();
