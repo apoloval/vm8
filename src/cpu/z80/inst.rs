@@ -14,6 +14,7 @@ macro_rules! inst {
     (DEC B)             => ([0x05]);
     (DEC C)             => ([0x0d]);
     (DEC D)             => ([0x15]);
+    (DEC E)             => ([0x1d]);
     (DEC BC)            => ([0x0b]);
     (DEC DE)            => ([0x1b]);
     (DJNZ $x:expr)      => ([0x10, $x]);

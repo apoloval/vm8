@@ -53,6 +53,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1a => { ctx.exec_ld::<A, IND_DE>();   07 },
         0x1b => { ctx.exec_dec16::<DE>();       06 },
         0x1c => { ctx.exec_inc8::<E>();         04 },
+        0x1d => { ctx.exec_dec8::<E>();         04 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -490,6 +491,7 @@ mod test {
     test_dec_reg8!(test_exec_dec_b, B, b, set_b);
     test_dec_reg8!(test_exec_dec_c, C, c, set_c);
     test_dec_reg8!(test_exec_dec_d, D, d, set_d);
+    test_dec_reg8!(test_exec_dec_e, E, e, set_e);
 
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
