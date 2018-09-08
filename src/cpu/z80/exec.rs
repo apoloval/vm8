@@ -57,6 +57,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1e => { ctx.exec_ld::<E, L8>();       07 },
         0x1f => { ctx.exec_rra();               04 },
         0x20 => { ctx.exec_jr_cond::<NZFLAG, L8>(); 12 },
+        0x21 => { ctx.exec_ld::<HL, L16>();     10 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -476,6 +477,7 @@ mod test {
 
     test_ld_r16_l16!(test_exec_ld_bc_l16, BC, bc);
     test_ld_r16_l16!(test_exec_ld_de_l16, DE, de);
+    test_ld_r16_l16!(test_exec_ld_hl_l16, HL, hl);
 
     /**********************************************/
     /* Exchange, Block Transfer, and Search Group */
