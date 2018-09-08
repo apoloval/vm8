@@ -52,6 +52,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x19 => { ctx.exec_add16::<HL, DE>();   11 },
         0x1a => { ctx.exec_ld::<A, IND_DE>();   07 },
         0x1b => { ctx.exec_dec16::<DE>();       06 },
+        0x1c => { ctx.exec_inc8::<E>();         04 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -297,6 +298,7 @@ def_reg8_arg!(A, a, set_a);
 def_reg8_arg!(B, b, set_b);
 def_reg8_arg!(C, c, set_c);
 def_reg8_arg!(D, d, set_d);
+def_reg8_arg!(E, e, set_e);
 def_reg8_arg!(H, h, set_h);
 def_reg8_arg!(L, l, set_l);
 
@@ -691,6 +693,15 @@ mod test {
         test.assert_behaves_like_dec16(
             |v, cpu| cpu.regs_mut().set_de(v), 
             |cpu| cpu.regs().de(),
+        );
+    }
+
+    #[test]
+    fn test_exec_inc_e() {
+        let mut test = ExecTest::for_inst(&inst!(INC E));
+        test.assert_behaves_like_inc8(
+            |v, cpu| cpu.regs_mut().set_e(v), 
+            |cpu| cpu.regs().e(),
         );
     }
 
