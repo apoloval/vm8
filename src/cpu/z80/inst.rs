@@ -10,6 +10,7 @@ macro_rules! encode_literal {
 
 macro_rules! inst {
     (ADD HL, BC)        => ([0x09]);
+    (ADD HL, DE)        => ([0x19]);
     (DEC B)             => ([0x05]);
     (DEC C)             => ([0x0d]);
     (DEC D)             => ([0x15]);

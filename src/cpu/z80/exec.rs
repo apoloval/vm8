@@ -49,6 +49,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x16 => { ctx.exec_ld::<D, L8>();       07 },
         0x17 => { ctx.exec_rla();               04 },
         0x18 => { ctx.exec_jr::<L8>();          12 },
+        0x19 => { ctx.exec_add16::<HL, DE>();   11 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -656,6 +657,18 @@ mod test {
 
             test.assert_all_flags_unaffected("JR");
         }
+    }
+
+    #[test]
+    fn test_exec_add_hl_de() {
+        let mut test = ExecTest::for_inst(&inst!(ADD HL, DE));
+        test.asset_behaves_like_add16(
+            |a, b, cpu| {
+                cpu.regs_mut().set_hl(a);
+                cpu.regs_mut().set_de(b);
+            },
+            |cpu| cpu.regs().hl(),
+        );        
     }
 
     /*********************************************************/
