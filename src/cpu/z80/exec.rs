@@ -347,22 +347,9 @@ mod test {
 
     use super::*;
 
-    #[test]
-    fn test_exec_nop() {
-        let mut test = ExecTest::for_inst(&inst!(NOP));
-        test.exec_step();
-        assert_eq!(0x0001, test.cpu.regs().pc());
-        test.assert_all_flags_unaffected("nop");
-    }
-
-    #[test]
-    fn test_exec_ld_bc_l16() {        
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(2, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD BC, val)).unwrap(); },
-            |cpu| cpu.regs().bc(),
-        );
-    }
+    /********************/
+    /* 8-Bit Load Group */
+    /********************/
 
     #[test]
     fn test_exec_ld_indbc_a() {
@@ -377,33 +364,6 @@ mod test {
     }
 
     #[test]
-    fn test_exec_inc_bc() {
-        let mut test = ExecTest::for_inst(&inst!(INC BC));
-        test.assert_behaves_like_inc16(
-            |v, cpu| cpu.regs_mut().set_bc(v),
-            |cpu| cpu.regs().bc(),
-        );
-    }
-
-    #[test]
-    fn test_exec_inc_b() {
-        let mut test = ExecTest::for_inst(&inst!(INC B));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_b(v), 
-            |cpu| cpu.regs().b(),
-        );
-    }
-
-    #[test]
-    fn test_exec_dec_b() {
-        let mut test = ExecTest::for_inst(&inst!(DEC B));
-        test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().set_b(v), 
-            |cpu| cpu.regs().b(),
-        );        
-    }
-
-    #[test]
     fn test_exec_ld_b_l8() {
         let mut test = ExecTest::new();
         test.assert_behaves_like_ld(1, 
@@ -413,27 +373,84 @@ mod test {
     }
 
     #[test]
-    fn test_exec_rlca() {
-        let mut test = ExecTest::for_inst(&inst!(RLCA));
-        for input in 0..=255 {
-            test.cpu.regs_mut().set_a(input);
-            test.exec_step();
-
-            let pre = format!("RLCA b{:08b}", input);
-            let carry = (input & 0b10000000) >> 7;
-            let expected = (input << 1) | carry;
-            let given = test.cpu.regs().a();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
-
-            test.assert_sflag_unaffected(&pre);
-            test.assert_zflag_unaffected(&pre);
-            test.assert_hflag_if(&pre, false);
-            test.assert_pvflag_unaffected(&pre);
-            test.assert_nflag_if(&pre, false);
-            test.assert_cflag_if(&pre, carry > 0);
-        }
+    fn test_exec_ld_a_indbc() {
+        let mut test = ExecTest::for_inst(&inst!(LD A, (BC)));
+        test.assert_behaves_like_ld(0, 
+            |val, cpu| { 
+                cpu.mem_mut().write_to(0x1234, val);
+                cpu.regs_mut().set_bc(0x1234);
+            },
+            |cpu| cpu.regs().a(),
+        );
     }
+
+    #[test]
+    fn test_exec_ld_c_l8() {
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(1, 
+            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD C, val)).unwrap(); },
+            |cpu| cpu.regs().c(),
+        );
+    }
+
+    #[test]
+    fn test_exec_ld_indde_a() {
+        let mut test = ExecTest::for_inst(&inst!(LD (DE), A));
+        test.assert_behaves_like_ld(0, 
+            |val, cpu| {
+                cpu.regs_mut().set_a(val);
+                cpu.regs_mut().set_de(0x1234);
+            },
+            |cpu| cpu.mem().read_from(0x1234),
+        );
+    }
+
+    #[test]
+    fn test_exec_ld_d_l8() {
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(1, 
+            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD D, val)).unwrap(); },
+            |cpu| cpu.regs().d(),
+        );
+    }
+
+    #[test]
+    fn test_exec_ld_a_indde() {
+        let mut test = ExecTest::for_inst(&inst!(LD A, (DE)));
+        test.assert_behaves_like_ld(0, 
+            |val, cpu| { 
+                cpu.mem_mut().write_to(0x1234, val);
+                cpu.regs_mut().set_de(0x1234);
+            },
+            |cpu| cpu.regs().a(),
+        );
+    }
+
+    /*********************/
+    /* 16-Bit Load Group */
+    /*********************/
+
+    #[test]
+    fn test_exec_ld_bc_l16() {        
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(2, 
+            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD BC, val)).unwrap(); },
+            |cpu| cpu.regs().bc(),
+        );
+    }
+
+    #[test]
+    fn test_exec_ld_de_l16() {        
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(2, 
+            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD DE, val)).unwrap(); },
+            |cpu| cpu.regs().de(),
+        );
+    }
+
+    /**********************************************/
+    /* Exchange, Block Transfer, and Search Group */
+    /**********************************************/
 
     #[test]
     fn test_exec_exaf() {
@@ -457,37 +474,26 @@ mod test {
         }
     }
 
+    /**************************/
+    /* 8-Bit Arithmetic group */
+    /**************************/
+
     #[test]
-    fn test_exec_add_hl_bc() {
-        let mut test = ExecTest::for_inst(&inst!(ADD HL, BC));
-        test.asset_behaves_like_add16(
-            |a, b, cpu| {
-                cpu.regs_mut().set_hl(a);
-                cpu.regs_mut().set_bc(b);
-            },
-            |cpu| cpu.regs().hl(),
+    fn test_exec_inc_b() {
+        let mut test = ExecTest::for_inst(&inst!(INC B));
+        test.assert_behaves_like_inc8(
+            |v, cpu| cpu.regs_mut().set_b(v), 
+            |cpu| cpu.regs().b(),
+        );
+    }
+
+    #[test]
+    fn test_exec_dec_b() {
+        let mut test = ExecTest::for_inst(&inst!(DEC B));
+        test.assert_behaves_like_dec8(
+            |v, cpu| cpu.regs_mut().set_b(v), 
+            |cpu| cpu.regs().b(),
         );        
-    }
-
-    #[test]
-    fn test_exec_ld_a_indbc() {
-        let mut test = ExecTest::for_inst(&inst!(LD A, (BC)));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| { 
-                cpu.mem_mut().write_to(0x1234, val);
-                cpu.regs_mut().set_bc(0x1234);
-            },
-            |cpu| cpu.regs().a(),
-        );
-    }
-
-    #[test]
-    fn test_exec_dec_bc() {
-        let mut test = ExecTest::for_inst(&inst!(DEC BC));
-        test.assert_behaves_like_dec16(
-            |v, cpu| cpu.regs_mut().set_bc(v), 
-            |cpu| cpu.regs().bc(),
-        );
     }
 
     #[test]
@@ -509,12 +515,133 @@ mod test {
     }
 
     #[test]
-    fn test_exec_ld_c_l8() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(1, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD C, val)).unwrap(); },
-            |cpu| cpu.regs().c(),
+    fn test_exec_inc_d() {
+        let mut test = ExecTest::for_inst(&inst!(INC D));
+        test.assert_behaves_like_inc8(
+            |v, cpu| cpu.regs_mut().set_d(v), 
+            |cpu| cpu.regs().d(),
         );
+    }
+
+    #[test]
+    fn test_exec_dec_d() {
+        let mut test = ExecTest::for_inst(&inst!(DEC D));
+        test.assert_behaves_like_dec8(
+            |v, cpu| cpu.regs_mut().set_d(v), 
+            |cpu| cpu.regs().d(),
+        );        
+    }
+
+    #[test]
+    fn test_exec_inc_e() {
+        let mut test = ExecTest::for_inst(&inst!(INC E));
+        test.assert_behaves_like_inc8(
+            |v, cpu| cpu.regs_mut().set_e(v), 
+            |cpu| cpu.regs().e(),
+        );
+    }
+
+    /*****************************************************/
+    /* General-Purpose Arithmetic and CPU Control Groups */
+    /*****************************************************/
+
+    #[test]
+    fn test_exec_nop() {
+        let mut test = ExecTest::for_inst(&inst!(NOP));
+        test.exec_step();
+        assert_eq!(0x0001, test.cpu.regs().pc());
+        test.assert_all_flags_unaffected("nop");
+    }
+
+    /***************************/
+    /* 16-Bit Arithmetic group */
+    /***************************/
+
+    #[test]
+    fn test_exec_inc_bc() {
+        let mut test = ExecTest::for_inst(&inst!(INC BC));
+        test.assert_behaves_like_inc16(
+            |v, cpu| cpu.regs_mut().set_bc(v),
+            |cpu| cpu.regs().bc(),
+        );
+    }
+
+    #[test]
+    fn test_exec_add_hl_bc() {
+        let mut test = ExecTest::for_inst(&inst!(ADD HL, BC));
+        test.asset_behaves_like_add16(
+            |a, b, cpu| {
+                cpu.regs_mut().set_hl(a);
+                cpu.regs_mut().set_bc(b);
+            },
+            |cpu| cpu.regs().hl(),
+        );        
+    }
+
+    #[test]
+    fn test_exec_dec_bc() {
+        let mut test = ExecTest::for_inst(&inst!(DEC BC));
+        test.assert_behaves_like_dec16(
+            |v, cpu| cpu.regs_mut().set_bc(v), 
+            |cpu| cpu.regs().bc(),
+        );
+    }
+
+    #[test]
+    fn test_exec_inc_de() {
+        let mut test = ExecTest::for_inst(&inst!(INC DE));
+        test.assert_behaves_like_inc16(
+            |v, cpu| cpu.regs_mut().set_de(v),
+            |cpu| cpu.regs().de(),
+        );
+    }
+
+    #[test]
+    fn test_exec_add_hl_de() {
+        let mut test = ExecTest::for_inst(&inst!(ADD HL, DE));
+        test.asset_behaves_like_add16(
+            |a, b, cpu| {
+                cpu.regs_mut().set_hl(a);
+                cpu.regs_mut().set_de(b);
+            },
+            |cpu| cpu.regs().hl(),
+        );        
+    }
+
+    #[test]
+    fn test_exec_dec_de() {
+        let mut test = ExecTest::for_inst(&inst!(DEC DE));
+        test.assert_behaves_like_dec16(
+            |v, cpu| cpu.regs_mut().set_de(v), 
+            |cpu| cpu.regs().de(),
+        );
+    }
+
+    /**************************/
+    /* Rotate and Shift Group */
+    /**************************/
+    
+    #[test]
+    fn test_exec_rlca() {
+        let mut test = ExecTest::for_inst(&inst!(RLCA));
+        for input in 0..=255 {
+            test.cpu.regs_mut().set_a(input);
+            test.exec_step();
+
+            let pre = format!("RLCA b{:08b}", input);
+            let carry = (input & 0b10000000) >> 7;
+            let expected = (input << 1) | carry;
+            let given = test.cpu.regs().a();
+            assert_eq!(0x0001, test.cpu.regs().pc());
+            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
+
+            test.assert_sflag_unaffected(&pre);
+            test.assert_zflag_unaffected(&pre);
+            test.assert_hflag_if(&pre, false);
+            test.assert_pvflag_unaffected(&pre);
+            test.assert_nflag_if(&pre, false);
+            test.assert_cflag_if(&pre, carry > 0);
+        }
     }
 
     #[test]
@@ -540,6 +667,34 @@ mod test {
         }
     }
 
+    #[test]
+    fn test_exec_rla() {
+        let mut test = ExecTest::for_inst(&inst!(RLA));
+        for input in 0..=255 {
+            let prev_carry = test.cpu.regs().flag_c();
+            test.cpu.regs_mut().set_a(input);
+            test.exec_step();
+
+            let pre = format!("RLA b{:08b}", input);
+            let carry = (input & 0b10000000) >> 7;
+            let expected = (input << 1) | prev_carry;
+            let given = test.cpu.regs().a();
+            assert_eq!(0x0001, test.cpu.regs().pc());
+            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
+
+            test.assert_sflag_unaffected(&pre);
+            test.assert_zflag_unaffected(&pre);
+            test.assert_hflag_if(&pre, false);
+            test.assert_pvflag_unaffected(&pre);
+            test.assert_nflag_if(&pre, false);
+            test.assert_cflag_if(&pre, carry > 0);
+        }
+    }
+
+    /**************/
+    /* Jump Group */
+    /**************/
+    
     #[test]
     fn test_exec_djnz_l8() {
         let mut test = ExecTest::new();
@@ -567,87 +722,6 @@ mod test {
     }
 
     #[test]
-    fn test_exec_ld_de_l16() {        
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(2, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD DE, val)).unwrap(); },
-            |cpu| cpu.regs().de(),
-        );
-    }
-
-    #[test]
-    fn test_exec_ld_indde_a() {
-        let mut test = ExecTest::for_inst(&inst!(LD (DE), A));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| {
-                cpu.regs_mut().set_a(val);
-                cpu.regs_mut().set_de(0x1234);
-            },
-            |cpu| cpu.mem().read_from(0x1234),
-        );
-    }
-
-    #[test]
-    fn test_exec_inc_de() {
-        let mut test = ExecTest::for_inst(&inst!(INC DE));
-        test.assert_behaves_like_inc16(
-            |v, cpu| cpu.regs_mut().set_de(v),
-            |cpu| cpu.regs().de(),
-        );
-    }
-
-    #[test]
-    fn test_exec_inc_d() {
-        let mut test = ExecTest::for_inst(&inst!(INC D));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_d(v), 
-            |cpu| cpu.regs().d(),
-        );
-    }
-
-    #[test]
-    fn test_exec_dec_d() {
-        let mut test = ExecTest::for_inst(&inst!(DEC D));
-        test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().set_d(v), 
-            |cpu| cpu.regs().d(),
-        );        
-    }
-
-    #[test]
-    fn test_exec_ld_d_l8() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(1, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD D, val)).unwrap(); },
-            |cpu| cpu.regs().d(),
-        );
-    }
-
-    #[test]
-    fn test_exec_rla() {
-        let mut test = ExecTest::for_inst(&inst!(RLA));
-        for input in 0..=255 {
-            let prev_carry = test.cpu.regs().flag_c();
-            test.cpu.regs_mut().set_a(input);
-            test.exec_step();
-
-            let pre = format!("RLA b{:08b}", input);
-            let carry = (input & 0b10000000) >> 7;
-            let expected = (input << 1) | prev_carry;
-            let given = test.cpu.regs().a();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
-
-            test.assert_sflag_unaffected(&pre);
-            test.assert_zflag_unaffected(&pre);
-            test.assert_hflag_if(&pre, false);
-            test.assert_pvflag_unaffected(&pre);
-            test.assert_nflag_if(&pre, false);
-            test.assert_cflag_if(&pre, carry > 0);
-        }
-    }
-
-    #[test]
     fn test_exec_jr_l8() {
         let mut test = ExecTest::new();
         for input in 0..=255 {
@@ -663,49 +737,9 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_exec_add_hl_de() {
-        let mut test = ExecTest::for_inst(&inst!(ADD HL, DE));
-        test.asset_behaves_like_add16(
-            |a, b, cpu| {
-                cpu.regs_mut().set_hl(a);
-                cpu.regs_mut().set_de(b);
-            },
-            |cpu| cpu.regs().hl(),
-        );        
-    }
-
-    #[test]
-    fn test_exec_ld_a_indde() {
-        let mut test = ExecTest::for_inst(&inst!(LD A, (DE)));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| { 
-                cpu.mem_mut().write_to(0x1234, val);
-                cpu.regs_mut().set_de(0x1234);
-            },
-            |cpu| cpu.regs().a(),
-        );
-    }
-
-    #[test]
-    fn test_exec_dec_de() {
-        let mut test = ExecTest::for_inst(&inst!(DEC DE));
-        test.assert_behaves_like_dec16(
-            |v, cpu| cpu.regs_mut().set_de(v), 
-            |cpu| cpu.regs().de(),
-        );
-    }
-
-    #[test]
-    fn test_exec_inc_e() {
-        let mut test = ExecTest::for_inst(&inst!(INC E));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_e(v), 
-            |cpu| cpu.regs().e(),
-        );
-    }
-
-    /*********************************************************/
+    /****************************************/
+    /* Test suite for instruction execution */
+    /****************************************/
 
     type CPU = z80::CPU<z80::MemoryBank>;
 
