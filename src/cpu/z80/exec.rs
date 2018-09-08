@@ -457,68 +457,39 @@ mod test {
     /* 8-Bit Arithmetic group */
     /**************************/
 
-    #[test]
-    fn test_exec_inc_b() {
-        let mut test = ExecTest::for_inst(&inst!(INC B));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_b(v), 
-            |cpu| cpu.regs().b(),
-        );
+    macro_rules! test_inc_reg8 {
+        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(INC $regname));
+                test.assert_behaves_like_inc8(
+                    |v, cpu| cpu.regs_mut().$regset(v), 
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_dec_b() {
-        let mut test = ExecTest::for_inst(&inst!(DEC B));
-        test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().set_b(v), 
-            |cpu| cpu.regs().b(),
-        );        
+    test_inc_reg8!(test_exec_inc_c, C, c, set_c);
+    test_inc_reg8!(test_exec_inc_d, D, d, set_d);
+    test_inc_reg8!(test_exec_inc_e, E, e, set_e);
+
+    macro_rules! test_dec_reg8 {
+        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(DEC $regname));
+                test.assert_behaves_like_dec8(
+                    |v, cpu| cpu.regs_mut().$regset(v), 
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_inc_c() {
-        let mut test = ExecTest::for_inst(&inst!(INC C));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_c(v), 
-            |cpu| cpu.regs().c(),
-        );
-    }
-
-    #[test]
-    fn test_exec_dec_c() {
-        let mut test = ExecTest::for_inst(&inst!(DEC C));
-        test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().set_c(v), 
-            |cpu| cpu.regs().c(),
-        );        
-    }
-
-    #[test]
-    fn test_exec_inc_d() {
-        let mut test = ExecTest::for_inst(&inst!(INC D));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_d(v), 
-            |cpu| cpu.regs().d(),
-        );
-    }
-
-    #[test]
-    fn test_exec_dec_d() {
-        let mut test = ExecTest::for_inst(&inst!(DEC D));
-        test.assert_behaves_like_dec8(
-            |v, cpu| cpu.regs_mut().set_d(v), 
-            |cpu| cpu.regs().d(),
-        );        
-    }
-
-    #[test]
-    fn test_exec_inc_e() {
-        let mut test = ExecTest::for_inst(&inst!(INC E));
-        test.assert_behaves_like_inc8(
-            |v, cpu| cpu.regs_mut().set_e(v), 
-            |cpu| cpu.regs().e(),
-        );
-    }
+    test_dec_reg8!(test_exec_dec_b, B, b, set_b);
+    test_dec_reg8!(test_exec_dec_c, C, c, set_c);
+    test_dec_reg8!(test_exec_dec_d, D, d, set_d);
 
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
