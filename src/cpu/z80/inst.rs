@@ -23,6 +23,7 @@ macro_rules! inst {
     (INC C)             => ([0x0c]);
     (INC D)             => ([0x14]);
     (INC E)             => ([0x1c]);
+    (INC H)             => ([0x24]);
     (INC BC)            => ([0x03]);
     (INC DE)            => ([0x13]);
     (INC HL)            => ([0x23]);
