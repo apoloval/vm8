@@ -411,23 +411,21 @@ mod test {
     /* 16-Bit Load Group */
     /*********************/
 
-    #[test]
-    fn test_exec_ld_bc_l16() {        
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(2, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD BC, val)).unwrap(); },
-            |cpu| cpu.regs().bc(),
-        );
+    macro_rules! test_ld_r16_l16 {
+        ($fname:ident, $regname:ident, $regget:ident) => {
+            #[test]
+            fn $fname() {        
+                let mut test = ExecTest::new();
+                test.assert_behaves_like_ld(2, 
+                    |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_ld_de_l16() {        
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(2, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD DE, val)).unwrap(); },
-            |cpu| cpu.regs().de(),
-        );
-    }
+    test_ld_r16_l16!(test_exec_ld_bc_l16, BC, bc);
+    test_ld_r16_l16!(test_exec_ld_de_l16, DE, de);
 
     /**********************************************/
     /* Exchange, Block Transfer, and Search Group */
