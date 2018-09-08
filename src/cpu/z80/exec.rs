@@ -1,6 +1,6 @@
 use byteorder::LittleEndian;
 
-use bus::{Bus, ReadFromBytes};
+use bus::{Bus, ReadFromBytes, WriteFromBytes};
 use cpu::z80::{Cycles, MemoryBus, Registers};
 use cpu::z80::alu::ALU;
 
@@ -58,6 +58,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1f => { ctx.exec_rra();               04 },
         0x20 => { ctx.exec_jr_cond::<NZFLAG, L8>(); 12 },
         0x21 => { ctx.exec_ld::<HL, L16>();     10 },
+        0x22 => { ctx.exec_ld::<IND_L16, HL>(); 16 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -68,33 +69,33 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
 
 trait Execute : Context + Sized {
     fn exec_add16<D: Src16 + Dest16, S: Src16>(&mut self) {
-        let a = D::read_arg(self);
-        let b = S::read_arg(self);
+        let (a, a_size) = D::read_arg(self);
+        let (b, b_size) = S::read_arg(self);
 
-        let c = (a.data as u32) + (b.data as u32);
+        let c = (a as u32) + (b as u32);
         D::write_arg(self, c as u16);
-        self.regs_mut().inc_pc(1 + a.mem_bytes + b.mem_bytes);
+        self.regs_mut().inc_pc(1 + a_size + b_size);
 
         let flags = flags_apply!(self.regs().flags(), 
             C:[c>0xffff]
-            H:[((a.data & 0x0fff) + (b.data & 0x0fff)) & 0x1000 != 0]
+            H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
         self.regs_mut().set_flags(flags);
     }
 
     fn exec_dec8<D: Src8 + Dest8>(&mut self) {
-        let fetch = D::read_arg(self);
+        let (dest, nbytes) = D::read_arg(self);
         let mut flags = self.regs().flags();
-        let result = self.alu().sub8_with_flags(fetch.data, 1, &mut flags);
+        let result = self.alu().sub8_with_flags(dest, 1, &mut flags);
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + fetch.mem_bytes);
+        self.regs_mut().inc_pc(1 + nbytes);
         self.regs_mut().set_flags(flags);
     }
 
     fn exec_dec16<D: Src16 + Dest16>(&mut self) {
-        let fetch = D::read_arg(self);
-        D::write_arg(self, fetch.data - 1);
-        self.regs_mut().inc_pc(1 + fetch.mem_bytes);
+        let (dest, nbytes) = D::read_arg(self);
+        D::write_arg(self, dest - 1);
+        self.regs_mut().inc_pc(1 + nbytes);
     }
 
     fn exec_djnz(&mut self) -> bool {
@@ -117,36 +118,36 @@ trait Execute : Context + Sized {
     }
 
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
-        let fetch = D::read_arg(self);
+        let (dest, nbytes) = D::read_arg(self);
         let mut flags = self.regs().flags();
-        let result = self.alu().add8_with_flags(fetch.data, 1, &mut flags);
+        let result = self.alu().add8_with_flags(dest, 1, &mut flags);
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + fetch.mem_bytes);
+        self.regs_mut().inc_pc(1 + nbytes);
         self.regs_mut().set_flags(flags);
     }
 
     fn exec_inc16<D: Src16 + Dest16>(&mut self) {
-        let fetch = D::read_arg(self);
-        let result = (fetch.data as u32 + 1) as u16;
+        let (dest, nbytes) = D::read_arg(self);
+        let result = (dest as u32 + 1) as u16;
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + fetch.mem_bytes);
+        self.regs_mut().inc_pc(1 + nbytes);
     }
 
     fn exec_jp<S: Src16>(&mut self) {
-        let s = S::read_arg(self);
-        self.regs_mut().set_pc(s.data);
+        let (dest, _) = S::read_arg(self);
+        self.regs_mut().set_pc(dest);
     }
 
     fn exec_jr<S: Src8>(&mut self) {
-        let s = S::read_arg(self);
-        self.regs_mut().inc_pc8(s.data);
+        let (dest, _) = S::read_arg(self);
+        self.regs_mut().inc_pc8(dest);
     }
 
     fn exec_jr_cond<C: Cond, S: Src8>(&mut self) -> usize {
         let cond = C::condition_met(self);
         if cond {
-            let s = S::read_arg(self);
-            self.regs_mut().inc_pc8(s.data);
+            let (dest, _) = S::read_arg(self);
+            self.regs_mut().inc_pc8(dest);
             12
         } else {
             self.regs_mut().inc_pc8(2);
@@ -156,9 +157,9 @@ trait Execute : Context + Sized {
 
     fn exec_ld<D: Dest, S: Src>(&mut self)
     where D: Dest<Item=S::Item> {
-        let fetch = S::read_arg(self);
-        D::write_arg(self, fetch.data);
-        self.regs_mut().inc_pc(1 + fetch.mem_bytes);
+        let (src, src_nbytes) = S::read_arg(self);
+        let dst_nbytes = D::write_arg(self, src);
+        self.regs_mut().inc_pc(1 + src_nbytes + dst_nbytes);
     }
 
     fn exec_nop(&mut self) {
@@ -224,14 +225,12 @@ impl<T> Execute for T where T: Context + Sized {}
 /********************************************************/
 
 
-struct Fetch<T> {
-    pub data: T,
-    pub mem_bytes: usize,
-}
+type FetchedBytes = usize;
+type Operand<T> = (T, FetchedBytes);
 
 trait Src {
     type Item;
-    fn read_arg<C: Context>(ctx: &C) -> Fetch<Self::Item>;
+    fn read_arg<C: Context>(ctx: &C) -> Operand<Self::Item>;
 }
 
 trait Src8 : Src<Item=u8> {}
@@ -242,7 +241,7 @@ impl<T> Src16 for T where T: Src<Item=u16> {}
 
 trait Dest {
     type Item;
-    fn write_arg<C: Context>(ctx: &mut C, val: Self::Item);
+    fn write_arg<C: Context>(ctx: &mut C, val: Self::Item) -> FetchedBytes;
 }
 
 trait Dest8 : Dest<Item=u8> {}
@@ -259,8 +258,8 @@ macro_rules! def_reg8_arg {
             type Item = u8;
 
             #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
-                Fetch { data: ctx.regs().$r8r(), mem_bytes: 0 }
+            fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
+                (ctx.regs().$r8r(), 0)
             }
         }
 
@@ -268,7 +267,10 @@ macro_rules! def_reg8_arg {
             type Item = u8;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) { ctx.regs_mut().$r8w(val) }
+            fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes { 
+                ctx.regs_mut().$r8w(val);
+                0
+            }
         }
     );
 }
@@ -281,8 +283,8 @@ macro_rules! def_reg16_arg {
             type Item = u16;
 
             #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> {
-                Fetch { data: ctx.regs().$r16r(), mem_bytes: 0 }
+            fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
+                (ctx.regs().$r16r(), 0)
             }
         }
 
@@ -290,7 +292,10 @@ macro_rules! def_reg16_arg {
             type Item = u16;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u16) { ctx.regs_mut().$r16w(val) }
+            fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes { 
+                ctx.regs_mut().$r16w(val);
+                0
+            }
         }
     );
 }
@@ -303,10 +308,10 @@ macro_rules! def_indreg16_arg {
             type Item = u8;
 
             #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
+            fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
                 let addr = ctx.regs().$r16();
                 let data = ctx.mem().read_from(addr);
-                Fetch { data: data, mem_bytes: 0 }
+                (data, 0)
             }
         }
 
@@ -314,9 +319,10 @@ macro_rules! def_indreg16_arg {
             type Item = u8;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) {
+            fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
                 let addr = ctx.regs().$r16();
                 ctx.mem_mut().write_to(addr, val);
+                0
             }
         }
     );
@@ -339,14 +345,42 @@ def_indreg16_arg!(IND_BC, bc);
 def_indreg16_arg!(IND_DE, de);
 def_indreg16_arg!(IND_HL, hl);
 
+struct IND_L16;
+
+impl Src for IND_L16 {
+    type Item = u16;
+
+    #[inline]
+    fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
+        let pc = ctx.regs().pc();
+        let addr = ctx.alu().add16(pc, 1);
+        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
+        let data = ctx.mem().read_word_from::<LittleEndian>(ind);
+        (data, 2)
+    }
+}
+
+impl Dest for IND_L16 {
+    type Item = u16;
+
+    #[inline]
+    fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
+        let pc = ctx.regs().pc();
+        let addr = ctx.alu().add16(pc, 1);
+        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
+        ctx.mem_mut().write_word_to::<LittleEndian>(ind, val);
+        2
+    }
+}
+
 struct L8;
 impl Src for L8 {
     type Item = u8;
 
     #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Fetch<u8> {
+    fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
         let pc = ctx.regs().pc();
-        Fetch { data: ctx.mem().read_from(pc + 1), mem_bytes: 1 }
+        (ctx.mem().read_from(pc + 1), 1)
     }
 }
 
@@ -355,9 +389,9 @@ impl Src for L16 {
     type Item = u16;
 
     #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Fetch<u16> {
+    fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
         let pc = ctx.regs().pc();
-        Fetch { data: ctx.mem().read_word_from::<LittleEndian>(pc + 1), mem_bytes: 2 }
+        (ctx.mem().read_word_from::<LittleEndian>(pc + 1), 2)
     }
 }
 
@@ -478,6 +512,21 @@ mod test {
     test_ld_r16_l16!(test_exec_ld_bc_l16, BC, bc);
     test_ld_r16_l16!(test_exec_ld_de_l16, DE, de);
     test_ld_r16_l16!(test_exec_ld_hl_l16, HL, hl);
+
+    macro_rules! test_ld_indl16_r16 {
+        ($fname:ident, $regname:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {        
+                let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
+                test.assert_behaves_like_ld(2, 
+                    |val, cpu| cpu.regs_mut().$regset(val),
+                    |cpu| cpu.mem().read_word_from::<LittleEndian>(0x1234),
+                );
+            }
+        }
+    }
+
+    test_ld_indl16_r16!(test_exec_ld_indl16_hl, HL, set_hl);
 
     /**********************************************/
     /* Exchange, Block Transfer, and Search Group */
