@@ -1,9 +1,9 @@
-extern crate hemu;
+extern crate vm8;
 
-use hemu::clock::{Clock, Frequency};
-use hemu::cpu;
-use hemu::cpu::{Processor};
-use hemu::cpu::z80;
+use vm8::clock::{Clock, Frequency};
+use vm8::cpu;
+use vm8::cpu::{Processor};
+use vm8::cpu::z80;
 
 const MAX_CYCLES: usize = 10_000_000;
 

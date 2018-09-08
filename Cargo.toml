@@ -1,7 +1,7 @@
 [package]
 authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
 build = "build.rs"
-name = "hemu"
+name = "vm8"
 version = "0.1.0"
 
 [features]
@@ -18,7 +18,7 @@ rand = "0.5"
 rustc_version = "0.1.*"
 
 [lib]
-name = "hemu"
+name = "vm8"
 
 [[bin]]
 name = "c80"
