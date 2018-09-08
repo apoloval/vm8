@@ -507,65 +507,57 @@ mod test {
     /* 16-Bit Arithmetic group */
     /***************************/
 
-    #[test]
-    fn test_exec_inc_bc() {
-        let mut test = ExecTest::for_inst(&inst!(INC BC));
-        test.assert_behaves_like_inc16(
-            |v, cpu| cpu.regs_mut().set_bc(v),
-            |cpu| cpu.regs().bc(),
-        );
+    macro_rules! test_inc_reg16 {
+        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(INC $regname));
+                test.assert_behaves_like_inc16(
+                    |v, cpu| cpu.regs_mut().$regset(v),
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_add_hl_bc() {
-        let mut test = ExecTest::for_inst(&inst!(ADD HL, BC));
-        test.asset_behaves_like_add16(
-            |a, b, cpu| {
-                cpu.regs_mut().set_hl(a);
-                cpu.regs_mut().set_bc(b);
-            },
-            |cpu| cpu.regs().hl(),
-        );        
+    test_inc_reg16!(test_exec_inc_bc, BC, bc, set_bc);
+    test_inc_reg16!(test_exec_inc_de, DE, de, set_de);
+
+    macro_rules! test_dec_reg16 {
+        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(DEC $regname));
+                test.assert_behaves_like_dec16(
+                    |v, cpu| cpu.regs_mut().$regset(v),
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_dec_bc() {
-        let mut test = ExecTest::for_inst(&inst!(DEC BC));
-        test.assert_behaves_like_dec16(
-            |v, cpu| cpu.regs_mut().set_bc(v), 
-            |cpu| cpu.regs().bc(),
-        );
+    test_dec_reg16!(test_exec_dec_bc, BC, bc, set_bc);
+    test_dec_reg16!(test_exec_dec_de, DE, de, set_de);
+
+    macro_rules! test_add_reg16_reg16 {
+        ($fname:ident, $dstname:ident, $srcname:ident, 
+         $dstget:ident, $dstset:ident, $srcset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(ADD $dstname, $srcname));
+                test.asset_behaves_like_add16(
+                    |a, b, cpu| {
+                        cpu.regs_mut().$dstset(a);
+                        cpu.regs_mut().$srcset(b);
+                    },
+                    |cpu| cpu.regs().$dstget(),
+                );        
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_inc_de() {
-        let mut test = ExecTest::for_inst(&inst!(INC DE));
-        test.assert_behaves_like_inc16(
-            |v, cpu| cpu.regs_mut().set_de(v),
-            |cpu| cpu.regs().de(),
-        );
-    }
-
-    #[test]
-    fn test_exec_add_hl_de() {
-        let mut test = ExecTest::for_inst(&inst!(ADD HL, DE));
-        test.asset_behaves_like_add16(
-            |a, b, cpu| {
-                cpu.regs_mut().set_hl(a);
-                cpu.regs_mut().set_de(b);
-            },
-            |cpu| cpu.regs().hl(),
-        );        
-    }
-
-    #[test]
-    fn test_exec_dec_de() {
-        let mut test = ExecTest::for_inst(&inst!(DEC DE));
-        test.assert_behaves_like_dec16(
-            |v, cpu| cpu.regs_mut().set_de(v), 
-            |cpu| cpu.regs().de(),
-        );
-    }
+    test_add_reg16_reg16!(test_exec_add_hl_bc, HL, BC, hl, set_hl, set_bc);
+    test_add_reg16_reg16!(test_exec_add_hl_de, HL, DE, hl, set_hl, set_de);
 
     /**************************/
     /* Rotate and Shift Group */
