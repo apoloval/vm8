@@ -54,6 +54,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1b => { ctx.exec_dec16::<DE>();       06 },
         0x1c => { ctx.exec_inc8::<E>();         04 },
         0x1d => { ctx.exec_dec8::<E>();         04 },
+        0x1e => { ctx.exec_ld::<E, L8>();       07 },
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -407,6 +408,7 @@ mod test {
     test_ld_r8_l8!(test_exec_ld_b_l8, B, b);
     test_ld_r8_l8!(test_exec_ld_c_l8, C, c);
     test_ld_r8_l8!(test_exec_ld_d_l8, D, d);
+    test_ld_r8_l8!(test_exec_ld_e_l8, E, e);
 
     /*********************/
     /* 16-Bit Load Group */
