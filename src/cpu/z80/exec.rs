@@ -351,80 +351,61 @@ mod test {
     /* 8-Bit Load Group */
     /********************/
 
-    #[test]
-    fn test_exec_ld_indbc_a() {
-        let mut test = ExecTest::for_inst(&inst!(LD (BC), A));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| {
-                cpu.regs_mut().set_a(val);
-                cpu.regs_mut().set_bc(0x1234);
-            },
-            |cpu| cpu.mem().read_from(0x1234),
-        );
+    macro_rules! test_ld_indreg_a {
+        ($fname:ident, $regname:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(LD ($regname), A));
+                test.assert_behaves_like_ld(0, 
+                    |val, cpu| {
+                        cpu.regs_mut().set_a(val);
+                        cpu.regs_mut().$regset(0x1234);
+                    },
+                    |cpu| cpu.mem().read_from(0x1234),
+                );
+            }
+        }
     }
 
-    #[test]
-    fn test_exec_ld_b_l8() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(1, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD B, val)).unwrap(); },
-            |cpu| cpu.regs().b(),
-        );
+    test_ld_indreg_a!(test_exec_ld_indbc_a, BC, set_bc);
+    test_ld_indreg_a!(test_exec_ld_indde_a, DE, set_de);
+
+    macro_rules! test_ld_a_ind {
+        ($fname:ident, $regname:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(LD A, ($regname)));
+                test.assert_behaves_like_ld(0, 
+                    |val, cpu| { 
+                        cpu.mem_mut().write_to(0x1234, val);
+                        cpu.regs_mut().$regset(0x1234);
+                    },
+                    |cpu| cpu.regs().a(),
+                );
+            }
+        };
     }
 
-    #[test]
-    fn test_exec_ld_a_indbc() {
-        let mut test = ExecTest::for_inst(&inst!(LD A, (BC)));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| { 
-                cpu.mem_mut().write_to(0x1234, val);
-                cpu.regs_mut().set_bc(0x1234);
-            },
-            |cpu| cpu.regs().a(),
-        );
+    test_ld_a_ind!(test_exec_ld_a_indbc, BC, set_bc);
+    test_ld_a_ind!(test_exec_ld_a_indde, DE, set_de);
+
+    macro_rules! test_ld_r8_l8 {
+        ($fname:ident, $regname:ident, $regget:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::new();
+                test.assert_behaves_like_ld(1, 
+                    |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+
+        }
     }
 
-    #[test]
-    fn test_exec_ld_c_l8() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(1, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD C, val)).unwrap(); },
-            |cpu| cpu.regs().c(),
-        );
-    }
-
-    #[test]
-    fn test_exec_ld_indde_a() {
-        let mut test = ExecTest::for_inst(&inst!(LD (DE), A));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| {
-                cpu.regs_mut().set_a(val);
-                cpu.regs_mut().set_de(0x1234);
-            },
-            |cpu| cpu.mem().read_from(0x1234),
-        );
-    }
-
-    #[test]
-    fn test_exec_ld_d_l8() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(1, 
-            |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD D, val)).unwrap(); },
-            |cpu| cpu.regs().d(),
-        );
-    }
-
-    #[test]
-    fn test_exec_ld_a_indde() {
-        let mut test = ExecTest::for_inst(&inst!(LD A, (DE)));
-        test.assert_behaves_like_ld(0, 
-            |val, cpu| { 
-                cpu.mem_mut().write_to(0x1234, val);
-                cpu.regs_mut().set_de(0x1234);
-            },
-            |cpu| cpu.regs().a(),
-        );
-    }
+    test_ld_r8_l8!(test_exec_ld_b_l8, B, b);
+    test_ld_r8_l8!(test_exec_ld_c_l8, C, c);
+    test_ld_r8_l8!(test_exec_ld_d_l8, D, d);
 
     /*********************/
     /* 16-Bit Load Group */
