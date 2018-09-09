@@ -467,26 +467,6 @@ mod test {
 
     use super::*;
 
-    macro_rules! assert_result {
-        (BIN8, $pre:expr, $a:expr, $b:expr) => (
-            assert_eq!($a, $b, "{} expects {:08b}b but {:08b}b given ", $pre, $a, $b)
-        );
-        (HEX8, $pre:expr, $a:expr, $b:expr) => (
-            assert_eq!($a, $b, "{} expects {:02x}h but {:02x}h given ", $pre, $a, $b)
-        );
-        (HEX16, $pre:expr, $a:expr, $b:expr) => (
-            assert_eq!($a, $b, "{} expects {:04x}h but {:04x}h given ", $pre, $a, $b)
-        );
-    }
-
-    macro_rules! begin_test_case {
-        ($case:expr) => (print!("Test case '{}': ", $case.name);)
-    }
-
-    macro_rules! end_test_case {
-        () => (println!("OK"))
-    }
-
     /********************/
     /* 8-Bit Load Group */
     /********************/
@@ -666,7 +646,8 @@ mod test {
             expected_flags: u8,
         }
         let mut test = ExecTest::for_inst(&inst!(DAA));
-        for case in &[
+        table_test!(
+            &[
             Case {
                 name: "Already adjusted",
                 pre_a: 0x42,
@@ -702,19 +683,19 @@ mod test {
                 expected_a: 0x74,
                 expected_flags: flags_apply!(0, N:1 H:0 C:1),
             },
-        ] {
-            begin_test_case!(case);
-            test.cpu.regs_mut().set_a(case.pre_a);
-            test.cpu.regs_mut().set_flags(case.pre_flags);
-            test.exec_step();
+            ],
+            |case: &Case| {
+                test.cpu.regs_mut().set_a(case.pre_a);
+                test.cpu.regs_mut().set_flags(case.pre_flags);
+                test.exec_step();
 
-            let given_a = test.cpu.regs().a();
-            let given_flags = test.cpu.regs().flags();
-            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-            assert_result!(HEX8, "register A", case.expected_a, given_a);
-            assert_result!(BIN8, "flags", case.expected_flags, given_flags);
-            end_test_case!();
-        }
+                let given_a = test.cpu.regs().a();
+                let given_flags = test.cpu.regs().flags();
+                assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+                assert_result!(HEX8, "register A", case.expected_a, given_a);
+                assert_result!(BIN8, "flags", case.expected_flags, given_flags);
+            }
+        );
     }
 
     #[test]

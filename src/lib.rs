@@ -9,6 +9,10 @@ extern crate num_traits;
 #[cfg(test)]
 extern crate rand;
 
+#[cfg(test)]
+#[macro_use]
+pub mod testutil;
+
 pub mod bus;
 pub mod clock;
 pub mod cpu;
