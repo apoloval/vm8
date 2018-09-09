@@ -63,6 +63,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x24 => { ctx.exec_inc8::<H>();         04 },
         0x25 => { ctx.exec_dec8::<H>();         04 },
         0x26 => { ctx.exec_ld::<H, L8>();       07 },
+        0x27 => { ctx.exec_daa();               04 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -84,6 +85,37 @@ trait Execute : Context + Sized {
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
+        self.regs_mut().set_flags(flags);
+    }
+
+    fn exec_daa(&mut self) {
+        let prev_a = self.regs().a();
+        let mut a = prev_a;
+        let mut flags = self.regs().flags();
+        if flag!(N, flags) == 0 {
+            if flag!(H, flags) == 1 || a & 0x0f > 0x09 { 
+                a = self.alu().add8(a, 0x06); 
+            }
+            if flag!(C, flags) == 1 || a > 0x99 { 
+                a = self.alu().add8(a, 0x60); 
+            }
+        } else {
+            if flag!(H, flags) == 1 || a & 0x0f > 0x09 { 
+                a = self.alu().sub8(a, 0x06); 
+            }
+            if flag!(C, flags) == 1 || a > 0x99 { 
+                a = self.alu().sub8(a, 0x60); 
+            }
+        }
+        self.regs_mut().set_a(a);
+        self.regs_mut().inc_pc(1);
+
+        flags = flags_apply!(flags, 
+            S:[a & 0x80 > 0]
+            Z:[a == 0]
+            H:[(a ^ prev_a) & 0x10 > 0]
+            C:[flag!(C, flags) > 0 || prev_a > 0x99]
+        );
         self.regs_mut().set_flags(flags);
     }
 
@@ -435,6 +467,26 @@ mod test {
 
     use super::*;
 
+    macro_rules! assert_result {
+        (BIN8, $pre:expr, $a:expr, $b:expr) => (
+            assert_eq!($a, $b, "{} expects {:08b}b but {:08b}b given ", $pre, $a, $b)
+        );
+        (HEX8, $pre:expr, $a:expr, $b:expr) => (
+            assert_eq!($a, $b, "{} expects {:02x}h but {:02x}h given ", $pre, $a, $b)
+        );
+        (HEX16, $pre:expr, $a:expr, $b:expr) => (
+            assert_eq!($a, $b, "{} expects {:04x}h but {:04x}h given ", $pre, $a, $b)
+        );
+    }
+
+    macro_rules! begin_test_case {
+        ($case:expr) => (print!("Test case '{}': ", $case.name);)
+    }
+
+    macro_rules! end_test_case {
+        () => (println!("OK"))
+    }
+
     /********************/
     /* 8-Bit Load Group */
     /********************/
@@ -603,6 +655,67 @@ mod test {
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
     /*****************************************************/
+
+    #[test]
+    fn test_exec_daa() {
+        struct Case {
+            name: &'static str,
+            pre_a: u8,
+            pre_flags: u8,
+            expected_a: u8,
+            expected_flags: u8,
+        }
+        let mut test = ExecTest::for_inst(&inst!(DAA));
+        for case in &[
+            Case {
+                name: "Already adjusted",
+                pre_a: 0x42,
+                pre_flags: flags_apply!(0, N:0 H:0 C:0),
+                expected_a: 0x42,
+                expected_flags: 0,
+            },
+            Case {
+                name: "Need to adjust low nibble after add",
+                pre_a: 0x4d,
+                pre_flags: flags_apply!(0, N:0 H:0 C:0),
+                expected_a: 0x53,
+                expected_flags: flags_apply!(0, N:0 H:1 C:0),
+            },
+            Case {
+                name: "Need to adjust low nibble after subtract",
+                pre_a: 0x4d,
+                pre_flags: flags_apply!(0, N:1 H:0 C:0),
+                expected_a: 0x47,
+                expected_flags: flags_apply!(0, N:1 H:0 C:0),
+            },
+            Case {
+                name: "Need to adjust high nibble after add",
+                pre_a: 0xd4,
+                pre_flags: flags_apply!(0, N:0 H:0 C:0),
+                expected_a: 0x34,
+                expected_flags: flags_apply!(0, N:0 H:0 C:1),
+            },
+            Case {
+                name: "Need to adjust high nibble after subtract",
+                pre_a: 0xd4,
+                pre_flags: flags_apply!(0, N:1 H:0 C:0),
+                expected_a: 0x74,
+                expected_flags: flags_apply!(0, N:1 H:0 C:1),
+            },
+        ] {
+            begin_test_case!(case);
+            test.cpu.regs_mut().set_a(case.pre_a);
+            test.cpu.regs_mut().set_flags(case.pre_flags);
+            test.exec_step();
+
+            let given_a = test.cpu.regs().a();
+            let given_flags = test.cpu.regs().flags();
+            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+            assert_result!(HEX8, "register A", case.expected_a, given_a);
+            assert_result!(BIN8, "flags", case.expected_flags, given_flags);
+            end_test_case!();
+        }
+    }
 
     #[test]
     fn test_exec_nop() {
