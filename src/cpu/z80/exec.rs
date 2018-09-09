@@ -101,10 +101,12 @@ trait Execute : Context + Sized {
             }
         } else {
             if flag!(H, flags) == 1 || a & 0x0f > 0x09 { 
-                a = self.alu().sub8(a, 0x06); 
+                let (r, _) = self.alu().sub8(a, 0x06); 
+                a = r;
             }
             if flag!(C, flags) == 1 || a > 0x99 { 
-                a = self.alu().sub8(a, 0x60); 
+                let (r, _) = self.alu().sub8(a, 0x60); 
+                a = r;
             }
         }
         self.regs_mut().set_a(a);
@@ -122,7 +124,7 @@ trait Execute : Context + Sized {
     fn exec_dec8<D: Src8 + Dest8>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
         let mut flags = self.regs().flags();
-        let result = self.alu().sub8_with_flags(dest, 1, &mut flags);
+        let result = self.alu().dec8_with_flags(dest, &mut flags);
         D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + nbytes);
         self.regs_mut().set_flags(flags);
@@ -130,12 +132,13 @@ trait Execute : Context + Sized {
 
     fn exec_dec16<D: Src16 + Dest16>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
-        D::write_arg(self, dest - 1);
+        let result = self.alu().sub16(dest, 1);
+        D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + nbytes);
     }
 
     fn exec_djnz(&mut self) -> bool {
-        let b = self.alu().sub8(self.regs().b(), 1);
+        let (b, _) = self.alu().sub8(self.regs().b(), 1);
         self.regs_mut().set_b(b);
         if b > 0 {
             let s = self.read_from_pc(1);
@@ -156,7 +159,7 @@ trait Execute : Context + Sized {
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
         let mut flags = self.regs().flags();
-        let result = self.alu().add8_with_flags(dest, 1, &mut flags);
+        let result = self.alu().inc8_with_flags(dest, &mut flags);
         D::write_arg(self, result);
         self.regs_mut().inc_pc(1 + nbytes);
         self.regs_mut().set_flags(flags);
@@ -389,7 +392,7 @@ impl Src for IND_L16 {
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
         let pc = ctx.regs().pc();
-        let addr = ctx.alu().add16(pc, 1);
+        let (addr, _) = ctx.alu().add16(pc, 1);
         let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
         let data = ctx.mem().read_word_from::<LittleEndian>(ind);
         (data, 2)
@@ -402,7 +405,7 @@ impl Dest for IND_L16 {
     #[inline]
     fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
         let pc = ctx.regs().pc();
-        let addr = ctx.alu().add16(pc, 1);
+        let (addr, _) = ctx.alu().add16(pc, 1);
         let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
         ctx.mem_mut().write_word_to::<LittleEndian>(ind, val);
         2
@@ -572,23 +575,20 @@ mod test {
     #[test]
     fn test_exec_exaf() {
         let mut test = ExecTest::for_inst(&inst!(EX AF, AF_));
-        for _ in 0..=255 {
-            let input = u16::sample();
-            let input_ = u16::sample();;
+        let input = 0x12;
+        let input_ = 0x34;
 
-            test.cpu.regs_mut().set_af(input);
-            test.cpu.regs_mut().set_af_(input_);
-            test.exec_step();
+        test.cpu.regs_mut().set_af(input);
+        test.cpu.regs_mut().set_af_(input_);
+        test.exec_step();
 
-            let pre = "EX AF, AF'";
-            let expected = input_;
-            let expected_ = input;
-            let given = test.cpu.regs().af();
-            let given_ = test.cpu.regs().af_();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected AF {} on {}, {} given", expected, pre, given);
-            assert_eq!(expected_, given_, "expected AF' {} on {}, {} given", expected_, pre, given_);
-        }
+        let expected = input_;
+        let expected_ = input;
+        let given = test.cpu.regs().af();
+        let given_ = test.cpu.regs().af_();
+        assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+        assert_result!(HEX8, "AF", expected, given);
+        assert_result!(HEX8, "AF'", expected_, given_);
     }
 
     /**************************/
@@ -769,96 +769,184 @@ mod test {
     
     #[test]
     fn test_exec_rlca() {
+        struct Case {
+            name: &'static str,
+            a: u8,
+            expected: u8,
+            expected_flags: fn(u8) -> u8,
+        }
         let mut test = ExecTest::for_inst(&inst!(RLCA));
-        for input in 0..=255 {
-            test.cpu.regs_mut().set_a(input);
+        table_test!(&[
+            Case {
+                name: "No carry",
+                a: 0x12,
+                expected: 0x24,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
+            },
+            Case {
+                name: "Carry",
+                a: 0xc8,
+                expected: 0x91,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
+            },
+        ], |case: &Case| {
+            let prev_flags = test.cpu.regs().flags();
+            test.cpu.regs_mut().set_a(case.a);
             test.exec_step();
 
-            let pre = format!("RLCA b{:08b}", input);
-            let carry = (input & 0b10000000) >> 7;
-            let expected = (input << 1) | carry;
-            let given = test.cpu.regs().a();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
-
-            test.assert_sflag_unaffected(&pre);
-            test.assert_zflag_unaffected(&pre);
-            test.assert_hflag_if(&pre, false);
-            test.assert_pvflag_unaffected(&pre);
-            test.assert_nflag_if(&pre, false);
-            test.assert_cflag_if(&pre, carry > 0);
-        }
+            let actual = test.cpu.regs().a();
+            let expected_flags = (case.expected_flags)(prev_flags);
+            let actual_flags = test.cpu.regs().flags();
+            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+            assert_result!(HEX8, "dest", case.expected, actual);
+            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+        });
     }
 
-    #[test]
+    #[test]    
     fn test_exec_rrca() {
+        struct Case {
+            name: &'static str,
+            a: u8,
+            expected: u8,
+            expected_flags: fn(u8) -> u8,
+        }
         let mut test = ExecTest::for_inst(&inst!(RRCA));
-        for input in 0..=255 {
-            test.cpu.regs_mut().set_a(input);
+        table_test!(&[
+            Case {
+                name: "No carry",
+                a: 0x24,
+                expected: 0x12,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
+            },
+            Case {
+                name: "Carry",
+                a: 0x91,
+                expected: 0xc8,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
+            },
+        ], |case: &Case| {
+            let prev_flags = test.cpu.regs().flags();
+            test.cpu.regs_mut().set_a(case.a);
             test.exec_step();
 
-            let pre = format!("RRCA b{:08b}", input);
-            let carry = input & 0b00000001;
-            let expected = (input >> 1) | (carry << 7);
-            let given = test.cpu.regs().a();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
-
-            test.assert_sflag_unaffected(&pre);
-            test.assert_zflag_unaffected(&pre);
-            test.assert_hflag_if(&pre, false);
-            test.assert_pvflag_unaffected(&pre);
-            test.assert_nflag_if(&pre, false);
-            test.assert_cflag_if(&pre, carry > 0);
-        }
+            let actual = test.cpu.regs().a();
+            let expected_flags = (case.expected_flags)(prev_flags);
+            let actual_flags = test.cpu.regs().flags();
+            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+            assert_result!(HEX8, "dest", case.expected, actual);
+            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+        });
     }
 
     #[test]
     fn test_exec_rla() {
+        struct Case {
+            name: &'static str,
+            a: u8,
+            carry: u8,
+            expected: u8,
+            expected_flags: fn(u8) -> u8,
+        }
         let mut test = ExecTest::for_inst(&inst!(RLA));
-        for input in 0..=255 {
-            let prev_carry = test.cpu.regs().flag_c();
-            test.cpu.regs_mut().set_a(input);
+        table_test!(&[
+            Case {
+                name: "No carry",
+                a: 0x12,
+                carry: 0,
+                expected: 0x24,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
+            },
+            Case {
+                name: "Carry in",
+                a: 0x12,
+                carry: 1,
+                expected: 0x25,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
+            },
+            Case {
+                name: "Carry out",
+                a: 0xc8,
+                carry: 0,
+                expected: 0x90,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
+            },
+            Case {
+                name: "Carry inout",
+                a: 0xc8,
+                carry: 1,
+                expected: 0x91,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
+            },
+        ], |case: &Case| {
+            let mut prev_flags = test.cpu.regs().flags();
+            prev_flags = flags_apply!(prev_flags, C:[case.carry == 1]);
+            test.cpu.regs_mut().set_flags(prev_flags);
+            test.cpu.regs_mut().set_a(case.a);
             test.exec_step();
 
-            let pre = format!("RLA b{:08b}", input);
-            let carry = (input & 0b10000000) >> 7;
-            let expected = (input << 1) | prev_carry;
-            let given = test.cpu.regs().a();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
-
-            test.assert_sflag_unaffected(&pre);
-            test.assert_zflag_unaffected(&pre);
-            test.assert_hflag_if(&pre, false);
-            test.assert_pvflag_unaffected(&pre);
-            test.assert_nflag_if(&pre, false);
-            test.assert_cflag_if(&pre, carry > 0);
-        }
+            let actual = test.cpu.regs().a();
+            let expected_flags = (case.expected_flags)(prev_flags);
+            let actual_flags = test.cpu.regs().flags();
+            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+            assert_result!(HEX8, "dest", case.expected, actual);
+            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+        });
     }
 
     #[test]
     fn test_exec_rra() {
+        struct Case {
+            name: &'static str,
+            a: u8,
+            carry: u8,
+            expected: u8,
+            expected_flags: fn(u8) -> u8,
+        }
         let mut test = ExecTest::for_inst(&inst!(RRA));
-        for input in 0..=255 {
-            let prev_carry = test.cpu.regs().flag_c();
-            test.cpu.regs_mut().set_a(input);
+        table_test!(&[
+            Case {
+                name: "No carry",
+                a: 0x24,
+                carry: 0,
+                expected: 0x12,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
+            },
+            Case {
+                name: "Carry in",
+                a: 0x24,
+                carry: 1,
+                expected: 0x92,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
+            },
+            Case {
+                name: "Carry out",
+                a: 0x91,
+                carry: 0,
+                expected: 0x48,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
+            },
+            Case {
+                name: "Carry inout",
+                a: 0x91,
+                carry: 1,
+                expected: 0xc8,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
+            },
+        ], |case: &Case| {
+            let mut prev_flags = test.cpu.regs().flags();
+            prev_flags = flags_apply!(prev_flags, C:[case.carry == 1]);
+            test.cpu.regs_mut().set_flags(prev_flags);
+            test.cpu.regs_mut().set_a(case.a);
             test.exec_step();
 
-            let pre = format!("RRA b{:08b}", input);
-            let carry = input & 0b00000001;
-            let expected = (input >> 1) | (prev_carry << 7);
-            let given = test.cpu.regs().a();
-            assert_eq!(0x0001, test.cpu.regs().pc());
-            assert_eq!(expected, given, "expected b{:08b} on {}, b{:08b} given", expected, pre, given);
-
-            test.assert_sflag_unaffected(&pre);
-            test.assert_zflag_unaffected(&pre);
-            test.assert_hflag_if(&pre, false);
-            test.assert_pvflag_unaffected(&pre);
-            test.assert_nflag_if(&pre, false);
-            test.assert_cflag_if(&pre, carry > 0);
-        }
+            let actual = test.cpu.regs().a();
+            let expected_flags = (case.expected_flags)(prev_flags);
+            let actual_flags = test.cpu.regs().flags();
+            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+            assert_result!(HEX8, "dest", case.expected, actual);
+            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+        });
     }
 
     /**************/
@@ -867,87 +955,128 @@ mod test {
     
     #[test]
     fn test_exec_djnz_l8() {
+        struct Case {
+            name: &'static str,
+            input: u8,
+            dest: i8,
+            expected: u8,
+            expected_pc: u16,
+        }
         let mut test = ExecTest::new();
-        for input in 0..=255 {
-            let dest = u8::sample();
-            test.cpu.mem_mut().write(&inst!(DJNZ dest)).unwrap();
-            test.cpu.regs_mut().set_b(input);
+        table_test!(&[
+            Case {
+                name: "Branch forwards",
+                input: 10,
+                dest: 0x55,
+                expected: 09,
+                expected_pc: 0x0055,
+            },
+            Case {
+                name: "Branch backwards",
+                input: 10,
+                dest: -0x10,
+                expected: 09,
+                expected_pc: 0xfff0,
+            },
+            Case {
+                name: "No branch",
+                input: 1,
+                dest: 0x55,
+                expected: 0,
+                expected_pc: 0x0002,
+            },
+        ], |case: &Case| {
+            test.cpu.mem_mut().write(&inst!(DJNZ case.dest as u8)).unwrap();
+            test.cpu.regs_mut().set_b(case.input);
             test.exec_step();
 
-            let expected = test.cpu.alu().sub8(input, 1);
             let actual = test.cpu.regs().b();
-            assert_eq!(expected, actual);
-
-            let expected_pc = if expected > 0 {
-                test.cpu.alu().add16(0, dest as i8 as u16)
-            } else {
-                2
-            };
-
             let actual_pc = test.cpu.regs().pc();
-            assert_eq!(expected_pc, actual_pc);
+            assert_result!(HEX8, "B", case.expected, actual);
+            assert_result!(HEX16, "program counter", case.expected_pc, actual_pc);
 
             test.assert_all_flags_unaffected("DJNZ");
-        }
+        });
     }
 
     #[test]
     fn test_exec_jr_l8() {
+        struct Case {
+            name: &'static str,
+            dest: i8,
+            expected_pc: u16,
+        }
         let mut test = ExecTest::new();
-        for input in 0..=255 {
-            let dest = u8::sample();
-            test.cpu.mem_mut().write(&inst!(JR dest)).unwrap();
+        table_test!(&[
+            Case {
+                name: "Branch forwards",
+                dest: 0x55,
+                expected_pc: 0x0055,
+            },
+            Case {
+                name: "Branch backwards",
+                dest: -0x10,
+                expected_pc: 0xfff0,
+            },
+        ], |case: &Case| {
+            test.cpu.mem_mut().write(&inst!(JR case.dest as u8)).unwrap();
             test.exec_step();
 
-            let expected_pc = test.cpu.alu().add16(0, dest as i8 as u16);
             let actual_pc = test.cpu.regs().pc();
-            assert_eq!(expected_pc, actual_pc);
+            assert_result!(HEX16, "program counter", case.expected_pc, actual_pc);
 
             test.assert_all_flags_unaffected("JR");
-        }
+        });
     }
 
     macro_rules! test_jr_cond_l8 {
-        ($fname:ident, $condname:ident, $flagget:ident, $flagval:expr) => {
+        ($fname:ident, $condname:ident, $flagget:ident, $met:expr, $unmet:expr) => {
             #[test]
             fn $fname() {
+                struct Case {
+                    name: &'static str,
+                    dest: i8,
+                    branch: bool,
+                    expected_pc: u16,
+                }
                 let mut test = ExecTest::new();
-                for dest in 0..=255 {
-                    let cond = test.cpu.regs().$flagget() == $flagval;
-                    test.cpu.mem_mut().write(&inst!(JR $condname, dest)).unwrap();
+                table_test!(&[
+                    Case {
+                        name: "Branch forwards",
+                        dest: 0x55,
+                        branch: true,
+                        expected_pc: 0x0055,
+                    },
+                    Case {
+                        name: "Branch backwards",
+                        dest: -0x10,
+                        branch: true,
+                        expected_pc: 0xfff0,
+                    },
+                    Case {
+                        name: "No branch",
+                        dest: 0x55,
+                        branch: false,
+                        expected_pc: 0x0002,
+                    },
+                ], |case: &Case| {
+                    test.cpu.mem_mut().write(&inst!(JR $condname, case.dest as u8)).unwrap();
+                    let mut flags = test.cpu.regs().flags();
+                    if case.branch { flags = $met(flags); }
+                    else { flags = $unmet(flags); }
+                    test.cpu.regs_mut().set_flags(flags);
                     test.exec_step();
 
-                    let expected_pc = if cond { 
-                        test.cpu.alu().add16(0, dest as i8 as u16)
-                    } else {
-                        2
-                    };
                     let actual_pc = test.cpu.regs().pc();
-                    assert_eq!(expected_pc, actual_pc);
+                    assert_result!(HEX16, "program counter", case.expected_pc, actual_pc);
 
                     test.assert_all_flags_unaffected("JR");
-                }
+                });
             }
         }
     }
 
-    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, 0);
-
-    #[test]
-    fn test_exec_jr_cond_l8() {
-        let mut test = ExecTest::new();
-        for input in 0..=255 {
-            let dest = u8::sample();
-            test.cpu.mem_mut().write(&inst!(JR dest)).unwrap();
-            test.exec_step();
-
-            let expected_pc = test.cpu.alu().add16(0, dest as i8 as u16);
-            let actual_pc = test.cpu.regs().pc();
-            assert_eq!(expected_pc, actual_pc);
-
-            test.assert_all_flags_unaffected("JR");
-        }
-    }
+    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, |f| f & 0b10111111, |f| f | 0b01000000);    
 
     /****************************************/
     /* Test suite for instruction execution */
@@ -974,7 +1103,7 @@ mod test {
 
     impl ExecTest {
         fn new() -> Self {
-            let prev_flags = u8::sample();
+            let prev_flags = u8::sample() & 0b11010111; // Do not set F5 and F3
             let mem = z80::MemoryBank::new();
             let mut cpu = z80::CPU::new(z80::Options::default(), mem);
             cpu.regs_mut().set_flags(prev_flags);
@@ -995,127 +1124,220 @@ mod test {
 
         fn assert_behaves_like_ld<S, G, D>(&mut self, opsize: usize, set: S, get: G) 
         where S: Fn(D, &mut CPU), G: Fn(&CPU) -> D, D: Data {
-            for _ in 0..=255 {
-                let input = D::sample();
-                set(input, &mut self.cpu);
-                
-                self.exec_step();
+            let input = D::sample();
+            set(input, &mut self.cpu);
+            
+            self.exec_step();
 
-                let output = get(&self.cpu);
-                let expected_pc = 1 + opsize as u16;
-                let actual_pc = self.cpu.regs().pc();
-                let flags = self.cpu.regs().flags();
-                
-                assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
-                assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
+            let output = get(&self.cpu);
+            let expected_pc = 1 + opsize as u16;
+            let actual_pc = self.cpu.regs().pc();
+            let flags = self.cpu.regs().flags();
+            
+            assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
+            assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
 
-                self.assert_all_flags_unaffected("LD");
-            }
+            self.assert_all_flags_unaffected("LD");
         }
 
         fn assert_behaves_like_inc8<S, G>(&mut self, set: S, get: G) 
         where S: Fn(u8, &mut CPU), G: Fn(&CPU) -> u8 {
-            for input in 0..=255 {
-                set(input, &mut self.cpu);
-                self.exec_step();
-                let expected = if input < 0xff { input + 1 } else { 0 };
-                let actual = get(&self.cpu);
-                
-                assert_eq!(0x0001, self.cpu.regs().pc());
-                assert_eq!(expected, actual);
-
-                let flags = self.cpu.regs().flags();
-                let pre = &format!("inc {}", input);
-
-                // Check flags
-                self.assert_sflag_if(&pre, actual & 0x80 != 0);
-                self.assert_zflag_if(&pre, actual == 0);
-                self.assert_hflag_if(&pre, input & 0x0f == 0x0f);
-                self.assert_pvflag_if(&pre, input == 0x7f);
-                self.assert_nflag_if(&pre, false);
-                self.assert_cflag_if(&pre, input == 0xff);
+            struct Case {
+                name: &'static str,
+                input: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
             }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x01,
+                    expected: 0x02,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:0 PV:0 N:0),
+                },
+                Case {
+                    name: "Half-carry",
+                    input: 0x0f,
+                    expected: 0x10,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:1 PV:0 N:0),
+                },
+                Case {
+                    name: "Overflow",
+                    input: 0x7f,
+                    expected: 0x80,
+                    expected_flags: |f| flags_apply!(f, S:1 Z:0 H:1 PV:1 N:0),
+                },
+                Case {
+                    name: "Carry",
+                    input: 0xff,
+                    expected: 0x00,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:1 H:1 PV:0 N:0),
+                },
+            ], |case: &Case| {
+                let prev_flags = self.cpu.regs().flags();
+                set(case.input, &mut self.cpu);
+                self.exec_step();
+                let actual = get(&self.cpu);
+                let flags = self.cpu.regs().flags();
+                let expected_flags = (case.expected_flags)(prev_flags);
+
+                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
+                assert_result!(HEX8, "result", case.expected, actual);
+                assert_result!(BIN8, "flags", expected_flags, flags);
+            });
         }
 
         fn assert_behaves_like_inc16<S, G>(&mut self, set: S, get: G) 
         where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            for _ in 0..=256 {
-                let input = u16::sample();
-                set(input, &mut self.cpu);
-                self.exec_step();
-                let expected = if input < 0xffff { input + 1 } else { 0 };
-                let actual = get(&self.cpu);
-                
-                assert_eq!(0x0001, self.cpu.regs().pc());
-                assert_eq!(expected, actual);
-
-                self.assert_all_flags_unaffected("INC (16-bits)");
+            struct Case {
+                name: &'static str,
+                input: u16,
+                expected: u16,
             }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x0001,
+                    expected: 0x0002,
+                },
+                Case {
+                    name: "Carry",
+                    input: 0xffff,
+                    expected: 0x0000,
+                },
+            ], |case: &Case| {
+                set(case.input, &mut self.cpu);
+                self.exec_step();
+                let actual = get(&self.cpu);
+
+                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
+                assert_result!(HEX16, "result", case.expected, actual);
+                self.assert_all_flags_unaffected("INC (16-bits)");
+            });
         }
 
         fn assert_behaves_like_dec8<S, G>(&mut self, set: S, get: G) 
         where S: Fn(u8, &mut CPU), G: Fn(&CPU) -> u8 {
-            for input in 0..=255 {
-                set(input, &mut self.cpu);
-                self.exec_step();
-                let expected = if input > 0 { input - 1 } else { 0xff };
-                let actual = get(&self.cpu);
-                
-                assert_eq!(0x0001, self.cpu.regs().pc());
-                assert_eq!(expected, actual);
-
-                let pre = &format!("dec {}", input);
-
-                // Check flags
-                self.assert_sflag_if(&pre, actual & 0x80 != 0);
-                self.assert_zflag_if(&pre, actual == 0);
-                self.assert_hflag_if(&pre, input & 0x0f == 0x00);
-                self.assert_pvflag_if(&pre, input == 0x80);
-                self.assert_nflag_if(&pre, true);
-                self.assert_cflag_if(&pre, input == 0x00);
+            struct Case {
+                name: &'static str,
+                input: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
             }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x02,
+                    expected: 0x01,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:0 PV:0 N:1),
+                },
+                Case {
+                    name: "Half-carry",
+                    input: 0x10,
+                    expected: 0x0f,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:1 PV:0 N:1),
+                },
+                Case {
+                    name: "Overflow",
+                    input: 0x80,
+                    expected: 0x7f,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:1 PV:1 N:1),
+                },
+                Case {
+                    name: "Zero",
+                    input: 0x01,
+                    expected: 0x00,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:1 H:0 PV:0 N:1),
+                },
+                Case {
+                    name: "No carry",
+                    input: 0x00,
+                    expected: 0xff,
+                    expected_flags: |f| flags_apply!(f, S:1 Z:0 H:1 PV:0 N:1),
+                },
+            ], |case: &Case| {
+                let expected_flags = (case.expected_flags)(self.prev_flags);
+                set(case.input, &mut self.cpu);
+                self.exec_step();
+                let actual = get(&self.cpu);
+                let flags = self.cpu.regs().flags();
+
+                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
+                assert_result!(HEX8, "result", case.expected, actual);
+                assert_result!(BIN8, "flags", expected_flags, flags);
+            });
         }
 
         fn assert_behaves_like_dec16<S, G>(&mut self, set: S, get: G) 
         where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            for _ in 0..=256 {
-                let input = u16::sample();
-                set(input, &mut self.cpu);
-                self.exec_step();
-                let expected = if input > 0 { input - 1 } else { 0xffff };
-                let actual = get(&self.cpu);
-                
-                assert_eq!(0x0001, self.cpu.regs().pc());
-                assert_eq!(expected, actual);
-
-                self.assert_all_flags_unaffected("DEC (16-bits)");
+            struct Case {
+                name: &'static str,
+                input: u16,
+                expected: u16,
             }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x0002,
+                    expected: 0x0001,
+                },
+                Case {
+                    name: "Carry",
+                    input: 0x0000,
+                    expected: 0xffff,
+                },
+            ], |case: &Case| {
+                set(case.input, &mut self.cpu);
+                self.exec_step();
+                let actual = get(&self.cpu);
+
+                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
+                assert_result!(HEX16, "result", case.expected, actual);
+                self.assert_all_flags_unaffected("DEC (16-bits)");
+            });
         }
 
         fn asset_behaves_like_add16<S, G>(&mut self, set: S, get: G)
         where S: Fn(u16, u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            for _ in 0..=255 {
-                let a = u16::sample();
-                let b = u16::sample();
-                let c = (a as u32) + (b as u32);
-                set(a, b, &mut self.cpu);
-                self.exec_step();
-                let expected = c as u16;
-                let actual = get(&self.cpu);
-                
-                assert_eq!(0x0001, self.cpu.regs().pc());
-                assert_eq!(expected, actual);
-
-                let pre = &format!("add b{:08b}, b{:08b}", a, b);
-
-                // Check flags
-                self.assert_sflag_unaffected(&pre);
-                self.assert_zflag_unaffected(&pre);
-                self.assert_hflag_if(&pre, ((a & 0xfff) + (b & 0xfff)) & 0x1000 != 0);
-                self.assert_pvflag_unaffected(&pre);
-                self.assert_nflag_if(&pre, false);
-                self.assert_cflag_if(&pre, c > 0xffff);
+            struct Case {
+                name: &'static str,
+                a: u16,
+                b: u16,
+                expected: u16,
+                expected_flags: fn(u8) -> u8,
             }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    a: 0x1245,
+                    b: 0x1921,
+                    expected: 0x2b66,
+                    expected_flags: |f| flags_apply!(f, H:0 N:0 C:0),
+                },
+                Case {
+                    name: "Half carry",
+                    a: 0x1f45,
+                    b: 0x1921,
+                    expected: 0x3866,
+                    expected_flags: |f| flags_apply!(f, H:1 N:0 C:0),
+                },
+                Case {
+                    name: "Carry",
+                    a: 0xff45,
+                    b: 0x1921,
+                    expected: 0x1866,
+                    expected_flags: |f| flags_apply!(f, H:1 N:0 C:1),
+                },
+            ], |case: &Case| {
+                set(case.a, case.b, &mut self.cpu);
+                self.exec_step();
+                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
+                let actual = get(&self.cpu);
+                let expected_flags = (case.expected_flags)(self.cpu.regs().flags());
+                let actual_flags = self.cpu.regs().flags();
+                assert_result!(HEX16, "dest", case.expected, actual);
+                assert_result!(BIN8, "flags", expected_flags, actual_flags);
+            });
         }
 
         fn assert_sflag_if(&self, pre: &str, active: bool) {
