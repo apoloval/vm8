@@ -67,6 +67,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x28 => { ctx.exec_jr_cond::<ZFLAG, L8>(); 12 },
         0x29 => { ctx.exec_add16::<HL, HL>();   11 },
         0x2a => { ctx.exec_ld::<HL, IND_L16>(); 16 },
+        0x2b => { ctx.exec_dec16::<HL>();       06 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -760,6 +761,7 @@ mod test {
 
     test_dec_reg16!(test_exec_dec_bc, BC, bc, set_bc);
     test_dec_reg16!(test_exec_dec_de, DE, de, set_de);
+    test_dec_reg16!(test_exec_dec_hl, HL, hl, set_hl);
 
     macro_rules! test_add_reg16_reg16 {
         ($fname:ident, $dstname:ident, $srcname:ident,
