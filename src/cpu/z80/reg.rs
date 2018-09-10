@@ -106,9 +106,11 @@ impl Registers {
 
     #[inline] pub fn flags(&self) -> u8 { self.af.low() }
     #[inline] pub fn pc(&self) -> u16 { *self.pc }
+    #[inline] pub fn sp(&self) -> u16 { *self.sp }
 
     #[inline] pub fn set_flags(&mut self, val: u8) { self.af.set_low(val) }
     #[inline] pub fn set_pc(&mut self, val: u16) { *self.pc = val }
+    #[inline] pub fn set_sp(&mut self, val: u16) { *self.sp = val }
 
     #[inline] pub fn flag_s(&self) -> u8 { flag!(S, self.flags()) }
     #[inline] pub fn flag_z(&self) -> u8 { flag!(Z, self.flags()) }
