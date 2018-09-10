@@ -64,6 +64,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x25 => { ctx.exec_dec8::<H>();         04 },
         0x26 => { ctx.exec_ld::<H, L8>();       07 },
         0x27 => { ctx.exec_daa();               04 },
+        0x28 => { ctx.exec_jr_cond::<ZFLAG, L8>(); 12 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -81,7 +82,7 @@ trait Execute : Context + Sized {
         D::write_arg(self, c as u16);
         self.regs_mut().inc_pc(1 + a_size + b_size);
 
-        let flags = flags_apply!(self.regs().flags(), 
+        let flags = flags_apply!(self.regs().flags(),
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
@@ -93,26 +94,26 @@ trait Execute : Context + Sized {
         let mut a = prev_a;
         let mut flags = self.regs().flags();
         if flag!(N, flags) == 0 {
-            if flag!(H, flags) == 1 || a & 0x0f > 0x09 { 
-                a = self.alu().add8(a, 0x06); 
+            if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
+                a = self.alu().add8(a, 0x06);
             }
-            if flag!(C, flags) == 1 || a > 0x99 { 
-                a = self.alu().add8(a, 0x60); 
+            if flag!(C, flags) == 1 || a > 0x99 {
+                a = self.alu().add8(a, 0x60);
             }
         } else {
-            if flag!(H, flags) == 1 || a & 0x0f > 0x09 { 
-                let (r, _) = self.alu().sub8(a, 0x06); 
+            if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
+                let (r, _) = self.alu().sub8(a, 0x06);
                 a = r;
             }
-            if flag!(C, flags) == 1 || a > 0x99 { 
-                let (r, _) = self.alu().sub8(a, 0x60); 
+            if flag!(C, flags) == 1 || a > 0x99 {
+                let (r, _) = self.alu().sub8(a, 0x60);
                 a = r;
             }
         }
         self.regs_mut().set_a(a);
         self.regs_mut().inc_pc(1);
 
-        flags = flags_apply!(flags, 
+        flags = flags_apply!(flags,
             S:[a & 0x80 > 0]
             Z:[a == 0]
             H:[(a ^ prev_a) & 0x10 > 0]
@@ -306,7 +307,7 @@ macro_rules! def_reg8_arg {
             type Item = u8;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes { 
+            fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
                 ctx.regs_mut().$r8w(val);
                 0
             }
@@ -331,7 +332,7 @@ macro_rules! def_reg16_arg {
             type Item = u16;
 
             #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes { 
+            fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
                 ctx.regs_mut().$r16w(val);
                 0
             }
@@ -479,7 +480,7 @@ mod test {
             #[test]
             fn $fname() {
                 let mut test = ExecTest::for_inst(&inst!(LD ($regname), A));
-                test.assert_behaves_like_ld(0, 
+                test.assert_behaves_like_ld(0,
                     |val, cpu| {
                         cpu.regs_mut().set_a(val);
                         cpu.regs_mut().$regset(0x1234);
@@ -498,8 +499,8 @@ mod test {
             #[test]
             fn $fname() {
                 let mut test = ExecTest::for_inst(&inst!(LD A, ($regname)));
-                test.assert_behaves_like_ld(0, 
-                    |val, cpu| { 
+                test.assert_behaves_like_ld(0,
+                    |val, cpu| {
                         cpu.mem_mut().write_to(0x1234, val);
                         cpu.regs_mut().$regset(0x1234);
                     },
@@ -517,7 +518,7 @@ mod test {
             #[test]
             fn $fname() {
                 let mut test = ExecTest::new();
-                test.assert_behaves_like_ld(1, 
+                test.assert_behaves_like_ld(1,
                     |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
                     |cpu| cpu.regs().$regget(),
                 );
@@ -539,9 +540,9 @@ mod test {
     macro_rules! test_ld_r16_l16 {
         ($fname:ident, $regname:ident, $regget:ident) => {
             #[test]
-            fn $fname() {        
+            fn $fname() {
                 let mut test = ExecTest::new();
-                test.assert_behaves_like_ld(2, 
+                test.assert_behaves_like_ld(2,
                     |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
                     |cpu| cpu.regs().$regget(),
                 );
@@ -556,9 +557,9 @@ mod test {
     macro_rules! test_ld_indl16_r16 {
         ($fname:ident, $regname:ident, $regset:ident) => {
             #[test]
-            fn $fname() {        
+            fn $fname() {
                 let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
-                test.assert_behaves_like_ld(2, 
+                test.assert_behaves_like_ld(2,
                     |val, cpu| cpu.regs_mut().$regset(val),
                     |cpu| cpu.mem().read_word_from::<LittleEndian>(0x1234),
                 );
@@ -601,7 +602,7 @@ mod test {
             fn $fname() {
                 let mut test = ExecTest::for_inst(&inst!(INC $regname));
                 test.assert_behaves_like_inc8(
-                    |v, cpu| cpu.regs_mut().$regset(v), 
+                    |v, cpu| cpu.regs_mut().$regset(v),
                     |cpu| cpu.regs().$regget(),
                 );
             }
@@ -619,7 +620,7 @@ mod test {
             fn $fname() {
                 let mut test = ExecTest::for_inst(&inst!(DEC $regname));
                 test.assert_behaves_like_dec8(
-                    |v, cpu| cpu.regs_mut().$regset(v), 
+                    |v, cpu| cpu.regs_mut().$regset(v),
                     |cpu| cpu.regs().$regget(),
                 );
             }
@@ -744,7 +745,7 @@ mod test {
     test_dec_reg16!(test_exec_dec_de, DE, de, set_de);
 
     macro_rules! test_add_reg16_reg16 {
-        ($fname:ident, $dstname:ident, $srcname:ident, 
+        ($fname:ident, $dstname:ident, $srcname:ident,
          $dstget:ident, $dstset:ident, $srcset:ident) => {
             #[test]
             fn $fname() {
@@ -755,7 +756,7 @@ mod test {
                         cpu.regs_mut().$srcset(b);
                     },
                     |cpu| cpu.regs().$dstget(),
-                );        
+                );
             }
         }
     }
@@ -766,7 +767,7 @@ mod test {
     /**************************/
     /* Rotate and Shift Group */
     /**************************/
-    
+
     #[test]
     fn test_exec_rlca() {
         struct Case {
@@ -803,7 +804,7 @@ mod test {
         });
     }
 
-    #[test]    
+    #[test]
     fn test_exec_rrca() {
         struct Case {
             name: &'static str,
@@ -952,7 +953,7 @@ mod test {
     /**************/
     /* Jump Group */
     /**************/
-    
+
     #[test]
     fn test_exec_djnz_l8() {
         struct Case {
@@ -1076,7 +1077,8 @@ mod test {
         }
     }
 
-    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, |f| f & 0b10111111, |f| f | 0b01000000);    
+    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, |f| f & 0b10111111, |f| f | 0b01000000);
+    test_jr_cond_l8!(test_exec_jr_z_l8, Z, flag_z, |f| f | 0b01000000, |f| f & 0b10111111);
 
     /****************************************/
     /* Test suite for instruction execution */
@@ -1122,25 +1124,25 @@ mod test {
             exec_step(&mut self.cpu);
         }
 
-        fn assert_behaves_like_ld<S, G, D>(&mut self, opsize: usize, set: S, get: G) 
+        fn assert_behaves_like_ld<S, G, D>(&mut self, opsize: usize, set: S, get: G)
         where S: Fn(D, &mut CPU), G: Fn(&CPU) -> D, D: Data {
             let input = D::sample();
             set(input, &mut self.cpu);
-            
+
             self.exec_step();
 
             let output = get(&self.cpu);
             let expected_pc = 1 + opsize as u16;
             let actual_pc = self.cpu.regs().pc();
             let flags = self.cpu.regs().flags();
-            
+
             assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
             assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
 
             self.assert_all_flags_unaffected("LD");
         }
 
-        fn assert_behaves_like_inc8<S, G>(&mut self, set: S, get: G) 
+        fn assert_behaves_like_inc8<S, G>(&mut self, set: S, get: G)
         where S: Fn(u8, &mut CPU), G: Fn(&CPU) -> u8 {
             struct Case {
                 name: &'static str,
@@ -1187,7 +1189,7 @@ mod test {
             });
         }
 
-        fn assert_behaves_like_inc16<S, G>(&mut self, set: S, get: G) 
+        fn assert_behaves_like_inc16<S, G>(&mut self, set: S, get: G)
         where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
             struct Case {
                 name: &'static str,
@@ -1216,7 +1218,7 @@ mod test {
             });
         }
 
-        fn assert_behaves_like_dec8<S, G>(&mut self, set: S, get: G) 
+        fn assert_behaves_like_dec8<S, G>(&mut self, set: S, get: G)
         where S: Fn(u8, &mut CPU), G: Fn(&CPU) -> u8 {
             struct Case {
                 name: &'static str,
@@ -1268,7 +1270,7 @@ mod test {
             });
         }
 
-        fn assert_behaves_like_dec16<S, G>(&mut self, set: S, get: G) 
+        fn assert_behaves_like_dec16<S, G>(&mut self, set: S, get: G)
         where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
             struct Case {
                 name: &'static str,
@@ -1367,10 +1369,10 @@ mod test {
         fn assert_flag_if(&self, pre: &str, active: bool, name: &str, mask: u8) {
             let flags = self.cpu.regs().flags();
             if active {
-                assert!(flags & mask != 0, 
+                assert!(flags & mask != 0,
                     "{}: expected {} flag to be set in 0b{:08b}", pre, name, flags);
             } else {
-                assert!(flags & mask == 0, 
+                assert!(flags & mask == 0,
                     "{}: expected {} flag to be unset in 0b{:08b}", pre, name, flags);
             }
         }
@@ -1410,8 +1412,8 @@ mod test {
 
         fn assert_flag_unaffected(&self, pre: &str, name: &str, mask: u8) {
             let flags = self.cpu.regs().flags();
-            assert!(flags & mask == self.prev_flags & mask, 
-                "{}: expected {} flag to be unaffected in b{:08b} (previous flags were b{:08b}", 
+            assert!(flags & mask == self.prev_flags & mask,
+                "{}: expected {} flag to be unaffected in b{:08b} (previous flags were b{:08b}",
                 pre, name, flags, self.prev_flags);
         }
     }
