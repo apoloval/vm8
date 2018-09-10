@@ -58,7 +58,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x1f => { ctx.exec_rra();               04 },
         0x20 => { ctx.exec_jr_cond::<NZFLAG, L8>() },
         0x21 => { ctx.exec_ld::<HL, L16>();     10 },
-        0x22 => { ctx.exec_ld::<IND_L16, HL>(); 16 },
+        0x22 => { ctx.exec_ld::<IND16_L16, HL>(); 16 },
         0x23 => { ctx.exec_inc16::<HL>();       06 },
         0x24 => { ctx.exec_inc8::<H>();         04 },
         0x25 => { ctx.exec_dec8::<H>();         04 },
@@ -66,7 +66,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x27 => { ctx.exec_daa();               04 },
         0x28 => { ctx.exec_jr_cond::<ZFLAG, L8>() },
         0x29 => { ctx.exec_add16::<HL, HL>();   11 },
-        0x2a => { ctx.exec_ld::<HL, IND_L16>(); 16 },
+        0x2a => { ctx.exec_ld::<HL, IND16_L16>(); 16 },
         0x2b => { ctx.exec_dec16::<HL>();       06 },
         0x2c => { ctx.exec_inc8::<L>();         04 },
         0x2d => { ctx.exec_dec8::<L>();         04 },
@@ -74,6 +74,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x2f => { ctx.exec_cpl();               04 },
         0x30 => { ctx.exec_jr_cond::<NCFLAG, L8>() },
         0x31 => { ctx.exec_ld::<SP, L16>();     10 },
+        0x32 => { ctx.exec_ld::<IND8_L16, A>(); 13 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -404,9 +405,37 @@ def_indreg16_arg!(IND_BC, bc);
 def_indreg16_arg!(IND_DE, de);
 def_indreg16_arg!(IND_HL, hl);
 
-struct IND_L16;
+struct IND8_L16;
 
-impl Src for IND_L16 {
+impl Src for IND8_L16 {
+    type Item = u8;
+
+    #[inline]
+    fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
+        let pc = ctx.regs().pc();
+        let (addr, _) = ctx.alu().add16(pc, 1);
+        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
+        let data = ctx.mem().read_from(ind);
+        (data, 2)
+    }
+}
+
+impl Dest for IND8_L16 {
+    type Item = u8;
+
+    #[inline]
+    fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
+        let pc = ctx.regs().pc();
+        let (addr, _) = ctx.alu().add16(pc, 1);
+        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
+        ctx.mem_mut().write_to(ind, val);
+        2
+    }
+}
+
+struct IND16_L16;
+
+impl Src for IND16_L16 {
     type Item = u16;
 
     #[inline]
@@ -419,7 +448,7 @@ impl Src for IND_L16 {
     }
 }
 
-impl Dest for IND_L16 {
+impl Dest for IND16_L16 {
     type Item = u16;
 
     #[inline]
@@ -513,7 +542,7 @@ mod test {
     test_ld_indreg_a!(test_exec_ld_indbc_a, BC, set_bc);
     test_ld_indreg_a!(test_exec_ld_indde_a, DE, set_de);
 
-    macro_rules! test_ld_a_ind {
+    macro_rules! test_ld_a_indl16 {
         ($fname:ident, $regname:ident, $regset:ident) => {
             #[test]
             fn $fname() {
@@ -529,8 +558,23 @@ mod test {
         };
     }
 
-    test_ld_a_ind!(test_exec_ld_a_indbc, BC, set_bc);
-    test_ld_a_ind!(test_exec_ld_a_indde, DE, set_de);
+    test_ld_a_indl16!(test_exec_ld_a_indbc, BC, set_bc);
+    test_ld_a_indl16!(test_exec_ld_a_indde, DE, set_de);
+
+    macro_rules! test_ld_indl16_r8 {
+        ($fname:ident, $regname:ident, $regset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
+                test.assert_behaves_like_ld(2,
+                    |val, cpu| cpu.regs_mut().$regset(val),
+                    |cpu| cpu.mem().read_from(0x1234),
+                );
+            }
+        }
+    }
+
+    test_ld_indl16_r8!(test_exec_ld_indl16_a, A, set_a);
 
     macro_rules! test_ld_r8_l8 {
         ($fname:ident, $regname:ident, $regget:ident) => {
@@ -1185,7 +1229,7 @@ mod test {
         prev_flags: u8,
     }
 
-    trait Data : fmt::Display + fmt::Debug + Copy + PartialEq {
+    trait Data : fmt::Display + fmt::Debug + fmt::UpperHex + Copy + PartialEq {
         fn sample() -> Self;
     }
 
@@ -1230,8 +1274,8 @@ mod test {
             let actual_pc = self.cpu.regs().pc();
             let flags = self.cpu.regs().flags();
 
-            assert_eq!(expected_pc, actual_pc, "expected H{:04x} PC, but H{:04x} found", expected_pc, actual_pc);
-            assert_eq!(input, output, "expected {} loaded value, but {} found", input, output);
+            assert_result!(HEX16, "program counter", expected_pc, actual_pc);
+            assert_result!(HEX16, "dest", input, output);
 
             self.assert_all_flags_unaffected("LD");
         }
