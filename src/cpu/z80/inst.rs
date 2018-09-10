@@ -18,6 +18,7 @@ macro_rules! inst {
     (DEC D)             => ([0x15]);
     (DEC E)             => ([0x1d]);
     (DEC H)             => ([0x25]);
+    (DEC L)             => ([0x2d]);
     (DEC BC)            => ([0x0b]);
     (DEC DE)            => ([0x1b]);
     (DEC HL)            => ([0x2b]);
