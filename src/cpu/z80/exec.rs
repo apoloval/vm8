@@ -66,6 +66,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x27 => { ctx.exec_daa();               04 },
         0x28 => { ctx.exec_jr_cond::<ZFLAG, L8>(); 12 },
         0x29 => { ctx.exec_add16::<HL, HL>();   11 },
+        0x2a => { ctx.exec_ld::<HL, IND_L16>(); 16 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -569,6 +570,21 @@ mod test {
     }
 
     test_ld_indl16_r16!(test_exec_ld_indl16_hl, HL, set_hl);
+
+    macro_rules! test_ld_r16_indl16 {
+        ($fname:ident, $regname:ident, $regget:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(LD $regname, (0x1234)));
+                test.assert_behaves_like_ld(2,
+                    |val, cpu| cpu.mem_mut().write_word_to::<LittleEndian>(0x1234, val),
+                    |cpu| cpu.regs().$regget(),
+                );
+            }
+        }
+    }
+
+    test_ld_r16_indl16!(test_exec_ld_hl_indl16, HL, hl);
 
     /**********************************************/
     /* Exchange, Block Transfer, and Search Group */
