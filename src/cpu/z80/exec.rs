@@ -71,6 +71,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x2c => { ctx.exec_inc8::<L>();         04 },
         0x2d => { ctx.exec_dec8::<L>();         04 },
         0x2e => { ctx.exec_ld::<L, L8>();       07 },
+        0x2f => { ctx.exec_cpl();               04 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -92,6 +93,15 @@ trait Execute : Context + Sized {
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
+        self.regs_mut().set_flags(flags);
+    }
+
+    fn exec_cpl(&mut self) {
+        let a = self.regs().a();
+        self.regs_mut().set_a(!a);
+        
+        let mut flags = self.regs().flags();
+        flags = flags_apply!(flags, H:1 N:1);
         self.regs_mut().set_flags(flags);
     }
 
@@ -660,6 +670,20 @@ mod test {
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
     /*****************************************************/
+
+    #[test]
+    fn test_exec_cpl() {
+        let mut test = ExecTest::for_inst(&inst!(CPL));
+        test.cpu.regs_mut().set_a(0x42);
+        test.exec_step();
+        
+        let actual = test.cpu.regs().a();
+        let expected = 0xbd;
+        assert_result!(HEX8, "A", expected, actual);
+
+        test.assert_hflag_if("CPL", true);
+        test.assert_nflag_if("CPL", true);
+    }
 
     #[test]
     fn test_exec_daa() {
