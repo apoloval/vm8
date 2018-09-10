@@ -36,6 +36,7 @@ macro_rules! inst {
     (INC HL)            => ([0x23]);
     (JP $x:expr)        => ([0xc3, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (JR $x:expr)        => ([0x18, $x]);
+    (JR NC, $x:expr)    => ([0x30, $x]);
     (JR NZ, $x:expr)    => ([0x20, $x]);
     (JR Z, $x:expr)     => ([0x28, $x]);
     (LD A, (BC))        => ([0x0a]);

@@ -72,6 +72,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x2d => { ctx.exec_dec8::<L>();         04 },
         0x2e => { ctx.exec_ld::<L, L8>();       07 },
         0x2f => { ctx.exec_cpl();               04 },
+        0x30 => { ctx.exec_jr_cond::<NCFLAG, L8>(); 12 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -99,7 +100,7 @@ trait Execute : Context + Sized {
     fn exec_cpl(&mut self) {
         let a = self.regs().a();
         self.regs_mut().set_a(!a);
-        
+
         let mut flags = self.regs().flags();
         flags = flags_apply!(flags, H:1 N:1);
         self.regs_mut().set_flags(flags);
@@ -1166,6 +1167,7 @@ mod test {
         }
     }
 
+    test_jr_cond_l8!(test_exec_jr_nc_l8, NC, flag_c, |f| f & 0b11111110, |f| f | 0b00000001);
     test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, |f| f & 0b10111111, |f| f | 0b01000000);
     test_jr_cond_l8!(test_exec_jr_z_l8, Z, flag_z, |f| f | 0b01000000, |f| f & 0b10111111);
 
