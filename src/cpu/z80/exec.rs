@@ -65,6 +65,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x26 => { ctx.exec_ld::<H, L8>();       07 },
         0x27 => { ctx.exec_daa();               04 },
         0x28 => { ctx.exec_jr_cond::<ZFLAG, L8>(); 12 },
+        0x29 => { ctx.exec_add16::<HL, HL>();   11 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -763,6 +764,46 @@ mod test {
 
     test_add_reg16_reg16!(test_exec_add_hl_bc, HL, BC, hl, set_hl, set_bc);
     test_add_reg16_reg16!(test_exec_add_hl_de, HL, DE, hl, set_hl, set_de);
+
+    #[test]
+    fn test_exec_add_hl_hl() {
+        struct Case {
+            name: &'static str,
+            a: u16,
+            expected: u16,
+            expected_flags: fn(u8) -> u8,
+        }
+        let mut test = ExecTest::for_inst(&inst!(ADD HL, HL));
+        table_test!(&[
+            Case {
+                name: "Regular case",
+                a: 0x1245,
+                expected: 0x248a,
+                expected_flags: |f| flags_apply!(f, H:0 N:0 C:0),
+            },
+            Case {
+                name: "Half carry",
+                a: 0x1f45,
+                expected: 0x3e8a,
+                expected_flags: |f| flags_apply!(f, H:1 N:0 C:0),
+            },
+            Case {
+                name: "Carry",
+                a: 0xff45,
+                expected: 0xfe8a,
+                expected_flags: |f| flags_apply!(f, H:1 N:0 C:1),
+            },
+        ], |case: &Case| {
+            test.cpu.regs_mut().set_hl(case.a);
+            test.exec_step();
+            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
+            let actual = test.cpu.regs().hl();
+            let expected_flags = (case.expected_flags)(test.cpu.regs().flags());
+            let actual_flags = test.cpu.regs().flags();
+            assert_result!(HEX16, "dest", case.expected, actual);
+            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+        });
+    }
 
     /**************************/
     /* Rotate and Shift Group */
