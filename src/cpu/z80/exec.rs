@@ -88,6 +88,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x3d => { ctx.exec_dec8::<A>();         04 },
         0x3e => { ctx.exec_ld::<A, L8>();       07 },
         0x3f => { ctx.exec_ccf();               04 },
+        0x40 => { ctx.exec_ld::<B, B>();        04 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -551,6 +552,21 @@ mod test {
     /********************/
     /* 8-Bit Load Group */
     /********************/
+
+    macro_rules! test_ld_r8_r8 {
+        ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(LD $dstname, $srcname));
+                test.assert_behaves_like_ld(0,
+                    |val, cpu| cpu.regs_mut().$srcset(val),
+                    |cpu| cpu.regs().$dstget(),
+                );
+            }
+        }
+    }
+
+    test_ld_r8_r8!(test_exec_ld_b_b, B, B, b, set_b);
 
     macro_rules! test_ld_indreg_a {
         ($fname:ident, $regname:ident, $regset:ident) => {
