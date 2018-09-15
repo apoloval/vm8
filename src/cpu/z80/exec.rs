@@ -79,6 +79,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x34 => { ctx.exec_inc8::<IND_HL>();    11 },
         0x35 => { ctx.exec_dec8::<IND_HL>();    11 },
         0x36 => { ctx.exec_ld::<IND_HL, L8>();  10 },
+        0x37 => { ctx.exec_scf();               4 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -266,6 +267,12 @@ trait Execute : Context + Sized {
         let dest = self.alu().rotate_right(orig, carry, &mut flags);
         self.regs_mut().set_a(dest);
         self.regs_mut().inc_pc(1);
+        self.regs_mut().set_flags(flags);
+    }
+
+    fn exec_scf(&mut self) {
+        let mut flags = self.regs().flags();
+        flags = flags_apply!(flags, H:0 N:0 C:1);
         self.regs_mut().set_flags(flags);
     }
 
@@ -841,6 +848,16 @@ mod test {
         test.exec_step();
         assert_eq!(0x0001, test.cpu.regs().pc());
         test.assert_all_flags_unaffected("nop");
+    }
+
+    #[test]
+    fn test_exec_scf() {
+        let mut test = ExecTest::for_inst(&inst!(SCF));
+        test.exec_step();
+        
+        test.assert_hflag_if("SCF", false);
+        test.assert_nflag_if("SCF", false);
+        test.assert_cflag_if("SCF", true);
     }
 
     /***************************/

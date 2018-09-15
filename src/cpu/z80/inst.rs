@@ -65,4 +65,5 @@ macro_rules! inst {
     (RLCA)              => ([0x07]);
     (RRA)               => ([0x1f]);
     (RRCA)              => ([0x0f]);
+    (SCF)               => ([0x37]);
 }
