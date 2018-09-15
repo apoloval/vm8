@@ -15,6 +15,7 @@ macro_rules! inst {
     (ADD HL, SP)        => ([0x39]);
     (CPL)               => ([0x2f]);
     (DAA)               => ([0x27]);
+    (DEC A)             => ([0x3d]);
     (DEC B)             => ([0x05]);
     (DEC C)             => ([0x0d]);
     (DEC D)             => ([0x15]);
