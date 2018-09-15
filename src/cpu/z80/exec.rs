@@ -136,6 +136,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x6d => { ctx.exec_ld::<L, L>();        04 },
         0x6e => { ctx.exec_ld::<L, IND_HL>();   07 },
         0x6f => { ctx.exec_ld::<L, A>();        04 },
+        0x70 => { ctx.exec_ld::<IND_HL, B>();   07 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -656,24 +657,28 @@ mod test {
     test_ld_r8_r8!(test_exec_ld_l_h, L, H, l, set_h);
     test_ld_r8_r8!(test_exec_ld_l_l, L, L, l, set_l);
 
-    macro_rules! test_ld_indreg_a {
-        ($fname:ident, $regname:ident, $regset:ident) => {
+    macro_rules! test_ld_indr16_r8 {
+        ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $dstset:ident, $srcset:ident) => {
             #[test]
             fn $fname() {
-                let mut test = ExecTest::for_inst(&inst!(LD ($regname), A));
+                let mut test = ExecTest::for_inst(&inst!(LD ($dstname), $srcname));
                 test.assert_behaves_like_ld(0,
                     |val, cpu| {
-                        cpu.regs_mut().set_a(val);
-                        cpu.regs_mut().$regset(0x1234);
+                        cpu.regs_mut().$dstset(0x1234);
+                        cpu.regs_mut().$srcset(val);
                     },
-                    |cpu| cpu.mem().read_from(0x1234),
+                    |cpu| {
+                        let addr = cpu.regs().$dstget();
+                        cpu.mem().read_from(addr)
+                    },
                 );
             }
         }
     }
 
-    test_ld_indreg_a!(test_exec_ld_indbc_a, BC, set_bc);
-    test_ld_indreg_a!(test_exec_ld_indde_a, DE, set_de);
+    test_ld_indr16_r8!(test_exec_ld_indbc_a, BC, A, bc, set_bc, set_a);
+    test_ld_indr16_r8!(test_exec_ld_indde_a, DE, A, de, set_de, set_a);
+    test_ld_indr16_r8!(test_exec_ld_indhl_b, HL, B, hl, set_hl, set_b);
 
     macro_rules! test_ld_r8_indr16 {
         ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
