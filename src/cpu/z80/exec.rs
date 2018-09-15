@@ -87,6 +87,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x3c => { ctx.exec_inc8::<A>();         04 },
         0x3d => { ctx.exec_dec8::<A>();         04 },
         0x3e => { ctx.exec_ld::<A, L8>();       07 },
+        0x3f => { ctx.exec_ccf();               04 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -108,6 +109,16 @@ trait Execute : Context + Sized {
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
+        self.regs_mut().set_flags(flags);
+    }
+
+    fn exec_ccf(&mut self) {
+        let mut flags = self.regs().flags();
+        if flag!(C, flags) == 0 {
+            flags = flags_apply!(flags, H:0 N:0 C:1);
+        } else {
+            flags = flags_apply!(flags, H:1 N:0 C:0);
+        }
         self.regs_mut().set_flags(flags);
     }
 
@@ -880,6 +891,26 @@ mod test {
         test.assert_hflag_if("SCF", false);
         test.assert_nflag_if("SCF", false);
         test.assert_cflag_if("SCF", true);
+    }
+
+    #[test]
+    fn test_exec_ccf() {
+        let mut test = ExecTest::for_inst(&inst!(CCF));
+        // Case: flag C is reset
+        test.cpu.regs_mut().set_flags(0x00);
+        test.exec_step();
+        
+        test.assert_hflag_if("CCF", false);
+        test.assert_nflag_if("CCF", false);
+        test.assert_cflag_if("CCF", true);
+
+        // Case: flag C is set
+        test.cpu.regs_mut().set_flags(0x01);
+        test.exec_step();
+        
+        test.assert_hflag_if("CCF", true);
+        test.assert_nflag_if("CCF", false);
+        test.assert_cflag_if("CCF", false);
     }
 
     /***************************/

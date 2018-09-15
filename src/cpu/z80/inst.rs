@@ -13,6 +13,7 @@ macro_rules! inst {
     (ADD HL, HL)        => ([0x29]);
     (ADD HL, DE)        => ([0x19]);
     (ADD HL, SP)        => ([0x39]);
+    (CCF)               => ([0x3f]);
     (CPL)               => ([0x2f]);
     (DAA)               => ([0x27]);
     (DEC A)             => ([0x3d]);
