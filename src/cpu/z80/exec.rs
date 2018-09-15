@@ -77,6 +77,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x32 => { ctx.exec_ld::<IND8_L16, A>(); 13 },
         0x33 => { ctx.exec_inc16::<SP>();       06 },
         0x34 => { ctx.exec_inc8::<IND_HL>();    11 },
+        0x35 => { ctx.exec_dec8::<IND_HL>();    11 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -721,6 +722,18 @@ mod test {
     fn test_exec_inc_indhl() {
         let mut test = ExecTest::for_inst(&inst!(INC (HL)));
         test.assert_behaves_like_inc8(
+            |v, cpu| {
+                cpu.mem_mut().write_to(0x1234, v);
+                cpu.regs_mut().set_hl(0x1234);
+            },
+            |cpu| cpu.mem().read_from(0x1234),
+        );
+    }
+
+    #[test]
+    fn test_exec_dec_indhl() {
+        let mut test = ExecTest::for_inst(&inst!(DEC (HL)));
+        test.assert_behaves_like_dec8(
             |v, cpu| {
                 cpu.mem_mut().write_to(0x1234, v);
                 cpu.regs_mut().set_hl(0x1234);
