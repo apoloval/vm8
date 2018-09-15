@@ -63,6 +63,7 @@ macro_rules! inst {
     (LD B, $x:expr)     => ([0x06, $x]);
     (LD C, B)           => ([0x48]);
     (LD C, C)           => ([0x49]);
+    (LD C, D)           => ([0x4a]);
     (LD C, $x:expr)     => ([0x0e, $x]);
     (LD D, $x:expr)     => ([0x16, $x]);
     (LD E, $x:expr)     => ([0x1e, $x]);
