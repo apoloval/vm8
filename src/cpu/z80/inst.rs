@@ -52,6 +52,7 @@ macro_rules! inst {
     (LD A, (DE))        => ([0x1a]);
     (LD A, ($x:expr))   => ([0x3a, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (LD A, $x:expr)     => ([0x3e, $x]);
+    (LD B, A)           => ([0x47]);
     (LD B, B)           => ([0x40]);
     (LD B, C)           => ([0x41]);
     (LD B, D)           => ([0x42]);
