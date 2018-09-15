@@ -142,6 +142,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x73 => { ctx.exec_ld::<IND_HL, E>();   07 },
         0x74 => { ctx.exec_ld::<IND_HL, H>();   07 },
         0x75 => { ctx.exec_ld::<IND_HL, L>();   07 },
+        0x77 => { ctx.exec_ld::<IND_HL, A>();   07 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -683,6 +684,7 @@ mod test {
 
     test_ld_indr16_r8!(test_exec_ld_indbc_a, BC, A, bc, set_bc, set_a);
     test_ld_indr16_r8!(test_exec_ld_indde_a, DE, A, de, set_de, set_a);
+    test_ld_indr16_r8!(test_exec_ld_indhl_a, HL, A, hl, set_hl, set_a);
     test_ld_indr16_r8!(test_exec_ld_indhl_b, HL, B, hl, set_hl, set_b);
     test_ld_indr16_r8!(test_exec_ld_indhl_c, HL, C, hl, set_hl, set_c);
     test_ld_indr16_r8!(test_exec_ld_indhl_d, HL, D, hl, set_hl, set_d);
