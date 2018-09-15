@@ -94,6 +94,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x43 => { ctx.exec_ld::<B, E>();        04 },
         0x44 => { ctx.exec_ld::<B, H>();        04 },
         0x45 => { ctx.exec_ld::<B, L>();        04 },
+        0x46 => { ctx.exec_ld::<B, IND_HL>();   07 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -597,24 +598,25 @@ mod test {
     test_ld_indreg_a!(test_exec_ld_indbc_a, BC, set_bc);
     test_ld_indreg_a!(test_exec_ld_indde_a, DE, set_de);
 
-    macro_rules! test_ld_a_indr16 {
-        ($fname:ident, $regname:ident, $regset:ident) => {
+    macro_rules! test_ld_r8_indr16 {
+        ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
             #[test]
             fn $fname() {
-                let mut test = ExecTest::for_inst(&inst!(LD A, ($regname)));
+                let mut test = ExecTest::for_inst(&inst!(LD $dstname, ($srcname)));
                 test.assert_behaves_like_ld(0,
                     |val, cpu| {
                         cpu.mem_mut().write_to(0x1234, val);
-                        cpu.regs_mut().$regset(0x1234);
+                        cpu.regs_mut().$srcset(0x1234);
                     },
-                    |cpu| cpu.regs().a(),
+                    |cpu| cpu.regs().$dstget(),
                 );
             }
         };
     }
 
-    test_ld_a_indr16!(test_exec_ld_a_indbc, BC, set_bc);
-    test_ld_a_indr16!(test_exec_ld_a_indde, DE, set_de);
+    test_ld_r8_indr16!(test_exec_ld_a_indbc, A, BC, a, set_bc);
+    test_ld_r8_indr16!(test_exec_ld_a_indde, A, DE, a, set_de);
+    test_ld_r8_indr16!(test_exec_ld_b_indhl, B, HL, b, set_hl);
 
     macro_rules! test_ld_indl16_r8 {
         ($fname:ident, $regname:ident, $regset:ident) => {
