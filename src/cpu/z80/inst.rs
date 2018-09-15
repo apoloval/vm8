@@ -77,6 +77,7 @@ macro_rules! inst {
     (LD D, H)           => ([0x54]);
     (LD D, L)           => ([0x55]);
     (LD D, (HL))        => ([0x56]);
+    (LD E, A)           => ([0x5f]);
     (LD E, B)           => ([0x58]);
     (LD E, C)           => ([0x59]);
     (LD E, D)           => ([0x5a]);
