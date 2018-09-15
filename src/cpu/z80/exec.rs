@@ -82,6 +82,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x37 => { ctx.exec_scf();               4 },
         0x38 => { ctx.exec_jr_cond::<CFLAG, L8>() },
         0x39 => { ctx.exec_add16::<HL, SP>();   11 },
+        0x3a => { ctx.exec_ld::<A, IND8_L16>(); 13 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -619,6 +620,18 @@ mod test {
                 Write::write(cpu.mem_mut(), &inst!(LD (HL), val)).unwrap(); 
             },
             |cpu| cpu.mem().read_from(0x1234),
+        );
+    }
+
+    #[test]
+    fn test_ld_a_indl16() {
+        let mut test = ExecTest::new();
+        test.assert_behaves_like_ld(2,
+            |val, cpu| { 
+                cpu.mem_mut().write_to(0x1234, val);
+                Write::write(cpu.mem_mut(), &inst!(LD A, (0x1234))).unwrap(); 
+            },
+            |cpu| cpu.regs().a(),
         );
     }
 
