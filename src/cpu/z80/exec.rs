@@ -555,7 +555,7 @@ mod test {
     test_ld_indreg_a!(test_exec_ld_indbc_a, BC, set_bc);
     test_ld_indreg_a!(test_exec_ld_indde_a, DE, set_de);
 
-    macro_rules! test_ld_a_indl16 {
+    macro_rules! test_ld_a_indr16 {
         ($fname:ident, $regname:ident, $regset:ident) => {
             #[test]
             fn $fname() {
@@ -571,8 +571,8 @@ mod test {
         };
     }
 
-    test_ld_a_indl16!(test_exec_ld_a_indbc, BC, set_bc);
-    test_ld_a_indl16!(test_exec_ld_a_indde, DE, set_de);
+    test_ld_a_indr16!(test_exec_ld_a_indbc, BC, set_bc);
+    test_ld_a_indr16!(test_exec_ld_a_indde, DE, set_de);
 
     macro_rules! test_ld_indl16_r8 {
         ($fname:ident, $regname:ident, $regset:ident) => {
