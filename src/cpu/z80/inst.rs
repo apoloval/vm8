@@ -51,6 +51,7 @@ macro_rules! inst {
     (JR Z, $x:expr)     => ([0x28, $x]);
     (LD A, (BC))        => ([0x0a]);
     (LD A, (DE))        => ([0x1a]);
+    (LD A, A)           => ([0x7f]);
     (LD A, B)           => ([0x78]);
     (LD A, C)           => ([0x79]);
     (LD A, D)           => ([0x7a]);
