@@ -158,6 +158,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x83 => { ctx.exec_add8::<A, E>();      04 },
         0x84 => { ctx.exec_add8::<A, H>();      04 },
         0x85 => { ctx.exec_add8::<A, L>();      04 },
+        0x86 => { ctx.exec_add8::<A, IND_HL>(); 07 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -915,6 +916,20 @@ mod test {
     test_add_a_r8!(test_exec_add_a_e, E, set_e);
     test_add_a_r8!(test_exec_add_a_h, H, set_h);
     test_add_a_r8!(test_exec_add_a_l, L, set_l);
+
+    #[test]
+    fn test_exec_add_a_indhl() {
+        let mut test = ExecTest::for_inst(&inst!(ADD A, (HL)));
+        test.assert_behaves_like_add8(
+            |a, b, cpu| {
+                cpu.regs_mut().set_a(a);
+                cpu.regs_mut().set_hl(0x1234);
+                cpu.mem_mut().write_to(0x1234, b);
+            },
+            |cpu| cpu.regs().a(),
+        );
+    }
+
     macro_rules! test_inc_reg8 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
             #[test]
