@@ -142,6 +142,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x73 => { ctx.exec_ld::<IND_HL, E>();   07 },
         0x74 => { ctx.exec_ld::<IND_HL, H>();   07 },
         0x75 => { ctx.exec_ld::<IND_HL, L>();   07 },
+        0x76 => { ctx.exec_halt();              04 },
         0x77 => { ctx.exec_ld::<IND_HL, A>();   07 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
@@ -253,6 +254,8 @@ trait Execute : Context + Sized {
         self.regs_mut().swap_af();
         self.regs_mut().inc_pc(1);
     }
+
+    fn exec_halt(&mut self) {}
 
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
@@ -1038,6 +1041,14 @@ mod test {
         test.assert_hflag_if("CCF", true);
         test.assert_nflag_if("CCF", false);
         test.assert_cflag_if("CCF", false);
+    }
+
+    #[test]
+    fn test_exec_halt() {
+        let mut test = ExecTest::for_inst(&inst!(HALT));
+        test.exec_step();
+        assert_result!(HEX16, "program counter", 0x0000, test.cpu.regs().pc());
+        test.assert_all_flags_unaffected("halt");
     }
 
     /***************************/
