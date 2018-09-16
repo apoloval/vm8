@@ -51,6 +51,7 @@ macro_rules! inst {
     (JR Z, $x:expr)     => ([0x28, $x]);
     (LD A, (BC))        => ([0x0a]);
     (LD A, (DE))        => ([0x1a]);
+    (LD A, B)           => ([0x78]);
     (LD A, ($x:expr))   => ([0x3a, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (LD A, $x:expr)     => ([0x3e, $x]);
     (LD B, A)           => ([0x47]);
