@@ -152,6 +152,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x7d => { ctx.exec_ld::<A, L>();        04 },
         0x7e => { ctx.exec_ld::<A, IND_HL>();   07 },
         0x7f => { ctx.exec_ld::<A, A>();        04 },
+        0x80 => { ctx.exec_add8::<A, B>();      04 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -161,6 +162,17 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
 /********************************************************/
 
 trait Execute : Context + Sized {
+    fn exec_add8<D: Src8 + Dest8, S: Src8>(&mut self) {
+        let (a, a_size) = D::read_arg(self);
+        let (b, b_size) = S::read_arg(self);
+
+        let mut flags = 0;
+        let c = self.alu().add8_with_flags(a, b, &mut flags);
+        D::write_arg(self, c);
+        self.regs_mut().inc_pc(1 + a_size + b_size);
+        self.regs_mut().set_flags(flags);
+    }
+
     fn exec_add16<D: Src16 + Dest16, S: Src16>(&mut self) {
         let (a, a_size) = D::read_arg(self);
         let (b, b_size) = S::read_arg(self);
@@ -876,6 +888,23 @@ mod test {
     /* 8-Bit Arithmetic group */
     /**************************/
 
+    macro_rules! test_add_a_r8 {
+        ($fname:ident, $srcname:ident, $srcset:ident) => {
+            #[test]
+            fn $fname() {
+                let mut test = ExecTest::for_inst(&inst!(ADD A, $srcname));
+                test.assert_behaves_like_add8(
+                    |a, b, cpu| {
+                        cpu.regs_mut().set_a(a);
+                        cpu.regs_mut().$srcset(b);
+                    },
+                    |cpu| cpu.regs().a(),
+                );
+            }
+        }
+    }
+
+    test_add_a_r8!(test_exec_add_a_b, B, set_b);
     macro_rules! test_inc_reg8 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
             #[test]
@@ -1702,6 +1731,63 @@ mod test {
                 assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
                 assert_result!(HEX16, "result", case.expected, actual);
                 self.assert_all_flags_unaffected("DEC (16-bits)");
+            });
+        }
+
+        fn assert_behaves_like_add8<S, G>(&mut self, set: S, get: G)
+        where S: Fn(u8, u8, &mut CPU), G: Fn(&CPU) -> u8 {
+            struct Case {
+                name: &'static str,
+                a: u8,
+                b: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
+            }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    a: 0x21,
+                    b: 0x21,
+                    expected: 0x42,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Overflow + signed",
+                    a: 0x51,
+                    b: 0x51,
+                    expected: 0xa2,
+                    expected_flags: |f| flags_apply!(f, S:1 Z:0 H:0 PV:1 N:0 C:0),
+                },
+                Case {
+                    name: "Half carry",
+                    a: 0x29,
+                    b: 0x29,
+                    expected: 0x52,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:1 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Zero",
+                    a: 0,
+                    b: 0,
+                    expected: 0,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:1 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Carry",
+                    a: 0x90,
+                    b: 0x90,
+                    expected: 0x20,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:0 PV:1 N:0 C:1),
+                },
+            ], |case: &Case| {
+                set(case.a, case.b, &mut self.cpu);
+                self.exec_step();
+                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
+                let actual = get(&self.cpu);
+                let expected_flags = (case.expected_flags)(self.cpu.regs().flags());
+                let actual_flags = self.cpu.regs().flags();
+                assert_result!(HEX16, "dest", case.expected, actual);
+                assert_result!(BIN8, "flags", expected_flags, actual_flags);
             });
         }
 
