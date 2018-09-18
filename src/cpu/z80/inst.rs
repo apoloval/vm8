@@ -13,6 +13,7 @@ macro_rules! inst {
     (ADC A, C)          => ([0x89]);
     (ADC A, D)          => ([0x8a]);
     (ADC A, E)          => ([0x8b]);
+    (ADC A, H)          => ([0x8c]);
     (ADD A, A)          => ([0x87]);
     (ADD A, B)          => ([0x80]);
     (ADD A, C)          => ([0x81]);
