@@ -9,6 +9,7 @@ macro_rules! encode_literal {
 }
 
 macro_rules! inst {
+    (ADC A, A)          => ([0x8f]);
     (ADC A, B)          => ([0x88]);
     (ADC A, C)          => ([0x89]);
     (ADC A, D)          => ([0x8a]);
