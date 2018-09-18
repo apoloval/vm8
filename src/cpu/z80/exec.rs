@@ -162,6 +162,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
         0x87 => { ctx.exec_add8::<A, A>();      04 },
         0x88 => { ctx.exec_adc8::<A, B>();      04 },
         0x89 => { ctx.exec_adc8::<A, C>();      04 },
+        0x8a => { ctx.exec_adc8::<A, D>();      04 },
 
         0xc3 => { ctx.exec_jp::<L16>();         10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -963,6 +964,7 @@ mod test {
 
     test_adc_a_r8!(test_exec_adc_a_b, B, set_b);
     test_adc_a_r8!(test_exec_adc_a_c, C, set_c);
+    test_adc_a_r8!(test_exec_adc_a_d, D, set_d);
     macro_rules! test_inc_reg8 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
             #[test]

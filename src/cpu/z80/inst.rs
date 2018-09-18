@@ -11,6 +11,7 @@ macro_rules! encode_literal {
 macro_rules! inst {
     (ADC A, B)          => ([0x88]);
     (ADC A, C)          => ([0x89]);
+    (ADC A, D)          => ([0x8a]);
     (ADD A, A)          => ([0x87]);
     (ADD A, B)          => ([0x80]);
     (ADD A, C)          => ([0x81]);
