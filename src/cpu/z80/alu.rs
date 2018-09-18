@@ -25,8 +25,25 @@ impl ALU {
     }
 
     #[inline]
+    pub fn adc8(&self, a: u8, b: u8, c: u8) -> u8 {
+        if c > 0 {
+            ((a as u16) + (b as u16) + 1) as u8
+        } else {
+            self.add8(a, b)
+        }
+    }
+
+    #[inline]
     pub fn add8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
         let c = self.add8(a, b);
+        let index = Self::pre_flags_index(a, c);
+        *flags = self.pre_flags[index].add;
+        c
+    }
+
+    #[inline]
+    pub fn adc8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
+        let c = self.adc8(a, b, flag!(C, *flags));
         let index = Self::pre_flags_index(a, c);
         *flags = self.pre_flags[index].add;
         c
