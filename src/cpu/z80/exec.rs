@@ -652,20 +652,28 @@ mod test {
 
     use super::*;
 
+    macro_rules! decl_test {
+        ($fname:ident, $body:block) => {
+            #[test]
+            fn $fname() {
+                $body
+            }
+        };
+    }
+
     /********************/
     /* 8-Bit Load Group */
     /********************/
 
     macro_rules! test_ld_r8_r8 {
         ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(LD $dstname, $srcname));
                 test.assert_behaves_like_ld(0,
                     |val, cpu| cpu.regs_mut().$srcset(val),
                     |cpu| cpu.regs().$dstget(),
                 );
-            }
+            });
         }
     }
 
@@ -721,8 +729,7 @@ mod test {
 
     macro_rules! test_ld_indr16_r8 {
         ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $dstset:ident, $srcset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(LD ($dstname), $srcname));
                 test.assert_behaves_like_ld(0,
                     |val, cpu| {
@@ -734,7 +741,7 @@ mod test {
                         cpu.mem().read_from(addr)
                     },
                 );
-            }
+            });
         }
     }
 
@@ -750,8 +757,7 @@ mod test {
 
     macro_rules! test_ld_r8_indr16 {
         ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(LD $dstname, ($srcname)));
                 test.assert_behaves_like_ld(0,
                     |val, cpu| {
@@ -760,7 +766,7 @@ mod test {
                     },
                     |cpu| cpu.regs().$dstget(),
                 );
-            }
+            });
         };
     }
 
@@ -776,14 +782,13 @@ mod test {
 
     macro_rules! test_ld_indl16_r8 {
         ($fname:ident, $regname:ident, $regset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
                 test.assert_behaves_like_ld(2,
                     |val, cpu| cpu.regs_mut().$regset(val),
                     |cpu| cpu.mem().read_from(0x1234),
                 );
-            }
+            });
         }
     }
 
@@ -791,15 +796,13 @@ mod test {
 
     macro_rules! test_ld_r8_l8 {
         ($fname:ident, $regname:ident, $regget:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::new();
                 test.assert_behaves_like_ld(1,
                     |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
                     |cpu| cpu.regs().$regget(),
                 );
-            }
-
+            });
         }
     }
 
@@ -841,14 +844,13 @@ mod test {
 
     macro_rules! test_ld_r16_l16 {
         ($fname:ident, $regname:ident, $regget:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::new();
                 test.assert_behaves_like_ld(2,
                     |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
                     |cpu| cpu.regs().$regget(),
                 );
-            }
+            });
         }
     }
 
@@ -859,14 +861,13 @@ mod test {
 
     macro_rules! test_ld_indl16_r16 {
         ($fname:ident, $regname:ident, $regset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
                 test.assert_behaves_like_ld(2,
                     |val, cpu| cpu.regs_mut().$regset(val),
                     |cpu| cpu.mem().read_word_from::<LittleEndian>(0x1234),
                 );
-            }
+            });
         }
     }
 
@@ -874,14 +875,13 @@ mod test {
 
     macro_rules! test_ld_r16_indl16 {
         ($fname:ident, $regname:ident, $regget:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(LD $regname, (0x1234)));
                 test.assert_behaves_like_ld(2,
                     |val, cpu| cpu.mem_mut().write_word_to::<LittleEndian>(0x1234, val),
                     |cpu| cpu.regs().$regget(),
                 );
-            }
+            });
         }
     }
 
@@ -916,8 +916,7 @@ mod test {
 
     macro_rules! test_add_a_r8 {
         ($fname:ident, $srcname:ident, $srcset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(ADD A, $srcname));
                 test.assert_behaves_like_add8(
                     |a, b, cpu| {
@@ -926,7 +925,7 @@ mod test {
                     },
                     |cpu| cpu.regs().a(),
                 );
-            }
+            });
         }
     }
 
@@ -953,8 +952,7 @@ mod test {
 
     macro_rules! test_adc_a_r8 {
         ($fname:ident, $srcname:ident, $srcset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(ADC A, $srcname));
                 test.assert_behaves_like_adc8(
                     |a, b, cpu| {
@@ -963,7 +961,7 @@ mod test {
                     },
                     |cpu| cpu.regs().a(),
                 );
-            }
+            });
         }
     }
 
@@ -990,14 +988,13 @@ mod test {
 
     macro_rules! test_inc_reg8 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(INC $regname));
                 test.assert_behaves_like_inc8(
                     |v, cpu| cpu.regs_mut().$regset(v),
                     |cpu| cpu.regs().$regget(),
                 );
-            }
+            });
         }
     }
 
@@ -1010,14 +1007,13 @@ mod test {
 
     macro_rules! test_dec_reg8 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(DEC $regname));
                 test.assert_behaves_like_dec8(
                     |v, cpu| cpu.regs_mut().$regset(v),
                     |cpu| cpu.regs().$regget(),
                 );
-            }
+            });
         }
     }
 
@@ -1185,14 +1181,13 @@ mod test {
 
     macro_rules! test_inc_reg16 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(INC $regname));
                 test.assert_behaves_like_inc16(
                     |v, cpu| cpu.regs_mut().$regset(v),
                     |cpu| cpu.regs().$regget(),
                 );
-            }
+            });
         }
     }
 
@@ -1203,14 +1198,13 @@ mod test {
 
     macro_rules! test_dec_reg16 {
         ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(DEC $regname));
                 test.assert_behaves_like_dec16(
                     |v, cpu| cpu.regs_mut().$regset(v),
                     |cpu| cpu.regs().$regget(),
                 );
-            }
+            });
         }
     }
 
@@ -1222,8 +1216,7 @@ mod test {
     macro_rules! test_add_reg16_reg16 {
         ($fname:ident, $dstname:ident, $srcname:ident,
          $dstget:ident, $dstset:ident, $srcset:ident) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 let mut test = ExecTest::for_inst(&inst!(ADD $dstname, $srcname));
                 test.asset_behaves_like_add16(
                     |a, b, cpu| {
@@ -1232,7 +1225,7 @@ mod test {
                     },
                     |cpu| cpu.regs().$dstget(),
                 );
-            }
+            });
         }
     }
 
@@ -1548,8 +1541,7 @@ mod test {
 
     macro_rules! test_jr_cond_l8 {
         ($fname:ident, $condname:ident, $flagget:ident, $met:expr, $unmet:expr) => {
-            #[test]
-            fn $fname() {
+            decl_test!($fname, {
                 struct Case {
                     name: &'static str,
                     dest: i8,
@@ -1589,7 +1581,7 @@ mod test {
 
                     test.assert_all_flags_unaffected("JR");
                 });
-            }
+            });
         }
     }
 
