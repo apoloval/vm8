@@ -646,11 +646,38 @@ mod test {
     use std::io::Write;
 
     use rand;
-    use rand::prelude::*;
 
     use cpu::z80;
 
     use super::*;
+
+    macro_rules! cpu {
+        () => {
+            {
+                let prev_flags = u8::sample() & 0b11010111; // Do not set F5 and F3
+                let mem = z80::MemoryBank::new();
+                let mut cpu = z80::CPU::new(z80::Options::default(), mem);
+                cpu.regs_mut().set_flags(prev_flags);
+                cpu
+            }
+        };
+        ($inst:expr) => {
+            {
+                let mut cpu = cpu!();
+                Write::write(cpu.mem_mut(), $inst).unwrap();
+                cpu
+            }
+        };
+    }
+
+    macro_rules! exec_step {
+        ($cpu:expr) => (
+            {
+                $cpu.regs_mut().set_pc(0x0000);
+                exec_step($cpu);
+            }
+        )
+    }
 
     macro_rules! decl_test {
         ($fname:ident, $body:block) => {
@@ -659,184 +686,235 @@ mod test {
                 $body
             }
         };
+        ($fname:ident, $cpu:expr, $body:expr) => {
+            #[test]
+            fn $fname() {
+                let mut cpu = $cpu;
+                $body(&mut cpu)
+            }
+        };
     }
+
+    // Produces a setter function that writes the value to the given 8-bits operand
+    macro_rules! setter8 {
+        (A) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_a(val));
+        (B) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_b(val));
+        (C) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_c(val));
+        (D) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_d(val));
+        (E) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_e(val));
+        (H) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_h(val));
+        (L) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_l(val));
+        ($a:expr) => (|_, _: &mut CPU| {});
+    }
+
+    // Produces a setter function that writes the value to the given 16-bits operand
+    macro_rules! setter16 {
+        (BC) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_bc(val));
+        (DE) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_de(val));
+        (HL) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_hl(val));
+        ($a:expr) => (|_, _: &mut CPU| {});
+    }
+
+    // Produces a setup function to prepare the 8-bits destination
+    macro_rules! setup_dst8 {
+        (($a:tt)) => (|_, cpu: &mut CPU| { setter16!($a)(0x1234, cpu); });
+        ($a:tt) => (|_, _: &mut CPU| {});
+    }
+
+    // Produces a setup function to prepare the 8-bits source
+    macro_rules! setup_src8 {
+        (inst => $a:expr) => (|val: u8, cpu: &mut CPU| cpu.mem_mut().write(&$a(val)).unwrap());
+        (($a:tt)) => (|val, cpu: &mut CPU| { 
+            cpu.mem_mut().write_to(0x1234, val); 
+            setter16!($a)(0x1234, cpu);
+        });
+        ($a:tt) => (setter8!($a));
+    }
+
+    // Produces a setup function that combines different setup functions
+    macro_rules! setup8 {
+        ($( $a:expr ),+) => (|val, cpu: &mut CPU| {
+            $( $a(val, cpu) );+
+        })
+    }
+
+    // Produces a getter function that returns the value of the given 8-bits operand
+    macro_rules! getter8 {
+        (A) => (|cpu: &CPU| cpu.regs().a());
+        (B) => (|cpu: &CPU| cpu.regs().b());
+        (C) => (|cpu: &CPU| cpu.regs().c());
+        (D) => (|cpu: &CPU| cpu.regs().d());
+        (E) => (|cpu: &CPU| cpu.regs().e());
+        (H) => (|cpu: &CPU| cpu.regs().h());
+        (L) => (|cpu: &CPU| cpu.regs().l());
+        (($a:tt)) => (|cpu: &CPU| cpu.mem().read_from(getter16!($a)(cpu)));
+        ($a:tt) => (|_: &CPU| $a);
+    }
+
+    // Produces a getter function that returns the value of the given 16-bits operand
+    macro_rules! getter16 {
+        (BC) => (|cpu: &CPU| cpu.regs().bc());
+        (DE) => (|cpu: &CPU| cpu.regs().de());
+        (HL) => (|cpu: &CPU| cpu.regs().hl());
+        (($a:tt)) => (|cpu: &CPU| cpu.mem().read_word_from::<LittleEndian>(getter16!($a)(cpu)));
+        ($a:tt) => (|_: &CPU| $a);
+    }
+
+    macro_rules! random_src {
+        ($type:ty, $cpu:expr, $srcset:expr) => ({
+            let input = <$type>::sample();
+            $srcset(input, $cpu);
+            input
+        })
+    }
+
+    macro_rules! assert_flags {
+        (unaffected, $cpu:expr, $body:block) => ({
+            let expected = $cpu.regs().flags();
+            $body;
+            let actual = $cpu.regs().flags();
+            assert_result!(BIN8, "flags", expected, actual);
+        })
+    }
+
+    macro_rules! assert_program_counter {
+        ($cpu:expr, $expected:expr) => ({
+            let actual = $cpu.regs().pc();
+            assert_result!(HEX16, "program counter", $expected, actual);
+        });
+    }
+
+    macro_rules! assert_dest {
+        ($type:ty, $cpu:expr, $dstget:expr, $expected:expr) => ({
+            let actual = $dstget($cpu);
+            assert_result!(HEX16, "dest", $expected, actual);
+        });
+    }
+
+    macro_rules! assert_behaves_like {
+        (LOAD, $type:ty, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            let input = random_src!($type, $cpu, $srcset);
+            assert_flags!(unaffected, $cpu, {
+                exec_step!($cpu);
+                assert_program_counter!($cpu, $pcinc);
+                assert_dest!($type, $cpu, $dstget, input);
+            });
+        };
+        (LOAD8, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            assert_behaves_like!(LOAD, u8, $pcinc, $cpu, $srcset, $dstget);
+        };
+    }    
 
     /********************/
     /* 8-Bit Load Group */
     /********************/
 
-    macro_rules! test_ld_r8_r8 {
-        ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(LD $dstname, $srcname));
-                test.assert_behaves_like_ld(0,
-                    |val, cpu| cpu.regs_mut().$srcset(val),
-                    |cpu| cpu.regs().$dstget(),
+    macro_rules! test_exec_ld {
+        ($fname:ident, $pcinc:expr, $dstname:tt, *) => {
+            decl_test!($fname, cpu!(), |cpu: &mut CPU| {
+                assert_behaves_like!(LOAD8, $pcinc, cpu,
+                    setup8!(
+                        setup_dst8!($dstname), 
+                        setup_src8!(inst => |val| inst!(LD $dstname, val))
+                    ),
+                    getter8!($dstname)
                 );
             });
-        }
-    }
-
-    test_ld_r8_r8!(test_exec_ld_a_a, A, A, a, set_a);
-    test_ld_r8_r8!(test_exec_ld_a_b, A, B, a, set_b);
-    test_ld_r8_r8!(test_exec_ld_a_c, A, C, a, set_c);
-    test_ld_r8_r8!(test_exec_ld_a_d, A, D, a, set_d);
-    test_ld_r8_r8!(test_exec_ld_a_e, A, E, a, set_e);
-    test_ld_r8_r8!(test_exec_ld_a_h, A, H, a, set_h);
-    test_ld_r8_r8!(test_exec_ld_a_l, A, L, a, set_l);
-    test_ld_r8_r8!(test_exec_ld_b_a, B, A, b, set_a);
-    test_ld_r8_r8!(test_exec_ld_b_b, B, B, b, set_b);
-    test_ld_r8_r8!(test_exec_ld_b_c, B, C, b, set_c);
-    test_ld_r8_r8!(test_exec_ld_b_d, B, D, b, set_d);
-    test_ld_r8_r8!(test_exec_ld_b_e, B, E, b, set_e);
-    test_ld_r8_r8!(test_exec_ld_b_h, B, H, b, set_h);
-    test_ld_r8_r8!(test_exec_ld_b_l, B, L, b, set_l);
-    test_ld_r8_r8!(test_exec_ld_c_a, C, A, c, set_a);
-    test_ld_r8_r8!(test_exec_ld_c_b, C, B, c, set_b);
-    test_ld_r8_r8!(test_exec_ld_c_c, C, C, c, set_c);
-    test_ld_r8_r8!(test_exec_ld_c_d, C, D, c, set_d);
-    test_ld_r8_r8!(test_exec_ld_c_e, C, E, c, set_e);
-    test_ld_r8_r8!(test_exec_ld_c_h, C, H, c, set_h);
-    test_ld_r8_r8!(test_exec_ld_c_l, C, L, c, set_l);
-    test_ld_r8_r8!(test_exec_ld_d_a, D, A, d, set_a);
-    test_ld_r8_r8!(test_exec_ld_d_b, D, B, d, set_b);
-    test_ld_r8_r8!(test_exec_ld_d_c, D, C, d, set_c);
-    test_ld_r8_r8!(test_exec_ld_d_d, D, D, d, set_d);
-    test_ld_r8_r8!(test_exec_ld_d_e, D, E, d, set_e);
-    test_ld_r8_r8!(test_exec_ld_d_h, D, H, d, set_h);
-    test_ld_r8_r8!(test_exec_ld_d_l, D, L, d, set_l);
-    test_ld_r8_r8!(test_exec_ld_e_a, E, A, e, set_a);
-    test_ld_r8_r8!(test_exec_ld_e_b, E, B, e, set_b);
-    test_ld_r8_r8!(test_exec_ld_e_c, E, C, e, set_c);
-    test_ld_r8_r8!(test_exec_ld_e_d, E, D, e, set_d);
-    test_ld_r8_r8!(test_exec_ld_e_e, E, E, e, set_e);
-    test_ld_r8_r8!(test_exec_ld_e_h, E, H, e, set_h);
-    test_ld_r8_r8!(test_exec_ld_e_l, E, L, e, set_l);
-    test_ld_r8_r8!(test_exec_ld_h_a, H, A, h, set_a);
-    test_ld_r8_r8!(test_exec_ld_h_b, H, B, h, set_b);
-    test_ld_r8_r8!(test_exec_ld_h_c, H, C, h, set_c);
-    test_ld_r8_r8!(test_exec_ld_h_d, H, D, h, set_d);
-    test_ld_r8_r8!(test_exec_ld_h_e, H, E, h, set_e);
-    test_ld_r8_r8!(test_exec_ld_h_h, H, H, h, set_h);
-    test_ld_r8_r8!(test_exec_ld_h_l, H, L, h, set_l);
-    test_ld_r8_r8!(test_exec_ld_l_a, L, A, l, set_a);
-    test_ld_r8_r8!(test_exec_ld_l_b, L, B, l, set_b);
-    test_ld_r8_r8!(test_exec_ld_l_c, L, C, l, set_c);
-    test_ld_r8_r8!(test_exec_ld_l_d, L, D, l, set_d);
-    test_ld_r8_r8!(test_exec_ld_l_e, L, E, l, set_e);
-    test_ld_r8_r8!(test_exec_ld_l_h, L, H, l, set_h);
-    test_ld_r8_r8!(test_exec_ld_l_l, L, L, l, set_l);
-
-    macro_rules! test_ld_indr16_r8 {
-        ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $dstset:ident, $srcset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(LD ($dstname), $srcname));
-                test.assert_behaves_like_ld(0,
-                    |val, cpu| {
-                        cpu.regs_mut().$dstset(0x1234);
-                        cpu.regs_mut().$srcset(val);
-                    },
-                    |cpu| {
-                        let addr = cpu.regs().$dstget();
-                        cpu.mem().read_from(addr)
-                    },
-                );
-            });
-        }
-    }
-
-    test_ld_indr16_r8!(test_exec_ld_indbc_a, BC, A, bc, set_bc, set_a);
-    test_ld_indr16_r8!(test_exec_ld_indde_a, DE, A, de, set_de, set_a);
-    test_ld_indr16_r8!(test_exec_ld_indhl_a, HL, A, hl, set_hl, set_a);
-    test_ld_indr16_r8!(test_exec_ld_indhl_b, HL, B, hl, set_hl, set_b);
-    test_ld_indr16_r8!(test_exec_ld_indhl_c, HL, C, hl, set_hl, set_c);
-    test_ld_indr16_r8!(test_exec_ld_indhl_d, HL, D, hl, set_hl, set_d);
-    test_ld_indr16_r8!(test_exec_ld_indhl_e, HL, E, hl, set_hl, set_e);
-    test_ld_indr16_r8!(test_exec_ld_indhl_h, HL, H, hl, set_hl, set_h);
-    test_ld_indr16_r8!(test_exec_ld_indhl_l, HL, L, hl, set_hl, set_l);
-
-    macro_rules! test_ld_r8_indr16 {
-        ($fname:ident, $dstname:ident, $srcname:ident, $dstget:ident, $srcset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(LD $dstname, ($srcname)));
-                test.assert_behaves_like_ld(0,
-                    |val, cpu| {
-                        cpu.mem_mut().write_to(0x1234, val);
-                        cpu.regs_mut().$srcset(0x1234);
-                    },
-                    |cpu| cpu.regs().$dstget(),
+        };
+        ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
+            decl_test!($fname, cpu!(&inst!(LD $dstname, $srcname)), |cpu: &mut CPU| {
+                assert_behaves_like!(LOAD8, $pcinc, cpu,
+                    setup8!(setup_dst8!($dstname), setup_src8!($srcname)),
+                    getter8!($dstname)
                 );
             });
         };
     }
 
-    test_ld_r8_indr16!(test_exec_ld_a_indbc, A, BC, a, set_bc);
-    test_ld_r8_indr16!(test_exec_ld_a_indde, A, DE, a, set_de);
-    test_ld_r8_indr16!(test_exec_ld_a_indhl, A, HL, a, set_hl);
-    test_ld_r8_indr16!(test_exec_ld_b_indhl, B, HL, b, set_hl);
-    test_ld_r8_indr16!(test_exec_ld_c_indhl, C, HL, c, set_hl);
-    test_ld_r8_indr16!(test_exec_ld_d_indhl, D, HL, d, set_hl);
-    test_ld_r8_indr16!(test_exec_ld_e_indhl, E, HL, e, set_hl);
-    test_ld_r8_indr16!(test_exec_ld_h_indhl, H, HL, h, set_hl);
-    test_ld_r8_indr16!(test_exec_ld_l_indhl, L, HL, l, set_hl);
+    test_exec_ld!(test_exec_ld_a_a, 1, A, A);
+    test_exec_ld!(test_exec_ld_a_b, 1, A, B);
+    test_exec_ld!(test_exec_ld_a_c, 1, A, C);
+    test_exec_ld!(test_exec_ld_a_d, 1, A, D);
+    test_exec_ld!(test_exec_ld_a_e, 1, A, E);
+    test_exec_ld!(test_exec_ld_a_h, 1, A, H);
+    test_exec_ld!(test_exec_ld_a_l, 1, A, L);
+    test_exec_ld!(test_exec_ld_b_a, 1, B, A);
+    test_exec_ld!(test_exec_ld_b_b, 1, B, B);
+    test_exec_ld!(test_exec_ld_b_c, 1, B, C);
+    test_exec_ld!(test_exec_ld_b_d, 1, B, D);
+    test_exec_ld!(test_exec_ld_b_e, 1, B, E);
+    test_exec_ld!(test_exec_ld_b_h, 1, B, H);
+    test_exec_ld!(test_exec_ld_b_l, 1, B, L);
+    test_exec_ld!(test_exec_ld_c_a, 1, C, A);
+    test_exec_ld!(test_exec_ld_c_b, 1, C, B);
+    test_exec_ld!(test_exec_ld_c_c, 1, C, C);
+    test_exec_ld!(test_exec_ld_c_d, 1, C, D);
+    test_exec_ld!(test_exec_ld_c_e, 1, C, E);
+    test_exec_ld!(test_exec_ld_c_h, 1, C, H);
+    test_exec_ld!(test_exec_ld_c_l, 1, C, L);
+    test_exec_ld!(test_exec_ld_d_a, 1, D, A);
+    test_exec_ld!(test_exec_ld_d_b, 1, D, B);
+    test_exec_ld!(test_exec_ld_d_c, 1, D, C);
+    test_exec_ld!(test_exec_ld_d_d, 1, D, D);
+    test_exec_ld!(test_exec_ld_d_e, 1, D, E);
+    test_exec_ld!(test_exec_ld_d_h, 1, D, H);
+    test_exec_ld!(test_exec_ld_d_l, 1, D, L);
+    test_exec_ld!(test_exec_ld_e_a, 1, E, A);
+    test_exec_ld!(test_exec_ld_e_b, 1, E, B);
+    test_exec_ld!(test_exec_ld_e_c, 1, E, C);
+    test_exec_ld!(test_exec_ld_e_d, 1, E, D);
+    test_exec_ld!(test_exec_ld_e_e, 1, E, E);
+    test_exec_ld!(test_exec_ld_e_h, 1, E, H);
+    test_exec_ld!(test_exec_ld_e_l, 1, E, L);
+    test_exec_ld!(test_exec_ld_h_a, 1, H, A);
+    test_exec_ld!(test_exec_ld_h_b, 1, H, B);
+    test_exec_ld!(test_exec_ld_h_c, 1, H, C);
+    test_exec_ld!(test_exec_ld_h_d, 1, H, D);
+    test_exec_ld!(test_exec_ld_h_e, 1, H, E);
+    test_exec_ld!(test_exec_ld_h_h, 1, H, H);
+    test_exec_ld!(test_exec_ld_h_l, 1, H, L);
+    test_exec_ld!(test_exec_ld_l_a, 1, L, A);
+    test_exec_ld!(test_exec_ld_l_b, 1, L, B);
+    test_exec_ld!(test_exec_ld_l_c, 1, L, C);
+    test_exec_ld!(test_exec_ld_l_d, 1, L, D);
+    test_exec_ld!(test_exec_ld_l_e, 1, L, E);
+    test_exec_ld!(test_exec_ld_l_h, 1, L, H);
+    test_exec_ld!(test_exec_ld_l_l, 1, L, L);
 
-    macro_rules! test_ld_indl16_r8 {
-        ($fname:ident, $regname:ident, $regset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
-                test.assert_behaves_like_ld(2,
-                    |val, cpu| cpu.regs_mut().$regset(val),
-                    |cpu| cpu.mem().read_from(0x1234),
-                );
-            });
-        }
-    }
+    test_exec_ld!(test_exec_ld_indbc_a, 1, (BC), A);
+    test_exec_ld!(test_exec_ld_indde_a, 1, (DE), A);
+    test_exec_ld!(test_exec_ld_indhl_a, 1, (HL), A);
+    test_exec_ld!(test_exec_ld_indhl_b, 1, (HL), B);
+    test_exec_ld!(test_exec_ld_indhl_c, 1, (HL), C);
+    test_exec_ld!(test_exec_ld_indhl_d, 1, (HL), D);
+    test_exec_ld!(test_exec_ld_indhl_e, 1, (HL), E);
+    test_exec_ld!(test_exec_ld_indhl_h, 1, (HL), H);
+    test_exec_ld!(test_exec_ld_indhl_l, 1, (HL), L);
 
-    test_ld_indl16_r8!(test_exec_ld_indl16_a, A, set_a);
+    test_exec_ld!(test_exec_ld_a_indbc, 1, A, (BC));
+    test_exec_ld!(test_exec_ld_a_indde, 1, A, (DE));
+    test_exec_ld!(test_exec_ld_a_indhl, 1, A, (HL));
+    test_exec_ld!(test_exec_ld_b_indhl, 1, B, (HL));
+    test_exec_ld!(test_exec_ld_c_indhl, 1, C, (HL));
+    test_exec_ld!(test_exec_ld_d_indhl, 1, D, (HL));
+    test_exec_ld!(test_exec_ld_e_indhl, 1, E, (HL));
+    test_exec_ld!(test_exec_ld_h_indhl, 1, H, (HL));
+    test_exec_ld!(test_exec_ld_l_indhl, 1, L, (HL));
 
-    macro_rules! test_ld_r8_l8 {
-        ($fname:ident, $regname:ident, $regget:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::new();
-                test.assert_behaves_like_ld(1,
-                    |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
-                    |cpu| cpu.regs().$regget(),
-                );
-            });
-        }
-    }
+    test_exec_ld!(test_exec_ld_indl16_a, 3, (0x1234), A);
 
-    test_ld_r8_l8!(test_exec_ld_a_l8, A, a);
-    test_ld_r8_l8!(test_exec_ld_b_l8, B, b);
-    test_ld_r8_l8!(test_exec_ld_c_l8, C, c);
-    test_ld_r8_l8!(test_exec_ld_d_l8, D, d);
-    test_ld_r8_l8!(test_exec_ld_e_l8, E, e);
-    test_ld_r8_l8!(test_exec_ld_h_l8, H, h);
-    test_ld_r8_l8!(test_exec_ld_l_l8, L, l);
+    test_exec_ld!(test_exec_ld_a_l8, 2, A, *);
+    test_exec_ld!(test_exec_ld_b_l8, 2, B, *);
+    test_exec_ld!(test_exec_ld_c_l8, 2, C, *);
+    test_exec_ld!(test_exec_ld_d_l8, 2, D, *);
+    test_exec_ld!(test_exec_ld_e_l8, 2, E, *);
+    test_exec_ld!(test_exec_ld_h_l8, 2, H, *);
+    test_exec_ld!(test_exec_ld_l_l8, 2, L, *);
 
-    #[test]
-    fn test_ld_indhl_l8() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(1,
-            |val, cpu| { 
-                cpu.regs_mut().set_hl(0x1234);
-                Write::write(cpu.mem_mut(), &inst!(LD (HL), val)).unwrap(); 
-            },
-            |cpu| cpu.mem().read_from(0x1234),
-        );
-    }
+    test_exec_ld!(test_exec_ld_indhl_l8, 2, (HL), *);
 
-    #[test]
-    fn test_ld_a_indl16() {
-        let mut test = ExecTest::new();
-        test.assert_behaves_like_ld(2,
-            |val, cpu| { 
-                cpu.mem_mut().write_to(0x1234, val);
-                Write::write(cpu.mem_mut(), &inst!(LD A, (0x1234))).unwrap(); 
-            },
-            |cpu| cpu.regs().a(),
-        );
-    }
+    test_exec_ld!(test_ld_a_indl16, 3, A, (0x1234));
+        
 
     /*********************/
     /* 16-Bit Load Group */
