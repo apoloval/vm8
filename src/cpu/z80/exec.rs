@@ -716,7 +716,7 @@ mod test {
     }
 
     // Produces a setup function to prepare the 8-bits destination
-    macro_rules! setup_dst8 {
+    macro_rules! setup_dst {
         (($a:tt)) => (|_, cpu: &mut CPU| { setter16!($a)(0x1234, cpu); });
         ($a:tt) => (|_, _: &mut CPU| {});
     }
@@ -724,15 +724,29 @@ mod test {
     // Produces a setup function to prepare the 8-bits source
     macro_rules! setup_src8 {
         (inst => $a:expr) => (|val: u8, cpu: &mut CPU| cpu.mem_mut().write(&$a(val)).unwrap());
-        (($a:tt)) => (|val, cpu: &mut CPU| { 
+        (($a:tt)) => (|val: u8, cpu: &mut CPU| { 
             cpu.mem_mut().write_to(0x1234, val); 
             setter16!($a)(0x1234, cpu);
         });
         ($a:tt) => (setter8!($a));
     }
 
+    // Produces a setup function to prepare the 16-bits source
+    macro_rules! setup_src16 {
+        (($a:tt)) => (|val: u16, cpu: &mut CPU| { 
+            cpu.mem_mut().write_word_to::<LittleEndian>(0x1234, val);
+            setter16!($a)(0x1234, cpu);
+        });
+        ($a:tt) => (setter16!($a));
+    }
+
+    // Produces a setup function to prepare the instruction
+    macro_rules! setup_inst {
+        ($a:expr) => (|val: u16, cpu: &mut CPU| cpu.mem_mut().write(&$a(val)).unwrap());
+    }
+
     // Produces a setup function that combines different setup functions
-    macro_rules! setup8 {
+    macro_rules! setup {
         ($( $a:expr ),+) => (|val, cpu: &mut CPU| {
             $( $a(val, cpu) );+
         })
@@ -756,6 +770,7 @@ mod test {
         (BC) => (|cpu: &CPU| cpu.regs().bc());
         (DE) => (|cpu: &CPU| cpu.regs().de());
         (HL) => (|cpu: &CPU| cpu.regs().hl());
+        (SP) => (|cpu: &CPU| cpu.regs().sp());
         (($a:tt)) => (|cpu: &CPU| cpu.mem().read_word_from::<LittleEndian>(getter16!($a)(cpu)));
         ($a:tt) => (|_: &CPU| $a);
     }
@@ -791,8 +806,8 @@ mod test {
         });
     }
 
-    macro_rules! assert_behaves_like {
-        (LOAD, $type:ty, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+    macro_rules! assert_behaves_like_load {
+        ($type:ty, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
             let input = random_src!($type, $cpu, $srcset);
             assert_flags!(unaffected, $cpu, {
                 exec_step!($cpu);
@@ -800,21 +815,24 @@ mod test {
                 assert_dest!($type, $cpu, $dstget, input);
             });
         };
-        (LOAD8, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
-            assert_behaves_like!(LOAD, u8, $pcinc, $cpu, $srcset, $dstget);
-        };
     }    
 
     /********************/
     /* 8-Bit Load Group */
     /********************/
 
-    macro_rules! test_exec_ld {
+    macro_rules! assert_behaves_like_load8 {
+        ($pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            assert_behaves_like_load!(u8, $pcinc, $cpu, $srcset, $dstget);
+        };
+    }    
+
+    macro_rules! test_exec_ld8 {
         ($fname:ident, $pcinc:expr, $dstname:tt, *) => {
             decl_test!($fname, cpu!(), |cpu: &mut CPU| {
-                assert_behaves_like!(LOAD8, $pcinc, cpu,
-                    setup8!(
-                        setup_dst8!($dstname), 
+                assert_behaves_like_load8!($pcinc, cpu,
+                    setup!(
+                        setup_dst!($dstname), 
                         setup_src8!(inst => |val| inst!(LD $dstname, val))
                     ),
                     getter8!($dstname)
@@ -823,147 +841,147 @@ mod test {
         };
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
             decl_test!($fname, cpu!(&inst!(LD $dstname, $srcname)), |cpu: &mut CPU| {
-                assert_behaves_like!(LOAD8, $pcinc, cpu,
-                    setup8!(setup_dst8!($dstname), setup_src8!($srcname)),
+                assert_behaves_like_load8!($pcinc, cpu,
+                    setup!(setup_dst!($dstname), setup_src8!($srcname)),
                     getter8!($dstname)
                 );
             });
         };
     }
 
-    test_exec_ld!(test_exec_ld_a_a, 1, A, A);
-    test_exec_ld!(test_exec_ld_a_b, 1, A, B);
-    test_exec_ld!(test_exec_ld_a_c, 1, A, C);
-    test_exec_ld!(test_exec_ld_a_d, 1, A, D);
-    test_exec_ld!(test_exec_ld_a_e, 1, A, E);
-    test_exec_ld!(test_exec_ld_a_h, 1, A, H);
-    test_exec_ld!(test_exec_ld_a_l, 1, A, L);
-    test_exec_ld!(test_exec_ld_b_a, 1, B, A);
-    test_exec_ld!(test_exec_ld_b_b, 1, B, B);
-    test_exec_ld!(test_exec_ld_b_c, 1, B, C);
-    test_exec_ld!(test_exec_ld_b_d, 1, B, D);
-    test_exec_ld!(test_exec_ld_b_e, 1, B, E);
-    test_exec_ld!(test_exec_ld_b_h, 1, B, H);
-    test_exec_ld!(test_exec_ld_b_l, 1, B, L);
-    test_exec_ld!(test_exec_ld_c_a, 1, C, A);
-    test_exec_ld!(test_exec_ld_c_b, 1, C, B);
-    test_exec_ld!(test_exec_ld_c_c, 1, C, C);
-    test_exec_ld!(test_exec_ld_c_d, 1, C, D);
-    test_exec_ld!(test_exec_ld_c_e, 1, C, E);
-    test_exec_ld!(test_exec_ld_c_h, 1, C, H);
-    test_exec_ld!(test_exec_ld_c_l, 1, C, L);
-    test_exec_ld!(test_exec_ld_d_a, 1, D, A);
-    test_exec_ld!(test_exec_ld_d_b, 1, D, B);
-    test_exec_ld!(test_exec_ld_d_c, 1, D, C);
-    test_exec_ld!(test_exec_ld_d_d, 1, D, D);
-    test_exec_ld!(test_exec_ld_d_e, 1, D, E);
-    test_exec_ld!(test_exec_ld_d_h, 1, D, H);
-    test_exec_ld!(test_exec_ld_d_l, 1, D, L);
-    test_exec_ld!(test_exec_ld_e_a, 1, E, A);
-    test_exec_ld!(test_exec_ld_e_b, 1, E, B);
-    test_exec_ld!(test_exec_ld_e_c, 1, E, C);
-    test_exec_ld!(test_exec_ld_e_d, 1, E, D);
-    test_exec_ld!(test_exec_ld_e_e, 1, E, E);
-    test_exec_ld!(test_exec_ld_e_h, 1, E, H);
-    test_exec_ld!(test_exec_ld_e_l, 1, E, L);
-    test_exec_ld!(test_exec_ld_h_a, 1, H, A);
-    test_exec_ld!(test_exec_ld_h_b, 1, H, B);
-    test_exec_ld!(test_exec_ld_h_c, 1, H, C);
-    test_exec_ld!(test_exec_ld_h_d, 1, H, D);
-    test_exec_ld!(test_exec_ld_h_e, 1, H, E);
-    test_exec_ld!(test_exec_ld_h_h, 1, H, H);
-    test_exec_ld!(test_exec_ld_h_l, 1, H, L);
-    test_exec_ld!(test_exec_ld_l_a, 1, L, A);
-    test_exec_ld!(test_exec_ld_l_b, 1, L, B);
-    test_exec_ld!(test_exec_ld_l_c, 1, L, C);
-    test_exec_ld!(test_exec_ld_l_d, 1, L, D);
-    test_exec_ld!(test_exec_ld_l_e, 1, L, E);
-    test_exec_ld!(test_exec_ld_l_h, 1, L, H);
-    test_exec_ld!(test_exec_ld_l_l, 1, L, L);
+    test_exec_ld8!(test_exec_ld8_a_a, 1, A, A);
+    test_exec_ld8!(test_exec_ld8_a_b, 1, A, B);
+    test_exec_ld8!(test_exec_ld8_a_c, 1, A, C);
+    test_exec_ld8!(test_exec_ld8_a_d, 1, A, D);
+    test_exec_ld8!(test_exec_ld8_a_e, 1, A, E);
+    test_exec_ld8!(test_exec_ld8_a_h, 1, A, H);
+    test_exec_ld8!(test_exec_ld8_a_l, 1, A, L);
+    test_exec_ld8!(test_exec_ld8_b_a, 1, B, A);
+    test_exec_ld8!(test_exec_ld8_b_b, 1, B, B);
+    test_exec_ld8!(test_exec_ld8_b_c, 1, B, C);
+    test_exec_ld8!(test_exec_ld8_b_d, 1, B, D);
+    test_exec_ld8!(test_exec_ld8_b_e, 1, B, E);
+    test_exec_ld8!(test_exec_ld8_b_h, 1, B, H);
+    test_exec_ld8!(test_exec_ld8_b_l, 1, B, L);
+    test_exec_ld8!(test_exec_ld8_c_a, 1, C, A);
+    test_exec_ld8!(test_exec_ld8_c_b, 1, C, B);
+    test_exec_ld8!(test_exec_ld8_c_c, 1, C, C);
+    test_exec_ld8!(test_exec_ld8_c_d, 1, C, D);
+    test_exec_ld8!(test_exec_ld8_c_e, 1, C, E);
+    test_exec_ld8!(test_exec_ld8_c_h, 1, C, H);
+    test_exec_ld8!(test_exec_ld8_c_l, 1, C, L);
+    test_exec_ld8!(test_exec_ld8_d_a, 1, D, A);
+    test_exec_ld8!(test_exec_ld8_d_b, 1, D, B);
+    test_exec_ld8!(test_exec_ld8_d_c, 1, D, C);
+    test_exec_ld8!(test_exec_ld8_d_d, 1, D, D);
+    test_exec_ld8!(test_exec_ld8_d_e, 1, D, E);
+    test_exec_ld8!(test_exec_ld8_d_h, 1, D, H);
+    test_exec_ld8!(test_exec_ld8_d_l, 1, D, L);
+    test_exec_ld8!(test_exec_ld8_e_a, 1, E, A);
+    test_exec_ld8!(test_exec_ld8_e_b, 1, E, B);
+    test_exec_ld8!(test_exec_ld8_e_c, 1, E, C);
+    test_exec_ld8!(test_exec_ld8_e_d, 1, E, D);
+    test_exec_ld8!(test_exec_ld8_e_e, 1, E, E);
+    test_exec_ld8!(test_exec_ld8_e_h, 1, E, H);
+    test_exec_ld8!(test_exec_ld8_e_l, 1, E, L);
+    test_exec_ld8!(test_exec_ld8_h_a, 1, H, A);
+    test_exec_ld8!(test_exec_ld8_h_b, 1, H, B);
+    test_exec_ld8!(test_exec_ld8_h_c, 1, H, C);
+    test_exec_ld8!(test_exec_ld8_h_d, 1, H, D);
+    test_exec_ld8!(test_exec_ld8_h_e, 1, H, E);
+    test_exec_ld8!(test_exec_ld8_h_h, 1, H, H);
+    test_exec_ld8!(test_exec_ld8_h_l, 1, H, L);
+    test_exec_ld8!(test_exec_ld8_l_a, 1, L, A);
+    test_exec_ld8!(test_exec_ld8_l_b, 1, L, B);
+    test_exec_ld8!(test_exec_ld8_l_c, 1, L, C);
+    test_exec_ld8!(test_exec_ld8_l_d, 1, L, D);
+    test_exec_ld8!(test_exec_ld8_l_e, 1, L, E);
+    test_exec_ld8!(test_exec_ld8_l_h, 1, L, H);
+    test_exec_ld8!(test_exec_ld8_l_l, 1, L, L);
 
-    test_exec_ld!(test_exec_ld_indbc_a, 1, (BC), A);
-    test_exec_ld!(test_exec_ld_indde_a, 1, (DE), A);
-    test_exec_ld!(test_exec_ld_indhl_a, 1, (HL), A);
-    test_exec_ld!(test_exec_ld_indhl_b, 1, (HL), B);
-    test_exec_ld!(test_exec_ld_indhl_c, 1, (HL), C);
-    test_exec_ld!(test_exec_ld_indhl_d, 1, (HL), D);
-    test_exec_ld!(test_exec_ld_indhl_e, 1, (HL), E);
-    test_exec_ld!(test_exec_ld_indhl_h, 1, (HL), H);
-    test_exec_ld!(test_exec_ld_indhl_l, 1, (HL), L);
+    test_exec_ld8!(test_exec_ld8_indbc_a, 1, (BC), A);
+    test_exec_ld8!(test_exec_ld8_indde_a, 1, (DE), A);
+    test_exec_ld8!(test_exec_ld8_indhl_a, 1, (HL), A);
+    test_exec_ld8!(test_exec_ld8_indhl_b, 1, (HL), B);
+    test_exec_ld8!(test_exec_ld8_indhl_c, 1, (HL), C);
+    test_exec_ld8!(test_exec_ld8_indhl_d, 1, (HL), D);
+    test_exec_ld8!(test_exec_ld8_indhl_e, 1, (HL), E);
+    test_exec_ld8!(test_exec_ld8_indhl_h, 1, (HL), H);
+    test_exec_ld8!(test_exec_ld8_indhl_l, 1, (HL), L);
 
-    test_exec_ld!(test_exec_ld_a_indbc, 1, A, (BC));
-    test_exec_ld!(test_exec_ld_a_indde, 1, A, (DE));
-    test_exec_ld!(test_exec_ld_a_indhl, 1, A, (HL));
-    test_exec_ld!(test_exec_ld_b_indhl, 1, B, (HL));
-    test_exec_ld!(test_exec_ld_c_indhl, 1, C, (HL));
-    test_exec_ld!(test_exec_ld_d_indhl, 1, D, (HL));
-    test_exec_ld!(test_exec_ld_e_indhl, 1, E, (HL));
-    test_exec_ld!(test_exec_ld_h_indhl, 1, H, (HL));
-    test_exec_ld!(test_exec_ld_l_indhl, 1, L, (HL));
+    test_exec_ld8!(test_exec_ld8_a_indbc, 1, A, (BC));
+    test_exec_ld8!(test_exec_ld8_a_indde, 1, A, (DE));
+    test_exec_ld8!(test_exec_ld8_a_indhl, 1, A, (HL));
+    test_exec_ld8!(test_exec_ld8_b_indhl, 1, B, (HL));
+    test_exec_ld8!(test_exec_ld8_c_indhl, 1, C, (HL));
+    test_exec_ld8!(test_exec_ld8_d_indhl, 1, D, (HL));
+    test_exec_ld8!(test_exec_ld8_e_indhl, 1, E, (HL));
+    test_exec_ld8!(test_exec_ld8_h_indhl, 1, H, (HL));
+    test_exec_ld8!(test_exec_ld8_l_indhl, 1, L, (HL));
 
-    test_exec_ld!(test_exec_ld_indl16_a, 3, (0x1234), A);
+    test_exec_ld8!(test_exec_ld8_indl16_a, 3, (0x1234), A);
 
-    test_exec_ld!(test_exec_ld_a_l8, 2, A, *);
-    test_exec_ld!(test_exec_ld_b_l8, 2, B, *);
-    test_exec_ld!(test_exec_ld_c_l8, 2, C, *);
-    test_exec_ld!(test_exec_ld_d_l8, 2, D, *);
-    test_exec_ld!(test_exec_ld_e_l8, 2, E, *);
-    test_exec_ld!(test_exec_ld_h_l8, 2, H, *);
-    test_exec_ld!(test_exec_ld_l_l8, 2, L, *);
+    test_exec_ld8!(test_exec_ld8_a_l8, 2, A, *);
+    test_exec_ld8!(test_exec_ld8_b_l8, 2, B, *);
+    test_exec_ld8!(test_exec_ld8_c_l8, 2, C, *);
+    test_exec_ld8!(test_exec_ld8_d_l8, 2, D, *);
+    test_exec_ld8!(test_exec_ld8_e_l8, 2, E, *);
+    test_exec_ld8!(test_exec_ld8_h_l8, 2, H, *);
+    test_exec_ld8!(test_exec_ld8_l_l8, 2, L, *);
 
-    test_exec_ld!(test_exec_ld_indhl_l8, 2, (HL), *);
+    test_exec_ld8!(test_exec_ld8_indhl_l8, 2, (HL), *);
 
-    test_exec_ld!(test_ld_a_indl16, 3, A, (0x1234));
+    test_exec_ld8!(test_ld_a_indl16, 3, A, (0x1234));
         
 
     /*********************/
     /* 16-Bit Load Group */
     /*********************/
 
-    macro_rules! test_ld_r16_l16 {
-        ($fname:ident, $regname:ident, $regget:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::new();
-                test.assert_behaves_like_ld(2,
-                    |val, cpu| { Write::write(cpu.mem_mut(), &inst!(LD $regname, val)).unwrap(); },
-                    |cpu| cpu.regs().$regget(),
+    macro_rules! assert_behaves_like_load16 {
+        ($pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            assert_behaves_like_load!(u16, $pcinc, $cpu, $srcset, $dstget);
+        };
+    }    
+
+    macro_rules! test_exec_ld16 {
+        ($fname:ident, $pcinc:expr, $dstname:tt, **) => {
+            decl_test!($fname, cpu!(), |cpu: &mut CPU| {
+                assert_behaves_like_load16!($pcinc, cpu,
+                    setup!(
+                        setup_dst!($dstname), 
+                        setup_inst!(|val| inst!(LD $dstname, val))
+                    ),
+                    getter16!($dstname)
                 );
             });
-        }
-    }
-
-    test_ld_r16_l16!(test_exec_ld_bc_l16, BC, bc);
-    test_ld_r16_l16!(test_exec_ld_de_l16, DE, de);
-    test_ld_r16_l16!(test_exec_ld_hl_l16, HL, hl);
-    test_ld_r16_l16!(test_exec_ld_sp_l16, SP, sp);
-
-    macro_rules! test_ld_indl16_r16 {
-        ($fname:ident, $regname:ident, $regset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(LD (0x1234), $regname));
-                test.assert_behaves_like_ld(2,
-                    |val, cpu| cpu.regs_mut().$regset(val),
-                    |cpu| cpu.mem().read_word_from::<LittleEndian>(0x1234),
+        };
+        ($fname:ident, $pcinc:expr, (**), $srcname:tt) => {
+            decl_test!($fname, cpu!(&inst!(LD (0x1234), $srcname)), |cpu: &mut CPU| {
+                assert_behaves_like_load16!($pcinc, cpu,
+                    setup_src16!($srcname),
+                    getter16!((0x1234))
                 );
             });
-        }
-    }
-
-    test_ld_indl16_r16!(test_exec_ld_indl16_hl, HL, set_hl);
-
-    macro_rules! test_ld_r16_indl16 {
-        ($fname:ident, $regname:ident, $regget:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(LD $regname, (0x1234)));
-                test.assert_behaves_like_ld(2,
-                    |val, cpu| cpu.mem_mut().write_word_to::<LittleEndian>(0x1234, val),
-                    |cpu| cpu.regs().$regget(),
+        };
+        ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
+            decl_test!($fname, cpu!(&inst!(LD $dstname, $srcname)), |cpu: &mut CPU| {
+                assert_behaves_like_load16!($pcinc, cpu,
+                    setup!(setup_dst!($dstname), setup_src16!($srcname)),
+                    getter16!($dstname)
                 );
             });
-        }
+        };
     }
 
-    test_ld_r16_indl16!(test_exec_ld_hl_indl16, HL, hl);
+    test_exec_ld16!(test_exec_ld16_bc_l16, 3, BC, **);
+    test_exec_ld16!(test_exec_ld16_de_l16, 3, DE, **);
+    test_exec_ld16!(test_exec_ld16_hl_l16, 3, HL, **);
+    test_exec_ld16!(test_exec_ld16_sp_l16, 3, SP, **);
+
+    test_exec_ld16!(test_exec_ld16_indl16_hl, 3, (**), HL);
+
+    test_exec_ld16!(test_exec_ld16_hl_indl16, 3, HL, **);
 
     /**********************************************/
     /* Exchange, Block Transfer, and Search Group */
