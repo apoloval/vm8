@@ -709,9 +709,11 @@ mod test {
 
     // Produces a setter function that writes the value to the given 16-bits operand
     macro_rules! setter16 {
+        (AF) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_af(val));
         (BC) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_bc(val));
         (DE) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_de(val));
         (HL) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_hl(val));
+        (AF_) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_af_(val));
         ($a:expr) => (|_, _: &mut CPU| {});
     }
 
@@ -767,10 +769,12 @@ mod test {
 
     // Produces a getter function that returns the value of the given 16-bits operand
     macro_rules! getter16 {
+        (AF) => (|cpu: &CPU| cpu.regs().af());
         (BC) => (|cpu: &CPU| cpu.regs().bc());
         (DE) => (|cpu: &CPU| cpu.regs().de());
         (HL) => (|cpu: &CPU| cpu.regs().hl());
         (SP) => (|cpu: &CPU| cpu.regs().sp());
+        (AF_) => (|cpu: &CPU| cpu.regs().af_());
         (($a:tt)) => (|cpu: &CPU| cpu.mem().read_word_from::<LittleEndian>(getter16!($a)(cpu)));
         ($a:tt) => (|_: &CPU| $a);
     }
@@ -780,6 +784,20 @@ mod test {
             let input = <$type>::sample();
             $srcset(input, $cpu);
             input
+        })
+    }
+
+    macro_rules! assert_r8 {
+        ($cpu:expr, $reg:ident, $expected:expr) => ({
+            let actual = getter8!($reg)($cpu);
+            assert_result!(HEX8, stringify!($reg), $expected, actual);
+        })
+    }
+
+    macro_rules! assert_r16 {
+        ($cpu:expr, $reg:ident, $expected:expr) => ({
+            let actual = getter16!($reg)($cpu);
+            assert_result!(HEX16, stringify!($reg), $expected, actual);
         })
     }
 
@@ -987,24 +1005,15 @@ mod test {
     /* Exchange, Block Transfer, and Search Group */
     /**********************************************/
 
-    #[test]
-    fn test_exec_exaf() {
-        let mut test = ExecTest::for_inst(&inst!(EX AF, AF_));
-        let input = 0x12;
-        let input_ = 0x34;
+    decl_test!(test_exec_exaf, cpu!(&inst!(EX AF, AF_)), |cpu: &mut CPU| {
+        let af = random_src!(u16, cpu, setter16!(AF));
+        let af_ = random_src!(u16, cpu, setter16!(AF_));
 
-        test.cpu.regs_mut().set_af(input);
-        test.cpu.regs_mut().set_af_(input_);
-        test.exec_step();
-
-        let expected = input_;
-        let expected_ = input;
-        let given = test.cpu.regs().af();
-        let given_ = test.cpu.regs().af_();
-        assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-        assert_result!(HEX8, "AF", expected, given);
-        assert_result!(HEX8, "AF'", expected_, given_);
-    }
+        exec_step!(cpu);
+        assert_program_counter!(cpu, 0x0001);
+        assert_r16!(cpu, AF, af_);
+        assert_r16!(cpu, AF_, af);
+    });
 
     /**************************/
     /* 8-Bit Arithmetic group */
