@@ -747,10 +747,26 @@ mod test {
         ($a:expr) => (|val: u16, cpu: &mut CPU| cpu.mem_mut().write(&$a(val)).unwrap());
     }
 
-    // Produces a setup function that combines different setup functions
-    macro_rules! setup {
+    // Produces a setup function that combines different setup functions for unary operations
+    macro_rules! setup_unary {
         ($( $a:expr ),+) => (|val, cpu: &mut CPU| {
             $( $a(val, cpu) );+
+        })
+    }
+
+    // Produces a setup function that combines different setup functions for binary operations
+    macro_rules! setup_binary {
+        ($a:expr, $b:expr) => (|a, b, cpu: &mut CPU| {
+            $a(a, cpu);
+            $b(b, cpu);
+        })
+    }
+
+    macro_rules! setup_flags {
+        ($cpu:expr, $( $flags:tt )*) => ({
+            let mut flags = $cpu.regs().flags();
+            flags = flags_apply!(flags, $( $flags )*);
+            $cpu.regs_mut().set_flags(flags);
         })
     }
 
@@ -787,6 +803,10 @@ mod test {
         })
     }
 
+    macro_rules! expected_flags {
+        ($($flags:tt)*) => (|f| flags_apply!(f, $( $flags )* ))
+    }
+
     macro_rules! assert_r8 {
         ($cpu:expr, $reg:ident, $expected:expr) => ({
             let actual = getter8!($reg)($cpu);
@@ -807,7 +827,14 @@ mod test {
             $body;
             let actual = $cpu.regs().flags();
             assert_result!(BIN8, "flags", expected, actual);
-        })
+        });
+        ($cpu:expr, $expected:expr, $body:block) => ({
+            let initial = $cpu.regs().flags();
+            $body;
+            let expected = $expected(initial);
+            let actual = $cpu.regs().flags();
+            assert_result!(BIN8, "flags", expected, actual);
+        });
     }
 
     macro_rules! assert_program_counter {
@@ -849,7 +876,7 @@ mod test {
         ($fname:ident, $pcinc:expr, $dstname:tt, *) => {
             decl_test!($fname, cpu!(), |cpu: &mut CPU| {
                 assert_behaves_like_load8!($pcinc, cpu,
-                    setup!(
+                    setup_unary!(
                         setup_dst!($dstname), 
                         setup_src8!(inst => |val| inst!(LD $dstname, val))
                     ),
@@ -860,7 +887,7 @@ mod test {
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
             decl_test!($fname, cpu!(&inst!(LD $dstname, $srcname)), |cpu: &mut CPU| {
                 assert_behaves_like_load8!($pcinc, cpu,
-                    setup!(setup_dst!($dstname), setup_src8!($srcname)),
+                    setup_unary!(setup_dst!($dstname), setup_src8!($srcname)),
                     getter8!($dstname)
                 );
             });
@@ -966,7 +993,7 @@ mod test {
         ($fname:ident, $pcinc:expr, $dstname:tt, **) => {
             decl_test!($fname, cpu!(), |cpu: &mut CPU| {
                 assert_behaves_like_load16!($pcinc, cpu,
-                    setup!(
+                    setup_unary!(
                         setup_dst!($dstname), 
                         setup_inst!(|val| inst!(LD $dstname, val))
                     ),
@@ -985,7 +1012,7 @@ mod test {
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
             decl_test!($fname, cpu!(&inst!(LD $dstname, $srcname)), |cpu: &mut CPU| {
                 assert_behaves_like_load16!($pcinc, cpu,
-                    setup!(setup_dst!($dstname), setup_src16!($srcname)),
+                    setup_unary!(setup_dst!($dstname), setup_src16!($srcname)),
                     getter16!($dstname)
                 );
             });
@@ -1019,140 +1046,302 @@ mod test {
     /* 8-Bit Arithmetic group */
     /**************************/
 
-    macro_rules! test_add_a_r8 {
-        ($fname:ident, $srcname:ident, $srcset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(ADD A, $srcname));
-                test.assert_behaves_like_add8(
-                    |a, b, cpu| {
-                        cpu.regs_mut().set_a(a);
-                        cpu.regs_mut().$srcset(b);
-                    },
-                    |cpu| cpu.regs().a(),
+    macro_rules! assert_behaves_like_add8 {
+        ($pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            struct Case {
+                name: &'static str,
+                input: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
+            }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x21, 
+                    expected: 0x42, 
+                    expected_flags: expected_flags!(S:0 Z:0 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Overflow + signed",
+                    input: 0x51,
+                    expected: 0xa2,
+                    expected_flags: expected_flags!(S:1 Z:0 H:0 PV:1 N:0 C:0),
+                },
+                Case {
+                    name: "Half carry",
+                    input: 0x29,
+                    expected: 0x52,
+                    expected_flags: expected_flags!(S:0 Z:0 H:1 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Zero",
+                    input: 0,
+                    expected: 0,
+                    expected_flags: expected_flags!(S:0 Z:1 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Carry",
+                    input: 0x90,
+                    expected: 0x20,
+                    expected_flags: expected_flags!(S:0 Z:0 H:0 PV:1 N:0 C:1),
+                },
+            ], |case: &Case| {
+                $srcset(case.input, case.input, $cpu);
+                assert_flags!($cpu, case.expected_flags, {
+                    exec_step!($cpu);
+                    assert_program_counter!($cpu, 0x0001);
+                    assert_dest!(u8, $cpu, $dstget, case.expected);
+                });
+            });
+        };
+    }
+
+    macro_rules! assert_behaves_like_adc8 {
+        ($pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            struct Case {
+                name: &'static str,
+                input: u8,
+                carry: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
+            }
+            table_test!(&[
+                Case {
+                    name: "Regular case, no prev carry",
+                    input: 0x21,
+                    carry: 0,
+                    expected: 0x42,
+                    expected_flags: expected_flags!(S:0 Z:0 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Regular case, prev carry",
+                    input: 0x21,
+                    carry: 1,
+                    expected: 0x43,
+                    expected_flags: expected_flags!(S:0 Z:0 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Overflow + signed",
+                    input: 0x51,
+                    carry: 0,
+                    expected: 0xa2,
+                    expected_flags: expected_flags!(S:1 Z:0 H:0 PV:1 N:0 C:0),
+                },
+                Case {
+                    name: "Half carry",
+                    input: 0x29,
+                    carry: 0,
+                    expected: 0x52,
+                    expected_flags: expected_flags!(S:0 Z:0 H:1 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Zero",
+                    input: 0,
+                    carry: 0,
+                    expected: 0,
+                    expected_flags: expected_flags!(S:0 Z:1 H:0 PV:0 N:0 C:0),
+                },
+                Case {
+                    name: "Carry",
+                    input: 0x90,
+                    carry: 0,
+                    expected: 0x20,
+                    expected_flags: expected_flags!(S:0 Z:0 H:0 PV:1 N:0 C:1),
+                },
+            ], |case: &Case| {
+                $srcset(case.input, case.input, $cpu);
+                setup_flags!($cpu, C:[case.carry == 1]);
+                assert_flags!($cpu, case.expected_flags, {
+                    exec_step!($cpu);
+                    assert_program_counter!($cpu, 0x0001);
+                    assert_dest!(u8, $cpu, $dstget, case.expected);
+                });
+            });
+        };
+    }
+
+    macro_rules! assert_behaves_like_inc8 {
+        ($pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            struct Case {
+                name: &'static str,
+                input: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
+            }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x01,
+                    expected: 0x02,
+                    expected_flags: expected_flags!(S:0 Z:0 H:0 PV:0 N:0),
+                },
+                Case {
+                    name: "Half-carry",
+                    input: 0x0f,
+                    expected: 0x10,
+                    expected_flags: expected_flags!(S:0 Z:0 H:1 PV:0 N:0),
+                },
+                Case {
+                    name: "Overflow",
+                    input: 0x7f,
+                    expected: 0x80,
+                    expected_flags: expected_flags!(S:1 Z:0 H:1 PV:1 N:0),
+                },
+                Case {
+                    name: "Carry",
+                    input: 0xff,
+                    expected: 0x00,
+                    expected_flags: expected_flags!(S:0 Z:1 H:1 PV:0 N:0),
+                },
+            ], |case: &Case| {
+                $srcset(case.input, $cpu);
+                assert_flags!($cpu, case.expected_flags, {
+                    exec_step!($cpu);
+                    assert_program_counter!($cpu, 0x0001);
+                    assert_dest!(u8, $cpu, $dstget, case.expected);
+                });
+            });
+        };
+    }
+
+    macro_rules! assert_behaves_like_dec8 {
+        ($pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
+            struct Case {
+                name: &'static str,
+                input: u8,
+                expected: u8,
+                expected_flags: fn(u8) -> u8,
+            }
+            table_test!(&[
+                Case {
+                    name: "Regular case",
+                    input: 0x02,
+                    expected: 0x01,
+                    expected_flags: |f| flags_apply!(f, S:0 Z:0 H:0 PV:0 N:1),
+                },
+                Case {
+                    name: "Half-carry",
+                    input: 0x10,
+                    expected: 0x0f,
+                    expected_flags: expected_flags!(S:0 Z:0 H:1 PV:0 N:1),
+                },
+                Case {
+                    name: "Overflow",
+                    input: 0x80,
+                    expected: 0x7f,
+                    expected_flags: expected_flags!(S:0 Z:0 H:1 PV:1 N:1),
+                },
+                Case {
+                    name: "Zero",
+                    input: 0x01,
+                    expected: 0x00,
+                    expected_flags: expected_flags!(S:0 Z:1 H:0 PV:0 N:1),
+                },
+                Case {
+                    name: "No carry",
+                    input: 0x00,
+                    expected: 0xff,
+                    expected_flags: expected_flags!(S:1 Z:0 H:1 PV:0 N:1),
+                },
+            ], |case: &Case| {
+                $srcset(case.input, $cpu);
+                assert_flags!($cpu, case.expected_flags, {
+                    exec_step!($cpu);
+                    assert_program_counter!($cpu, 0x0001);
+                    assert_dest!(u8, $cpu, $dstget, case.expected);
+                });
+            });
+        };
+    }
+
+    macro_rules! test_exec_add8 {
+        ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
+            decl_test!($fname, cpu!(&inst!(ADD $dstname, $srcname)), |cpu: &mut CPU| {
+                assert_behaves_like_add8!($pcinc, cpu,
+                    setup_binary!(
+                        setup_src8!($srcname), 
+                        setup_src8!($dstname)
+                    ),
+                    getter8!($dstname)
                 );
             });
-        }
+        };
     }
 
-    test_add_a_r8!(test_exec_add_a_a, A, set_a);
-    test_add_a_r8!(test_exec_add_a_b, B, set_b);
-    test_add_a_r8!(test_exec_add_a_c, C, set_c);
-    test_add_a_r8!(test_exec_add_a_d, D, set_d);
-    test_add_a_r8!(test_exec_add_a_e, E, set_e);
-    test_add_a_r8!(test_exec_add_a_h, H, set_h);
-    test_add_a_r8!(test_exec_add_a_l, L, set_l);
-
-    #[test]
-    fn test_exec_add_a_indhl() {
-        let mut test = ExecTest::for_inst(&inst!(ADD A, (HL)));
-        test.assert_behaves_like_add8(
-            |a, b, cpu| {
-                cpu.regs_mut().set_a(a);
-                cpu.regs_mut().set_hl(0x1234);
-                cpu.mem_mut().write_to(0x1234, b);
-            },
-            |cpu| cpu.regs().a(),
-        );
-    }
-
-    macro_rules! test_adc_a_r8 {
-        ($fname:ident, $srcname:ident, $srcset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(ADC A, $srcname));
-                test.assert_behaves_like_adc8(
-                    |a, b, cpu| {
-                        cpu.regs_mut().set_a(a);
-                        cpu.regs_mut().$srcset(b);
-                    },
-                    |cpu| cpu.regs().a(),
+    macro_rules! test_exec_adc8 {
+        ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
+            decl_test!($fname, cpu!(&inst!(ADC $dstname, $srcname)), |cpu: &mut CPU| {
+                assert_behaves_like_adc8!($pcinc, cpu,
+                    setup_binary!(
+                        setup_src8!($srcname), 
+                        setup_src8!($dstname)
+                    ),
+                    getter8!($dstname)
                 );
             });
-        }
+        };
     }
 
-    test_adc_a_r8!(test_exec_adc_a_a, A, set_a);
-    test_adc_a_r8!(test_exec_adc_a_b, B, set_b);
-    test_adc_a_r8!(test_exec_adc_a_c, C, set_c);
-    test_adc_a_r8!(test_exec_adc_a_d, D, set_d);
-    test_adc_a_r8!(test_exec_adc_a_e, E, set_e);
-    test_adc_a_r8!(test_exec_adc_a_h, H, set_h);
-    test_adc_a_r8!(test_exec_adc_a_l, L, set_l);
-
-    #[test]
-    fn test_exec_adc_a_indhl() {
-        let mut test = ExecTest::for_inst(&inst!(ADC A, (HL)));
-        test.assert_behaves_like_adc8(
-            |a, b, cpu| {
-                cpu.regs_mut().set_a(a);
-                cpu.regs_mut().set_hl(0x1234);
-                cpu.mem_mut().write_to(0x1234, b);
-            },
-            |cpu| cpu.regs().a(),
-        );
-    }
-
-    macro_rules! test_inc_reg8 {
-        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(INC $regname));
-                test.assert_behaves_like_inc8(
-                    |v, cpu| cpu.regs_mut().$regset(v),
-                    |cpu| cpu.regs().$regget(),
+    macro_rules! test_exec_inc8 {
+        ($fname:ident, $pcinc:expr, $dstname:tt) => {
+            decl_test!($fname, cpu!(&inst!(INC $dstname)), |cpu: &mut CPU| {
+                assert_behaves_like_inc8!($pcinc, cpu,
+                    setup_src8!($dstname),
+                    getter8!($dstname)
                 );
             });
-        }
+        };
     }
 
-    test_inc_reg8!(test_exec_inc_a, A, a, set_a);
-    test_inc_reg8!(test_exec_inc_c, C, c, set_c);
-    test_inc_reg8!(test_exec_inc_d, D, d, set_d);
-    test_inc_reg8!(test_exec_inc_e, E, e, set_e);
-    test_inc_reg8!(test_exec_inc_h, H, h, set_h);
-    test_inc_reg8!(test_exec_inc_l, L, l, set_l);
-
-    macro_rules! test_dec_reg8 {
-        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(DEC $regname));
-                test.assert_behaves_like_dec8(
-                    |v, cpu| cpu.regs_mut().$regset(v),
-                    |cpu| cpu.regs().$regget(),
+    macro_rules! test_exec_dec8 {
+        ($fname:ident, $pcinc:expr, $dstname:tt) => {
+            decl_test!($fname, cpu!(&inst!(DEC $dstname)), |cpu: &mut CPU| {
+                assert_behaves_like_dec8!($pcinc, cpu,
+                    setup_src8!($dstname),
+                    getter8!($dstname)
                 );
             });
-        }
+        };
     }
 
-    test_dec_reg8!(test_exec_dec_a, A, a, set_a);
-    test_dec_reg8!(test_exec_dec_b, B, b, set_b);
-    test_dec_reg8!(test_exec_dec_c, C, c, set_c);
-    test_dec_reg8!(test_exec_dec_d, D, d, set_d);
-    test_dec_reg8!(test_exec_dec_e, E, e, set_e);
-    test_dec_reg8!(test_exec_dec_h, H, h, set_h);
-    test_dec_reg8!(test_exec_dec_l, L, l, set_l);
+    test_exec_add8!(test_exec_add_a_a, 1, A, A);
+    test_exec_add8!(test_exec_add_a_b, 1, A, B);
+    test_exec_add8!(test_exec_add_a_c, 1, A, C);
+    test_exec_add8!(test_exec_add_a_d, 1, A, D);
+    test_exec_add8!(test_exec_add_a_e, 1, A, E);
+    test_exec_add8!(test_exec_add_a_h, 1, A, H);
+    test_exec_add8!(test_exec_add_a_l, 1, A, L);
 
-    #[test]
-    fn test_exec_inc_indhl() {
-        let mut test = ExecTest::for_inst(&inst!(INC (HL)));
-        test.assert_behaves_like_inc8(
-            |v, cpu| {
-                cpu.mem_mut().write_to(0x1234, v);
-                cpu.regs_mut().set_hl(0x1234);
-            },
-            |cpu| cpu.mem().read_from(0x1234),
-        );
-    }
+    test_exec_add8!(test_exec_add_a_indhl, 1, A, (HL));
 
-    #[test]
-    fn test_exec_dec_indhl() {
-        let mut test = ExecTest::for_inst(&inst!(DEC (HL)));
-        test.assert_behaves_like_dec8(
-            |v, cpu| {
-                cpu.mem_mut().write_to(0x1234, v);
-                cpu.regs_mut().set_hl(0x1234);
-            },
-            |cpu| cpu.mem().read_from(0x1234),
-        );
-    }
+    test_exec_adc8!(test_exec_adc_a_a, 1, A, A);
+    test_exec_adc8!(test_exec_adc_a_b, 1, A, B);
+    test_exec_adc8!(test_exec_adc_a_c, 1, A, C);
+    test_exec_adc8!(test_exec_adc_a_d, 1, A, D);
+    test_exec_adc8!(test_exec_adc_a_e, 1, A, E);
+    test_exec_adc8!(test_exec_adc_a_h, 1, A, H);
+    test_exec_adc8!(test_exec_adc_a_l, 1, A, L);
+
+    test_exec_adc8!(test_exec_adc_a_indhl, 3, A, (HL));
+
+    test_exec_inc8!(test_exec_inc_a, 1, A);
+    test_exec_inc8!(test_exec_inc_c, 1, C);
+    test_exec_inc8!(test_exec_inc_d, 1, D);
+    test_exec_inc8!(test_exec_inc_e, 1, E);
+    test_exec_inc8!(test_exec_inc_h, 1, H);
+    test_exec_inc8!(test_exec_inc_l, 1, L);
+
+    test_exec_inc8!(test_exec_inc_indhl, 1, (HL));
+
+    test_exec_dec8!(test_exec_dec_a, 1, A);
+    test_exec_dec8!(test_exec_dec_b, 1, B);
+    test_exec_dec8!(test_exec_dec_c, 1, C);
+    test_exec_dec8!(test_exec_dec_d, 1, D);
+    test_exec_dec8!(test_exec_dec_e, 1, E);
+    test_exec_dec8!(test_exec_dec_h, 1, H);
+    test_exec_dec8!(test_exec_dec_l, 1, L);
+
+    test_exec_dec8!(test_exec_dec_indhl, 1, (HL));    
 
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
