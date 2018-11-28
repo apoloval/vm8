@@ -686,13 +686,6 @@ mod test {
                 $body
             }
         };
-        ($fname:ident, $cpu:expr, $body:expr) => {
-            #[test]
-            fn $fname() {
-                let mut cpu = $cpu;
-                $body(&mut cpu)
-            }
-        };
     }
 
     // Produces a setter function that writes the value to the given 8-bits operand
@@ -874,8 +867,9 @@ mod test {
 
     macro_rules! test_exec_ld8 {
         ($fname:ident, $pcinc:expr, $dstname:tt, *) => {
-            decl_test!($fname, cpu!(), |cpu: &mut CPU| {
-                assert_behaves_like_load8!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!();
+                assert_behaves_like_load8!($pcinc, &mut cpu,
                     setup_unary!(
                         setup_dst!($dstname), 
                         setup_src8!(inst => |val| inst!(LD $dstname, val))
@@ -885,8 +879,9 @@ mod test {
             });
         };
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
-            decl_test!($fname, cpu!(LD $dstname, $srcname), |cpu: &mut CPU| {
-                assert_behaves_like_load8!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(LD $dstname, $srcname);
+                assert_behaves_like_load8!($pcinc, &mut cpu,
                     setup_unary!(setup_dst!($dstname), setup_src8!($srcname)),
                     getter8!($dstname)
                 );
@@ -991,8 +986,9 @@ mod test {
 
     macro_rules! test_exec_ld16 {
         ($fname:ident, $pcinc:expr, $dstname:tt, **) => {
-            decl_test!($fname, cpu!(), |cpu: &mut CPU| {
-                assert_behaves_like_load16!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!();
+                assert_behaves_like_load16!($pcinc, &mut cpu,
                     setup_unary!(
                         setup_dst!($dstname), 
                         setup_inst!(|val| inst!(LD $dstname, val))
@@ -1002,16 +998,18 @@ mod test {
             });
         };
         ($fname:ident, $pcinc:expr, (**), $srcname:tt) => {
-            decl_test!($fname, cpu!(LD (0x1234), $srcname), |cpu: &mut CPU| {
-                assert_behaves_like_load16!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(LD (0x1234), $srcname);
+                assert_behaves_like_load16!($pcinc, &mut cpu,
                     setup_src16!($srcname),
                     getter16!((0x1234))
                 );
             });
         };
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
-            decl_test!($fname, cpu!(&inst!(LD $dstname, $srcname)), |cpu: &mut CPU| {
-                assert_behaves_like_load16!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(&inst!(LD $dstname, $srcname));
+                assert_behaves_like_load16!($pcinc, &mut cpu,
                     setup_unary!(setup_dst!($dstname), setup_src16!($srcname)),
                     getter16!($dstname)
                 );
@@ -1032,14 +1030,15 @@ mod test {
     /* Exchange, Block Transfer, and Search Group */
     /**********************************************/
 
-    decl_test!(test_exec_exaf, cpu!(EX AF, AF_), |cpu: &mut CPU| {
-        let af = random_src!(u16, cpu, setter16!(AF));
-        let af_ = random_src!(u16, cpu, setter16!(AF_));
+    decl_test!(test_exec_exaf, {
+        let mut cpu = cpu!(EX AF, AF_);
+        let af = random_src!(u16, &mut cpu, setter16!(AF));
+        let af_ = random_src!(u16, &mut cpu, setter16!(AF_));
 
-        exec_step!(cpu);
+        exec_step!(&mut cpu);
         assert_program_counter!(cpu, 0x0001);
-        assert_r16!(cpu, AF, af_);
-        assert_r16!(cpu, AF_, af);
+        assert_r16!(&mut cpu, AF, af_);
+        assert_r16!(&mut cpu, AF_, af);
     });
 
     /**************************/
@@ -1256,8 +1255,9 @@ mod test {
 
     macro_rules! test_exec_add8 {
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
-            decl_test!($fname, cpu!(ADD $dstname, $srcname), |cpu: &mut CPU| {
-                assert_behaves_like_add8!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(ADD $dstname, $srcname);
+                assert_behaves_like_add8!($pcinc, &mut cpu,
                     setup_binary!(
                         setup_src8!($srcname), 
                         setup_src8!($dstname)
@@ -1270,8 +1270,9 @@ mod test {
 
     macro_rules! test_exec_adc8 {
         ($fname:ident, $pcinc:expr, $dstname:tt, $srcname:tt) => {
-            decl_test!($fname, cpu!(ADC $dstname, $srcname), |cpu: &mut CPU| {
-                assert_behaves_like_adc8!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(ADC $dstname, $srcname);
+                assert_behaves_like_adc8!($pcinc, &mut cpu,
                     setup_binary!(
                         setup_src8!($srcname), 
                         setup_src8!($dstname)
@@ -1284,8 +1285,9 @@ mod test {
 
     macro_rules! test_exec_inc8 {
         ($fname:ident, $pcinc:expr, $dstname:tt) => {
-            decl_test!($fname, cpu!(INC $dstname), |cpu: &mut CPU| {
-                assert_behaves_like_inc8!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(INC $dstname);
+                assert_behaves_like_inc8!($pcinc, &mut cpu,
                     setup_src8!($dstname),
                     getter8!($dstname)
                 );
@@ -1295,8 +1297,9 @@ mod test {
 
     macro_rules! test_exec_dec8 {
         ($fname:ident, $pcinc:expr, $dstname:tt) => {
-            decl_test!($fname, cpu!(DEC $dstname), |cpu: &mut CPU| {
-                assert_behaves_like_dec8!($pcinc, cpu,
+            decl_test!($fname, {
+                let mut cpu = cpu!(DEC $dstname);
+                assert_behaves_like_dec8!($pcinc, &mut cpu,
                     setup_src8!($dstname),
                     getter8!($dstname)
                 );
