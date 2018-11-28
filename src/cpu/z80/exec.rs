@@ -689,7 +689,7 @@ mod test {
     }
 
     // Produces a setter function that writes the value to the given 8-bits operand
-    macro_rules! setter8 {
+    macro_rules! setter8 {        
         (A) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_a(val));
         (B) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_b(val));
         (C) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_c(val));
@@ -763,29 +763,8 @@ mod test {
         })
     }
 
-    // Produces a getter function that returns the value of the given 8-bits operand
-    macro_rules! getter8 {
-        (A) => (|cpu: &CPU| cpu.regs().a());
-        (B) => (|cpu: &CPU| cpu.regs().b());
-        (C) => (|cpu: &CPU| cpu.regs().c());
-        (D) => (|cpu: &CPU| cpu.regs().d());
-        (E) => (|cpu: &CPU| cpu.regs().e());
-        (H) => (|cpu: &CPU| cpu.regs().h());
-        (L) => (|cpu: &CPU| cpu.regs().l());
-        (($a:tt)) => (|cpu: &CPU| cpu.mem().read_from(getter16!($a)(cpu)));
-        ($a:tt) => (|_: &CPU| $a);
-    }
-
-    // Produces a getter function that returns the value of the given 16-bits operand
-    macro_rules! getter16 {
-        (AF) => (|cpu: &CPU| cpu.regs().af());
-        (BC) => (|cpu: &CPU| cpu.regs().bc());
-        (DE) => (|cpu: &CPU| cpu.regs().de());
-        (HL) => (|cpu: &CPU| cpu.regs().hl());
-        (SP) => (|cpu: &CPU| cpu.regs().sp());
-        (AF_) => (|cpu: &CPU| cpu.regs().af_());
-        (($a:tt)) => (|cpu: &CPU| cpu.mem().read_word_from::<LittleEndian>(getter16!($a)(cpu)));
-        ($a:tt) => (|_: &CPU| $a);
+    macro_rules! getter {
+        ($( $eval:tt )+) => (|cpu: &CPU| cpu_eval!(cpu, $( $eval )+));
     }
 
     macro_rules! random_src {
@@ -802,14 +781,14 @@ mod test {
 
     macro_rules! assert_r8 {
         ($cpu:expr, $reg:ident, $expected:expr) => ({
-            let actual = getter8!($reg)($cpu);
+            let actual = getter!($reg)($cpu);
             assert_result!(HEX8, stringify!($reg), $expected, actual);
         })
     }
 
     macro_rules! assert_r16 {
         ($cpu:expr, $reg:ident, $expected:expr) => ({
-            let actual = getter16!($reg)($cpu);
+            let actual = getter!($reg)($cpu);
             assert_result!(HEX16, stringify!($reg), $expected, actual);
         })
     }
@@ -874,7 +853,7 @@ mod test {
                         setup_dst!($dstname), 
                         setup_src8!(inst => |val| inst!(LD $dstname, val))
                     ),
-                    getter8!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -883,7 +862,7 @@ mod test {
                 let mut cpu = cpu!(LD $dstname, $srcname);
                 assert_behaves_like_load8!($pcinc, &mut cpu,
                     setup_unary!(setup_dst!($dstname), setup_src8!($srcname)),
-                    getter8!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -993,7 +972,7 @@ mod test {
                         setup_dst!($dstname), 
                         setup_inst!(|val| inst!(LD $dstname, val))
                     ),
-                    getter16!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -1002,7 +981,7 @@ mod test {
                 let mut cpu = cpu!(LD (0x1234), $srcname);
                 assert_behaves_like_load16!($pcinc, &mut cpu,
                     setup_src16!($srcname),
-                    getter16!((0x1234))
+                    getter!((0x1234) as u16)
                 );
             });
         };
@@ -1011,7 +990,7 @@ mod test {
                 let mut cpu = cpu!(&inst!(LD $dstname, $srcname));
                 assert_behaves_like_load16!($pcinc, &mut cpu,
                     setup_unary!(setup_dst!($dstname), setup_src16!($srcname)),
-                    getter16!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -1262,7 +1241,7 @@ mod test {
                         setup_src8!($srcname), 
                         setup_src8!($dstname)
                     ),
-                    getter8!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -1277,7 +1256,7 @@ mod test {
                         setup_src8!($srcname), 
                         setup_src8!($dstname)
                     ),
-                    getter8!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -1289,7 +1268,7 @@ mod test {
                 let mut cpu = cpu!(INC $dstname);
                 assert_behaves_like_inc8!($pcinc, &mut cpu,
                     setup_src8!($dstname),
-                    getter8!($dstname)
+                    getter!($dstname)
                 );
             });
         };
@@ -1301,7 +1280,7 @@ mod test {
                 let mut cpu = cpu!(DEC $dstname);
                 assert_behaves_like_dec8!($pcinc, &mut cpu,
                     setup_src8!($dstname),
-                    getter8!($dstname)
+                    getter!($dstname)
                 );
             });
         };

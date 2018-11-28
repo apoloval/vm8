@@ -51,3 +51,23 @@ impl<M: MemoryBus> CPU<M> {
         }
     }
 }
+
+// Evaluate the given expression in the context of the CPU
+macro_rules! cpu_eval {
+    ($cpu:expr, A) => { $cpu.regs().a() };
+    ($cpu:expr, B) => { $cpu.regs().b() };
+    ($cpu:expr, C) => { $cpu.regs().c() };
+    ($cpu:expr, D) => { $cpu.regs().d() };
+    ($cpu:expr, E) => { $cpu.regs().e() };
+    ($cpu:expr, H) => { $cpu.regs().h() };
+    ($cpu:expr, L) => { $cpu.regs().l() };
+    ($cpu:expr, AF) => { $cpu.regs().af() };
+    ($cpu:expr, AF_) => { $cpu.regs().af_() };
+    ($cpu:expr, BC) => { $cpu.regs().bc() };
+    ($cpu:expr, DE) => { $cpu.regs().de() };
+    ($cpu:expr, HL) => { $cpu.regs().hl() };
+    ($cpu:expr, SP) => { $cpu.regs().sp() };
+    ($cpu:expr, ($reg:tt) as u16) => { $cpu.mem().read_word_from::<LittleEndian>(cpu_eval!($cpu, $reg)) };
+    ($cpu:expr, ($reg:tt)) => { $cpu.mem().read_from(cpu_eval!($cpu, $reg)) };
+    ($cpu:expr, $val:tt) => { $val };
+}
