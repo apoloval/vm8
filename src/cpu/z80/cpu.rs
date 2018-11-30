@@ -85,6 +85,7 @@ macro_rules! cpu_eval {
     ($cpu:expr, DE <- $eval:tt) => { $cpu.regs_mut().set_de(cpu_eval!($cpu, $eval)) };
     ($cpu:expr, HL <- $eval:tt) => { $cpu.regs_mut().set_hl(cpu_eval!($cpu, $eval)) };
     ($cpu:expr, SP <- $eval:tt) => { $cpu.regs_mut().set_sp(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, PC <- $eval:tt) => { $cpu.regs_mut().set_pc(cpu_eval!($cpu, $eval)) };
     ($cpu:expr, ($addr:expr) <- $eval:tt) => { $cpu.mem_mut().write_to($addr, cpu_eval!($cpu, $eval)) };
     ($cpu:expr, ($addr:expr) as u16 <- $eval:tt) => { $cpu.mem_mut().write_word_to::<LittleEndian>($addr, cpu_eval!($cpu, $eval)) };
 }

@@ -673,8 +673,10 @@ mod test {
     macro_rules! exec_step {
         ($cpu:expr) => (
             {
-                $cpu.regs_mut().set_pc(0x0000);
+                let f0 = cpu_eval!($cpu, F);
+                cpu_eval!($cpu, PC <- 0x0000);
                 exec_step($cpu);
+                f0
             }
         )
     }
@@ -816,8 +818,7 @@ mod test {
     macro_rules! assert_behaves_like_load {
         ($type:ty, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
             let input = random_src!($type, $cpu, $srcset);
-            let f0 = cpu_eval!($cpu, F);
-            exec_step!($cpu);
+            let f0 = exec_step!($cpu);
             assert_program_counter!($cpu, $pcinc);
             assert_dest!($type, $cpu, $dstget, input);
             assert_flags!(unaffected, $cpu, f0);
@@ -1055,8 +1056,7 @@ mod test {
                 },
             ], |case: &Case| {
                 $srcset(case.input, case.input, $cpu);
-                let f0 = cpu_eval!($cpu, F);
-                exec_step!($cpu);
+                let f0 = exec_step!($cpu);
                 assert_program_counter!($cpu, 0x0001);
                 assert_dest!(u8, $cpu, $dstget, case.expected);
                 assert_flags!($cpu, case.expected_flags, f0);
@@ -1119,8 +1119,7 @@ mod test {
             ], |case: &Case| {
                 $srcset(case.input, case.input, $cpu);
                 setup_flags!($cpu, C:[case.carry == 1]);
-                let f0 = cpu_eval!($cpu, F);
-                exec_step!($cpu);
+                let f0 = exec_step!($cpu);
                 assert_program_counter!($cpu, 0x0001);
                 assert_dest!(u8, $cpu, $dstget, case.expected);
                 assert_flags!($cpu, case.expected_flags, f0);
@@ -1163,8 +1162,7 @@ mod test {
                 },
             ], |case: &Case| {
                 $srcset(case.input, $cpu);
-                let f0 = cpu_eval!($cpu, F);
-                exec_step!($cpu);
+                let f0 = exec_step!($cpu);
                 assert_program_counter!($cpu, 0x0001);
                 assert_dest!(u8, $cpu, $dstget, case.expected);
                 assert_flags!($cpu, case.expected_flags, f0);
@@ -1213,8 +1211,7 @@ mod test {
                 },
             ], |case: &Case| {
                 $srcset(case.input, $cpu);
-                let f0 = cpu_eval!($cpu, F);
-                exec_step!($cpu);
+                let f0 = exec_step!($cpu);
                 assert_program_counter!($cpu, 0x0001);
                 assert_dest!(u8, $cpu, $dstget, case.expected);
                 assert_flags!($cpu, case.expected_flags, f0);
