@@ -688,51 +688,39 @@ mod test {
         };
     }
 
-    // Produces a setter function that writes the value to the given 8-bits operand
-    macro_rules! setter8 {        
-        (A) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_a(val));
-        (B) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_b(val));
-        (C) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_c(val));
-        (D) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_d(val));
-        (E) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_e(val));
-        (H) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_h(val));
-        (L) => (|val: u8, cpu: &mut CPU| cpu.regs_mut().set_l(val));
-        ($a:expr) => (|_, _: &mut CPU| {});
+    macro_rules! setter {
+        ($reg:tt) => (|val, cpu: &mut CPU| cpu_eval!(cpu, $reg <- val));
     }
-
-    // Produces a setter function that writes the value to the given 16-bits operand
-    macro_rules! setter16 {
-        (AF) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_af(val));
-        (BC) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_bc(val));
-        (DE) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_de(val));
-        (HL) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_hl(val));
-        (AF_) => (|val: u16, cpu: &mut CPU| cpu.regs_mut().set_af_(val));
-        ($a:expr) => (|_, _: &mut CPU| {});
-    }
-
+    
     // Produces a setup function to prepare the 8-bits destination
     macro_rules! setup_dst {
-        (($a:tt)) => (|_, cpu: &mut CPU| { setter16!($a)(0x1234, cpu); });
+        (($a:ident)) => (|_, cpu: &mut CPU| { setter!($a)(0x1234, cpu); });
         ($a:tt) => (|_, _: &mut CPU| {});
     }
 
     // Produces a setup function to prepare the 8-bits source
     macro_rules! setup_src8 {
         (inst => $a:expr) => (|val: u8, cpu: &mut CPU| cpu.mem_mut().write(&$a(val)).unwrap());
-        (($a:tt)) => (|val: u8, cpu: &mut CPU| { 
-            cpu.mem_mut().write_to(0x1234, val); 
-            setter16!($a)(0x1234, cpu);
+        (($a:ident)) => (|val: u8, cpu: &mut CPU| { 
+            setter!((0x1234))(val, cpu);
+            setter!($a)(0x1234, cpu);
         });
-        ($a:tt) => (setter8!($a));
+        (($a:expr)) => (|val: u8, cpu: &mut CPU| { 
+            setter!(($a))(val, cpu);
+        });
+        ($a:tt) => (setter!($a));
     }
 
     // Produces a setup function to prepare the 16-bits source
     macro_rules! setup_src16 {
-        (($a:tt)) => (|val: u16, cpu: &mut CPU| { 
-            cpu.mem_mut().write_word_to::<LittleEndian>(0x1234, val);
-            setter16!($a)(0x1234, cpu);
+        (($a:ident)) => (|val: u16, cpu: &mut CPU| { 
+            setter!($a)(0x1234, cpu);
+            setter!((0x1234) as u16)(val, cpu);
         });
-        ($a:tt) => (setter16!($a));
+        (($a:expr)) => (|val: u16, cpu: &mut CPU| { 
+            setter!(($a) as u16)(val, cpu);
+        });
+        ($a:tt) => (setter!($a));
     }
 
     // Produces a setup function to prepare the instruction
@@ -1011,8 +999,8 @@ mod test {
 
     decl_test!(test_exec_exaf, {
         let mut cpu = cpu!(EX AF, AF_);
-        let af = random_src!(u16, &mut cpu, setter16!(AF));
-        let af_ = random_src!(u16, &mut cpu, setter16!(AF_));
+        let af = random_src!(u16, &mut cpu, setter!(AF));
+        let af_ = random_src!(u16, &mut cpu, setter!(AF_));
 
         exec_step!(&mut cpu);
         assert_program_counter!(cpu, 0x0001);
