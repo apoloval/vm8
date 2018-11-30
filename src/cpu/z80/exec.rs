@@ -688,8 +688,9 @@ mod test {
         };
     }
 
+    // Produces a setter function for the given destination
     macro_rules! setter {
-        ($reg:tt) => (|val, cpu: &mut CPU| cpu_eval!(cpu, $reg <- val));
+        ($dest:tt) => (|val, cpu: &mut CPU| cpu_eval!(cpu, $dest <- val));
     }
     
     // Produces a setup function to prepare the 8-bits destination
@@ -714,8 +715,8 @@ mod test {
     // Produces a setup function to prepare the 16-bits source
     macro_rules! setup_src16 {
         (($a:ident)) => (|val: u16, cpu: &mut CPU| { 
-            setter!($a)(0x1234, cpu);
             setter!((0x1234) as u16)(val, cpu);
+            setter!($a)(0x1234, cpu);
         });
         (($a:expr)) => (|val: u16, cpu: &mut CPU| { 
             setter!(($a) as u16)(val, cpu);
@@ -743,6 +744,7 @@ mod test {
         })
     }
 
+    // Produces a setup function to prepare the CPU flags
     macro_rules! setup_flags {
         ($cpu:expr, $( $flags:tt )*) => ({
             let mut flags = $cpu.regs().flags();
@@ -751,10 +753,12 @@ mod test {
         })
     }
 
+    // Produces a getter function from the given source
     macro_rules! getter {
-        ($( $eval:tt )+) => (|cpu: &CPU| cpu_eval!(cpu, $( $eval )+));
+        ($( $src:tt )+) => (|cpu: &CPU| cpu_eval!(cpu, $( $src )+));
     }
 
+    // Set a random value as source operand and save it to the given source setter
     macro_rules! random_src {
         ($type:ty, $cpu:expr, $srcset:expr) => ({
             let input = <$type>::sample();
