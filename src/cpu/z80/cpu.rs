@@ -55,6 +55,7 @@ impl<M: MemoryBus> CPU<M> {
 // Evaluate the given expression in the context of the CPU
 macro_rules! cpu_eval {
     ($cpu:expr, A) => { $cpu.regs().a() };
+    ($cpu:expr, F) => { $cpu.regs().flags() };
     ($cpu:expr, B) => { $cpu.regs().b() };
     ($cpu:expr, C) => { $cpu.regs().c() };
     ($cpu:expr, D) => { $cpu.regs().d() };

@@ -786,15 +786,13 @@ mod test {
     }
 
     macro_rules! assert_flags {
-        (unaffected, $cpu:expr, $body:block) => ({
-            let expected = $cpu.regs().flags();
-            $body;
-            let actual = $cpu.regs().flags();
+        (unaffected, $cpu:expr, $f0:expr) => ({
+            let expected = $f0;
+            let actual = cpu_eval!($cpu, F);
             assert_result!(BIN8, "flags", expected, actual);
         });
-        ($cpu:expr, $expected:expr, $body:block) => ({
-            let initial = $cpu.regs().flags();
-            $body;
+        ($cpu:expr, $expected:expr, $f0:expr) => ({
+            let initial = $f0;
             let expected = $expected(initial);
             let actual = $cpu.regs().flags();
             assert_result!(BIN8, "flags", expected, actual);
@@ -818,11 +816,11 @@ mod test {
     macro_rules! assert_behaves_like_load {
         ($type:ty, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
             let input = random_src!($type, $cpu, $srcset);
-            assert_flags!(unaffected, $cpu, {
-                exec_step!($cpu);
-                assert_program_counter!($cpu, $pcinc);
-                assert_dest!($type, $cpu, $dstget, input);
-            });
+            let f0 = cpu_eval!($cpu, F);
+            exec_step!($cpu);
+            assert_program_counter!($cpu, $pcinc);
+            assert_dest!($type, $cpu, $dstget, input);
+            assert_flags!(unaffected, $cpu, f0);
         };
     }    
 
@@ -1057,11 +1055,11 @@ mod test {
                 },
             ], |case: &Case| {
                 $srcset(case.input, case.input, $cpu);
-                assert_flags!($cpu, case.expected_flags, {
-                    exec_step!($cpu);
-                    assert_program_counter!($cpu, 0x0001);
-                    assert_dest!(u8, $cpu, $dstget, case.expected);
-                });
+                let f0 = cpu_eval!($cpu, F);
+                exec_step!($cpu);
+                assert_program_counter!($cpu, 0x0001);
+                assert_dest!(u8, $cpu, $dstget, case.expected);
+                assert_flags!($cpu, case.expected_flags, f0);
             });
         };
     }
@@ -1121,11 +1119,11 @@ mod test {
             ], |case: &Case| {
                 $srcset(case.input, case.input, $cpu);
                 setup_flags!($cpu, C:[case.carry == 1]);
-                assert_flags!($cpu, case.expected_flags, {
-                    exec_step!($cpu);
-                    assert_program_counter!($cpu, 0x0001);
-                    assert_dest!(u8, $cpu, $dstget, case.expected);
-                });
+                let f0 = cpu_eval!($cpu, F);
+                exec_step!($cpu);
+                assert_program_counter!($cpu, 0x0001);
+                assert_dest!(u8, $cpu, $dstget, case.expected);
+                assert_flags!($cpu, case.expected_flags, f0);
             });
         };
     }
@@ -1165,11 +1163,11 @@ mod test {
                 },
             ], |case: &Case| {
                 $srcset(case.input, $cpu);
-                assert_flags!($cpu, case.expected_flags, {
-                    exec_step!($cpu);
-                    assert_program_counter!($cpu, 0x0001);
-                    assert_dest!(u8, $cpu, $dstget, case.expected);
-                });
+                let f0 = cpu_eval!($cpu, F);
+                exec_step!($cpu);
+                assert_program_counter!($cpu, 0x0001);
+                assert_dest!(u8, $cpu, $dstget, case.expected);
+                assert_flags!($cpu, case.expected_flags, f0);
             });
         };
     }
@@ -1215,11 +1213,11 @@ mod test {
                 },
             ], |case: &Case| {
                 $srcset(case.input, $cpu);
-                assert_flags!($cpu, case.expected_flags, {
-                    exec_step!($cpu);
-                    assert_program_counter!($cpu, 0x0001);
-                    assert_dest!(u8, $cpu, $dstget, case.expected);
-                });
+                let f0 = cpu_eval!($cpu, F);
+                exec_step!($cpu);
+                assert_program_counter!($cpu, 0x0001);
+                assert_dest!(u8, $cpu, $dstget, case.expected);
+                assert_flags!($cpu, case.expected_flags, f0);
             });
         };
     }
