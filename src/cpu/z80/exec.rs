@@ -14,14 +14,14 @@ pub trait Context {
     fn mem_mut(&mut self) -> &mut Self::Mem;
 
     fn read_from_pc(&self, offset: usize) -> u8 {
-        let pc = self.regs().pc();
+        let pc = cpu_eval!(self, PC);
         let pos = ((pc as usize) + offset) as u16;
         self.mem().read_from(pos)
     }
 }
 
 pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
-    let pc = ctx.regs().pc();
+    let pc = cpu_eval!(ctx, PC);
     let opcode = ctx.read_from_pc(0);
     match opcode {
         0x00 => { ctx.exec_nop();               04 },
@@ -181,11 +181,11 @@ trait Execute : Context + Sized {
         let (a, a_size) = D::read_arg(self);
         let (b, b_size) = S::read_arg(self);
 
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         let c = self.alu().adc8_with_flags(a, b, &mut flags);
         D::write_arg(self, c);
-        self.regs_mut().inc_pc(1 + a_size + b_size);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, PC ++<- 1 + a_size + b_size);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_add8<D: Src8 + Dest8, S: Src8>(&mut self) {
@@ -195,8 +195,8 @@ trait Execute : Context + Sized {
         let mut flags = 0;
         let c = self.alu().add8_with_flags(a, b, &mut flags);
         D::write_arg(self, c);
-        self.regs_mut().inc_pc(1 + a_size + b_size);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, PC ++<- 1 + a_size + b_size);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_add16<D: Src16 + Dest16, S: Src16>(&mut self) {
@@ -205,38 +205,38 @@ trait Execute : Context + Sized {
 
         let c = (a as u32) + (b as u32);
         D::write_arg(self, c as u16);
-        self.regs_mut().inc_pc(1 + a_size + b_size);
+        cpu_eval!(self, PC ++<- 1 + a_size + b_size);
 
-        let flags = flags_apply!(self.regs().flags(),
+        let flags = flags_apply!(cpu_eval!(self, F),
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_ccf(&mut self) {
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         if flag!(C, flags) == 0 {
             flags = flags_apply!(flags, H:0 N:0 C:1);
         } else {
             flags = flags_apply!(flags, H:1 N:0 C:0);
         }
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_cpl(&mut self) {
-        let a = self.regs().a();
-        self.regs_mut().set_a(!a);
+        let a = cpu_eval!(self, A);
+        cpu_eval!(self, A <- !a);
 
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         flags = flags_apply!(flags, H:1 N:1);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_daa(&mut self) {
-        let prev_a = self.regs().a();
+        let prev_a = cpu_eval!(self, A);
         let mut a = prev_a;
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         if flag!(N, flags) == 0 {
             if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
                 a = self.alu().add8(a, 0x06);
@@ -254,8 +254,8 @@ trait Execute : Context + Sized {
                 a = r;
             }
         }
-        self.regs_mut().set_a(a);
-        self.regs_mut().inc_pc(1);
+        cpu_eval!(self, A <- a);
+        cpu_eval!(self, PC++);
 
         flags = flags_apply!(flags,
             S:[a & 0x80 > 0]
@@ -263,80 +263,79 @@ trait Execute : Context + Sized {
             H:[(a ^ prev_a) & 0x10 > 0]
             C:[flag!(C, flags) > 0 || prev_a > 0x99]
         );
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_dec8<D: Src8 + Dest8>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         let result = self.alu().dec8_with_flags(dest, &mut flags);
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + nbytes);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, PC ++<- 1 + nbytes);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_dec16<D: Src16 + Dest16>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
         let result = self.alu().sub16(dest, 1);
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + nbytes);
+        cpu_eval!(self, PC ++<- 1 + nbytes);
     }
 
     fn exec_djnz(&mut self) -> bool {
-        let (b, _) = self.alu().sub8(self.regs().b(), 1);
-        self.regs_mut().set_b(b);
+        let (b, _) = self.alu().sub8(cpu_eval!(self, B), 1);
+        cpu_eval!(self, B <- b);
         if b > 0 {
             let s = self.read_from_pc(1);
-            let pc = self.regs().pc();
-            self.regs_mut().inc_pc8(s);
+            cpu_eval!(self, PC +<- s);
             true
         } else {
-            self.regs_mut().inc_pc(2);
+            cpu_eval!(self, PC ++<- 2);
             false
         }
     }
 
     fn exec_exaf(&mut self) {
-        self.regs_mut().swap_af();
-        self.regs_mut().inc_pc(1);
+        cpu_eval!(self, AF <-> AF_);
+        cpu_eval!(self, PC++);
     }
 
     fn exec_halt(&mut self) {}
 
     fn exec_inc8<D: Src8 + Dest8>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         let result = self.alu().inc8_with_flags(dest, &mut flags);
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + nbytes);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, PC ++<- 1 + nbytes);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_inc16<D: Src16 + Dest16>(&mut self) {
         let (dest, nbytes) = D::read_arg(self);
         let result = (dest as u32 + 1) as u16;
         D::write_arg(self, result);
-        self.regs_mut().inc_pc(1 + nbytes);
+        cpu_eval!(self, PC ++<- 1 + nbytes);
     }
 
     fn exec_jp<S: Src16>(&mut self) {
         let (dest, _) = S::read_arg(self);
-        self.regs_mut().set_pc(dest);
+        cpu_eval!(self, PC <- dest);
     }
 
     fn exec_jr<S: Src8>(&mut self) {
         let (dest, _) = S::read_arg(self);
-        self.regs_mut().inc_pc8(dest);
+        cpu_eval!(self, PC +<- dest);
     }
 
     fn exec_jr_cond<C: Cond, S: Src8>(&mut self) -> usize {
         let cond = C::condition_met(self);
         if cond {
             let (dest, _) = S::read_arg(self);
-            self.regs_mut().inc_pc8(dest);
+            cpu_eval!(self, PC +<- dest);
             12
         } else {
-            self.regs_mut().inc_pc8(2);
+            cpu_eval!(self, PC +<- 2);
             7
         }
     }
@@ -345,57 +344,57 @@ trait Execute : Context + Sized {
     where D: Dest<Item=S::Item> {
         let (src, src_nbytes) = S::read_arg(self);
         let dst_nbytes = D::write_arg(self, src);
-        self.regs_mut().inc_pc(1 + src_nbytes + dst_nbytes);
+        cpu_eval!(self, PC ++<- 1 + src_nbytes + dst_nbytes);
     }
 
     fn exec_nop(&mut self) {
-        self.regs_mut().inc_pc(1);
+        cpu_eval!(self, PC++);
     }
 
     fn exec_rla(&mut self) {
-        let mut flags = self.regs().flags();
-        let orig = self.regs().a();
-        let carry = self.regs().flag_c();
+        let mut flags = cpu_eval!(self, F);
+        let orig = cpu_eval!(self, A);
+        let carry = flag!(C, cpu_eval!(self, F));
         let dest = self.alu().rotate_left(orig, carry, &mut flags);
-        self.regs_mut().set_a(dest);
-        self.regs_mut().inc_pc(1);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, A <- dest);
+        cpu_eval!(self, PC++);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_rlca(&mut self) {
-        let mut flags = self.regs().flags();
-        let orig = self.regs().a();
+        let mut flags = cpu_eval!(self, F);
+        let orig = cpu_eval!(self, A);
         let carry = (orig & 0x80) >> 7;
         let dest = self.alu().rotate_left(orig, carry, &mut flags);
-        self.regs_mut().set_a(dest);
-        self.regs_mut().inc_pc(1);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, A <- dest);
+        cpu_eval!(self, PC++);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_rra(&mut self) {
-        let mut flags = self.regs().flags();
-        let orig = self.regs().a();
-        let carry = self.regs().flag_c();
+        let mut flags = cpu_eval!(self, F);
+        let orig = cpu_eval!(self, A);
+        let carry = flag!(C, cpu_eval!(self, F));
         let dest = self.alu().rotate_right(orig, carry, &mut flags);
-        self.regs_mut().set_a(dest);
-        self.regs_mut().inc_pc(1);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, A <- dest);
+        cpu_eval!(self, PC++);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_rrca(&mut self) {
-        let mut flags = self.regs().flags();
-        let orig = self.regs().a();
+        let mut flags = cpu_eval!(self, F);
+        let orig = cpu_eval!(self, A);
         let carry = orig & 0x01;
         let dest = self.alu().rotate_right(orig, carry, &mut flags);
-        self.regs_mut().set_a(dest);
-        self.regs_mut().inc_pc(1);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, A <- dest);
+        cpu_eval!(self, PC++);
+        cpu_eval!(self, F <- flags);
     }
 
     fn exec_scf(&mut self) {
-        let mut flags = self.regs().flags();
+        let mut flags = cpu_eval!(self, F);
         flags = flags_apply!(flags, H:0 N:0 C:1);
-        self.regs_mut().set_flags(flags);
+        cpu_eval!(self, F <- flags);
     }
 
     fn alu_add8(a: u8, b: u8, flags: u8) -> (u8, u8) {
@@ -443,7 +442,7 @@ trait Dest16 : Dest<Item=u16> {}
 impl<T> Dest16 for T where T: Dest<Item=u16> {}
 
 macro_rules! def_reg8_arg {
-    ($reg:tt, $r8r:ident, $r8w:ident) => (
+    ($reg:tt) => (
         struct $reg;
 
         impl Src for $reg {
@@ -451,7 +450,7 @@ macro_rules! def_reg8_arg {
 
             #[inline]
             fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-                (ctx.regs().$r8r(), 0)
+                (cpu_eval!(ctx, $reg), 0)
             }
         }
 
@@ -460,7 +459,7 @@ macro_rules! def_reg8_arg {
 
             #[inline]
             fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
-                ctx.regs_mut().$r8w(val);
+                cpu_eval!(ctx, $reg <- val);
                 0
             }
         }
@@ -468,7 +467,7 @@ macro_rules! def_reg8_arg {
 }
 
 macro_rules! def_reg16_arg {
-    ($reg:tt, $r16r:ident, $r16w:ident) => (
+    ($reg:tt) => (
         struct $reg;
 
         impl Src for $reg {
@@ -476,7 +475,7 @@ macro_rules! def_reg16_arg {
 
             #[inline]
             fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
-                (ctx.regs().$r16r(), 0)
+                (cpu_eval!(ctx, $reg), 0)
             }
         }
 
@@ -485,7 +484,7 @@ macro_rules! def_reg16_arg {
 
             #[inline]
             fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
-                ctx.regs_mut().$r16w(val);
+                cpu_eval!(ctx, $reg <- val);
                 0
             }
         }
@@ -493,7 +492,7 @@ macro_rules! def_reg16_arg {
 }
 
 macro_rules! def_indreg16_arg {
-    ($reg:tt, $r16:ident) => (
+    ($reg:tt, $regname:ident) => (
         struct $reg;
 
         impl Src for $reg {
@@ -501,9 +500,7 @@ macro_rules! def_indreg16_arg {
 
             #[inline]
             fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-                let addr = ctx.regs().$r16();
-                let data = ctx.mem().read_from(addr);
-                (data, 0)
+                (cpu_eval!(ctx, ($regname)), 0)
             }
         }
 
@@ -512,31 +509,30 @@ macro_rules! def_indreg16_arg {
 
             #[inline]
             fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
-                let addr = ctx.regs().$r16();
-                ctx.mem_mut().write_to(addr, val);
+                cpu_eval!(ctx, ($regname) <- val);
                 0
             }
         }
     );
 }
 
-def_reg8_arg!(A, a, set_a);
-def_reg8_arg!(B, b, set_b);
-def_reg8_arg!(C, c, set_c);
-def_reg8_arg!(D, d, set_d);
-def_reg8_arg!(E, e, set_e);
-def_reg8_arg!(H, h, set_h);
-def_reg8_arg!(L, l, set_l);
+def_reg8_arg!(A);
+def_reg8_arg!(B);
+def_reg8_arg!(C);
+def_reg8_arg!(D);
+def_reg8_arg!(E);
+def_reg8_arg!(H);
+def_reg8_arg!(L);
 
-def_reg16_arg!(AF, af, set_af);
-def_reg16_arg!(BC, bc, set_bc);
-def_reg16_arg!(DE, de, set_de);
-def_reg16_arg!(HL, hl, set_hl);
-def_reg16_arg!(SP, sp, set_sp);
+def_reg16_arg!(AF);
+def_reg16_arg!(BC);
+def_reg16_arg!(DE);
+def_reg16_arg!(HL);
+def_reg16_arg!(SP);
 
-def_indreg16_arg!(IND_BC, bc);
-def_indreg16_arg!(IND_DE, de);
-def_indreg16_arg!(IND_HL, hl);
+def_indreg16_arg!(IND_BC, BC);
+def_indreg16_arg!(IND_DE, DE);
+def_indreg16_arg!(IND_HL, HL);
 
 struct IND8_L16;
 
@@ -545,10 +541,10 @@ impl Src for IND8_L16 {
 
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-        let pc = ctx.regs().pc();
+        let pc = cpu_eval!(ctx, PC);
         let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
-        let data = ctx.mem().read_from(ind);
+        let ind = cpu_eval!(ctx, (addr) as u16);
+        let data = cpu_eval!(ctx, (ind));
         (data, 2)
     }
 }
@@ -558,10 +554,10 @@ impl Dest for IND8_L16 {
 
     #[inline]
     fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
-        let pc = ctx.regs().pc();
+        let pc = cpu_eval!(ctx, PC);
         let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
-        ctx.mem_mut().write_to(ind, val);
+        let ind = cpu_eval!(ctx, (addr) as u16);
+        cpu_eval!(ctx, (ind) <- val);
         2
     }
 }
@@ -573,10 +569,10 @@ impl Src for IND16_L16 {
 
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
-        let pc = ctx.regs().pc();
+        let pc = cpu_eval!(ctx, PC);
         let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
-        let data = ctx.mem().read_word_from::<LittleEndian>(ind);
+        let ind = cpu_eval!(ctx, (addr) as u16);
+        let data = cpu_eval!(ctx, (ind) as u16);
         (data, 2)
     }
 }
@@ -586,10 +582,10 @@ impl Dest for IND16_L16 {
 
     #[inline]
     fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
-        let pc = ctx.regs().pc();
+        let pc = cpu_eval!(ctx, PC);
         let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = ctx.mem().read_word_from::<LittleEndian>(addr);
-        ctx.mem_mut().write_word_to::<LittleEndian>(ind, val);
+        let ind = cpu_eval!(ctx, (addr) as u16);
+        cpu_eval!(ctx, (ind) as u16 <- val);
         2
     }
 }
@@ -600,8 +596,8 @@ impl Src for L8 {
 
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-        let pc = ctx.regs().pc();
-        (ctx.mem().read_from(pc + 1), 1)
+        let pc = cpu_eval!(ctx, PC);
+        (cpu_eval!(ctx, (pc + 1)), 1)
     }
 }
 
@@ -611,8 +607,8 @@ impl Src for L16 {
 
     #[inline]
     fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
-        let pc = ctx.regs().pc();
-        (ctx.mem().read_word_from::<LittleEndian>(pc + 1), 2)
+        let pc = cpu_eval!(ctx, PC);
+        (cpu_eval!(ctx, (pc + 1) as u16), 2)
     }
 }
 
@@ -621,22 +617,23 @@ trait Cond {
 }
 
 macro_rules! def_cond {
-    ($name:ident, $flagget:ident, $flagvalue:expr) => {
+    ($name:ident, $f:ident, $flagvalue:expr) => {
         struct $name;
 
         impl Cond for $name {
             fn condition_met<C: Context>(ctx: &C) -> bool {
-                let flag = ctx.regs().$flagget();
+                let flags = cpu_eval!(ctx, F);                
+                let flag = flag!($f, flags);
                 flag == $flagvalue
             }
         }
     }
 }
 
-def_cond!(ZFLAG, flag_z, 1);
-def_cond!(NZFLAG, flag_z, 0);
-def_cond!(CFLAG, flag_c, 1);
-def_cond!(NCFLAG, flag_c, 0);
+def_cond!(ZFLAG, Z, 1);
+def_cond!(NZFLAG, Z, 0);
+def_cond!(CFLAG, C, 1);
+def_cond!(NCFLAG, C, 0);
 
 /********************************************************/
 
@@ -657,7 +654,7 @@ mod test {
                 let prev_flags = u8::sample() & 0b11010111; // Do not set F5 and F3
                 let mem = z80::MemoryBank::new();
                 let mut cpu = z80::CPU::new(z80::Options::default(), mem);
-                cpu.regs_mut().set_flags(prev_flags);
+                cpu_eval!(cpu, F <- prev_flags);
                 cpu
             }
         };
@@ -749,9 +746,9 @@ mod test {
     // Produces a setup function to prepare the CPU flags
     macro_rules! setup_flags {
         ($cpu:expr, $( $flags:tt )*) => ({
-            let mut flags = $cpu.regs().flags();
+            let mut flags = cpu_eval!($cpu, F);
             flags = flags_apply!(flags, $( $flags )*);
-            $cpu.regs_mut().set_flags(flags);
+            cpu_eval!($cpu, F <- flags);
         })
     }
 
@@ -796,14 +793,14 @@ mod test {
         ($cpu:expr, $expected:expr, $f0:expr) => ({
             let initial = $f0;
             let expected = $expected(initial);
-            let actual = $cpu.regs().flags();
+            let actual = cpu_eval!($cpu, F);
             assert_result!(BIN8, "flags", expected, actual);
         });
     }
 
     macro_rules! assert_program_counter {
         ($cpu:expr, $expected:expr) => ({
-            let actual = $cpu.regs().pc();
+            let actual = cpu_eval!($cpu, PC);
             assert_result!(HEX16, "program counter", $expected, actual);
         });
     }

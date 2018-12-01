@@ -54,6 +54,41 @@ impl<M: MemoryBus> CPU<M> {
 
 // Evaluate the given expression in the context of the CPU
 macro_rules! cpu_eval {
+    ($cpu:expr, A <- $eval:expr) => { $cpu.regs_mut().set_a(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, F <- $eval:expr) => { $cpu.regs_mut().set_flags(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, B <- $eval:expr) => { $cpu.regs_mut().set_b(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, C <- $eval:expr) => { $cpu.regs_mut().set_c(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, D <- $eval:expr) => { $cpu.regs_mut().set_d(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, E <- $eval:expr) => { $cpu.regs_mut().set_e(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, H <- $eval:expr) => { $cpu.regs_mut().set_h(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, L <- $eval:expr) => { $cpu.regs_mut().set_l(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, AF <-> AF_) => { $cpu.regs_mut().swap_af() };
+    ($cpu:expr, AF <- $eval:expr) => { $cpu.regs_mut().set_af(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, AF_ <- $eval:expr) => { $cpu.regs_mut().set_af_(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, BC <- $eval:expr) => { $cpu.regs_mut().set_bc(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, DE <- $eval:expr) => { $cpu.regs_mut().set_de(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, HL <- $eval:expr) => { $cpu.regs_mut().set_hl(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, SP <- $eval:expr) => { $cpu.regs_mut().set_sp(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, PC +<- $eval:expr) => { $cpu.regs_mut().inc_pc8(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, PC ++<- $eval:expr) => { $cpu.regs_mut().inc_pc(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, PC <- $eval:expr) => { $cpu.regs_mut().set_pc(cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, PC++) => { $cpu.regs_mut().inc_pc(1) };
+
+    ($cpu:expr, ($reg:ident) <- $eval:expr) => { 
+        let addr = cpu_eval!($cpu, $reg);
+        let val = cpu_eval!($cpu, $eval);
+        $cpu.mem_mut().write_to(addr, val)
+    };
+
+    ($cpu:expr, ($reg:ident) as u16 <- $eval:expr) => { 
+        let addr = cpu_eval!($cpu, $reg);
+        let val = cpu_eval!($cpu, $eval);
+        $cpu.mem_mut().write_word_to::<LittleEndian>(addr, val) 
+    };
+
+    ($cpu:expr, ($addr:expr) <- $eval:expr) => { $cpu.mem_mut().write_to($addr, cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, ($addr:expr) as u16 <- $eval:expr) => { $cpu.mem_mut().write_word_to::<LittleEndian>($addr, cpu_eval!($cpu, $eval)) };
+
     ($cpu:expr, A) => { $cpu.regs().a() };
     ($cpu:expr, F) => { $cpu.regs().flags() };
     ($cpu:expr, B) => { $cpu.regs().b() };
@@ -68,24 +103,13 @@ macro_rules! cpu_eval {
     ($cpu:expr, DE) => { $cpu.regs().de() };
     ($cpu:expr, HL) => { $cpu.regs().hl() };
     ($cpu:expr, SP) => { $cpu.regs().sp() };
-    ($cpu:expr, ($reg:tt) as u16) => { $cpu.mem().read_word_from::<LittleEndian>(cpu_eval!($cpu, $reg)) };
-    ($cpu:expr, ($reg:tt)) => { $cpu.mem().read_from(cpu_eval!($cpu, $reg)) };
-    ($cpu:expr, $val:tt) => { $val };
+    ($cpu:expr, PC) => { $cpu.regs().pc() };
+    ($cpu:expr, ($reg:ident) as u16) => { $cpu.mem().read_word_from::<LittleEndian>(cpu_eval!($cpu, $reg)) };
+    ($cpu:expr, ($reg:ident)) => { $cpu.mem().read_from(cpu_eval!($cpu, $reg)) };
 
-    ($cpu:expr, A <- $eval:tt) => { $cpu.regs_mut().set_a(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, B <- $eval:tt) => { $cpu.regs_mut().set_b(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, C <- $eval:tt) => { $cpu.regs_mut().set_c(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, D <- $eval:tt) => { $cpu.regs_mut().set_d(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, E <- $eval:tt) => { $cpu.regs_mut().set_e(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, H <- $eval:tt) => { $cpu.regs_mut().set_h(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, L <- $eval:tt) => { $cpu.regs_mut().set_l(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, AF <- $eval:tt) => { $cpu.regs_mut().set_af(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, AF_ <- $eval:tt) => { $cpu.regs_mut().set_af_(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, BC <- $eval:tt) => { $cpu.regs_mut().set_bc(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, DE <- $eval:tt) => { $cpu.regs_mut().set_de(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, HL <- $eval:tt) => { $cpu.regs_mut().set_hl(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, SP <- $eval:tt) => { $cpu.regs_mut().set_sp(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, PC <- $eval:tt) => { $cpu.regs_mut().set_pc(cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, ($addr:expr) <- $eval:tt) => { $cpu.mem_mut().write_to($addr, cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, ($addr:expr) as u16 <- $eval:tt) => { $cpu.mem_mut().write_word_to::<LittleEndian>($addr, cpu_eval!($cpu, $eval)) };
+    ($cpu:expr, ($addr:expr) as u16) => { $cpu.mem().read_word_from::<LittleEndian>($addr) };
+
+    ($cpu:expr, ($addr:expr)) => { $cpu.mem().read_from($addr) };
+
+    ($cpu:expr, $val:expr) => { $val };
 }
