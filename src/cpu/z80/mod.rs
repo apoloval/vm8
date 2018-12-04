@@ -5,6 +5,10 @@ use mem;
 #[macro_use] pub mod flags;
 #[macro_use] mod cpu;
 
+#[cfg(test)]
+#[macro_use]
+mod assert;
+
 mod alu;
 mod error;
 mod exec;

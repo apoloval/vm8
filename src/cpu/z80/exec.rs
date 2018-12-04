@@ -524,48 +524,6 @@ mod test {
         ($($flags:tt)*) => (|f| flags_apply!(f, $( $flags )* ))
     }
 
-    macro_rules! assert_r8 {
-        ($cpu:expr, $reg:ident, $expected:expr) => ({
-            let actual = getter!($reg)($cpu);
-            assert_result!(HEX8, stringify!($reg), $expected, actual);
-        })
-    }
-
-    macro_rules! assert_r16 {
-        ($cpu:expr, $reg:ident, $expected:expr) => ({
-            let actual = getter!($reg)($cpu);
-            assert_result!(HEX16, stringify!($reg), $expected, actual);
-        })
-    }
-
-    macro_rules! assert_flags {
-        (unaffected, $cpu:expr, $f0:expr) => ({
-            let expected = $f0;
-            let actual = cpu_eval!($cpu, F);
-            assert_result!(BIN8, "flags", expected, actual);
-        });
-        ($cpu:expr, $expected:expr, $f0:expr) => ({
-            let initial = $f0;
-            let expected = $expected(initial);
-            let actual = cpu_eval!($cpu, F);
-            assert_result!(BIN8, "flags", expected, actual);
-        });
-    }
-
-    macro_rules! assert_program_counter {
-        ($cpu:expr, $expected:expr) => ({
-            let actual = cpu_eval!($cpu, PC);
-            assert_result!(HEX16, "program counter", $expected, actual);
-        });
-    }
-
-    macro_rules! assert_dest {
-        ($type:ty, $cpu:expr, $dstget:expr, $expected:expr) => ({
-            let actual = $dstget($cpu);
-            assert_result!(HEX16, "dest", $expected, actual);
-        });
-    }
-
     macro_rules! assert_behaves_like_load {
         ($type:ty, $pcinc:expr, $cpu:expr, $srcset:expr, $dstget:expr) => {
             let input = random_src!($type, $cpu, $srcset);
@@ -1067,19 +1025,14 @@ mod test {
     /* General-Purpose Arithmetic and CPU Control Groups */
     /*****************************************************/
 
-    #[test]
-    fn test_exec_cpl() {
-        let mut test = ExecTest::for_inst(&inst!(CPL));
-        test.cpu.regs_mut().set_a(0x42);
-        test.exec_step();
-        
-        let actual = test.cpu.regs().a();
-        let expected = 0xbd;
-        assert_result!(HEX8, "A", expected, actual);
+    decl_test!(test_exec_cpl, {
+        let mut cpu = cpu!(CPL);
+        cpu_eval!(cpu, A <- 0x42);
+        let f0 = exec_step!(&mut cpu);
 
-        test.assert_hflag_if("CPL", true);
-        test.assert_nflag_if("CPL", true);
-    }
+        assert_r8!(cpu, A, 0xbd);
+        assert_flags!(cpu, f0, (H:1 N:1));
+    });
 
     #[test]
     fn test_exec_daa() {
