@@ -5,6 +5,9 @@ macro_rules! flag {
     (PV, $flags:expr)   => (($flags & 0x04) >> 2);
     (N, $flags:expr)    => (($flags & 0x02) >> 1);
     (C, $flags:expr)    => ($flags & 0x01);
+
+    (NZ, $flags:expr)   => (flag!(Z, $flags) ^ 1);
+    (NC, $flags:expr)   => (flag!(C, $flags) ^ 1);
 }
 
 macro_rules! flags_bitmask_set {

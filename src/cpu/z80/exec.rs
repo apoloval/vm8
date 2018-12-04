@@ -20,242 +20,90 @@ pub trait Context {
     }
 }
 
-pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
-    let pc = cpu_eval!(ctx, PC);
-    let opcode = ctx.read_from_pc(0);
-    match opcode {
-        0x00 => { ctx.exec_nop();               04 },
-        0x01 => { ctx.exec_ld::<BC, L16>();     10 },
-        0x02 => { ctx.exec_ld::<IND_BC, A>();   07 },
-        0x03 => { ctx.exec_inc16::<BC>();       06 },
-        0x04 => { ctx.exec_inc8::<B>();         04 },
-        0x05 => { ctx.exec_dec8::<B>();         04 },
-        0x06 => { ctx.exec_ld::<B, L8>();       07 },
-        0x07 => { ctx.exec_rlca();              04 },
-        0x08 => { ctx.exec_exaf();              04 },
-        0x09 => { ctx.exec_add16::<HL, BC>();   11 },
-        0x0a => { ctx.exec_ld::<A, IND_BC>();   07 },
-        0x0b => { ctx.exec_dec16::<BC>();       06 },
-        0x0c => { ctx.exec_inc8::<C>();         04 },
-        0x0d => { ctx.exec_dec8::<C>();         04 },
-        0x0e => { ctx.exec_ld::<C, L8>();       07 },
-        0x0f => { ctx.exec_rrca();              04 },
-        0x10 => { if ctx.exec_djnz() { 13 } else { 8 } },
-        0x11 => { ctx.exec_ld::<DE, L16>();     10 },
-        0x12 => { ctx.exec_ld::<IND_DE, A>();   07 },
-        0x13 => { ctx.exec_inc16::<DE>();       06 },
-        0x14 => { ctx.exec_inc8::<D>();         04 },
-        0x15 => { ctx.exec_dec8::<D>();         04 },
-        0x16 => { ctx.exec_ld::<D, L8>();       07 },
-        0x17 => { ctx.exec_rla();               04 },
-        0x18 => { ctx.exec_jr::<L8>();          12 },
-        0x19 => { ctx.exec_add16::<HL, DE>();   11 },
-        0x1a => { ctx.exec_ld::<A, IND_DE>();   07 },
-        0x1b => { ctx.exec_dec16::<DE>();       06 },
-        0x1c => { ctx.exec_inc8::<E>();         04 },
-        0x1d => { ctx.exec_dec8::<E>();         04 },
-        0x1e => { ctx.exec_ld::<E, L8>();       07 },
-        0x1f => { ctx.exec_rra();               04 },
-        0x20 => { ctx.exec_jr_cond::<NZFLAG, L8>() },
-        0x21 => { ctx.exec_ld::<HL, L16>();     10 },
-        0x22 => { ctx.exec_ld::<IND16_L16, HL>(); 16 },
-        0x23 => { ctx.exec_inc16::<HL>();       06 },
-        0x24 => { ctx.exec_inc8::<H>();         04 },
-        0x25 => { ctx.exec_dec8::<H>();         04 },
-        0x26 => { ctx.exec_ld::<H, L8>();       07 },
-        0x27 => { ctx.exec_daa();               04 },
-        0x28 => { ctx.exec_jr_cond::<ZFLAG, L8>() },
-        0x29 => { ctx.exec_add16::<HL, HL>();   11 },
-        0x2a => { ctx.exec_ld::<HL, IND16_L16>(); 16 },
-        0x2b => { ctx.exec_dec16::<HL>();       06 },
-        0x2c => { ctx.exec_inc8::<L>();         04 },
-        0x2d => { ctx.exec_dec8::<L>();         04 },
-        0x2e => { ctx.exec_ld::<L, L8>();       07 },
-        0x2f => { ctx.exec_cpl();               04 },
-        0x30 => { ctx.exec_jr_cond::<NCFLAG, L8>() },
-        0x31 => { ctx.exec_ld::<SP, L16>();     10 },
-        0x32 => { ctx.exec_ld::<IND8_L16, A>(); 13 },
-        0x33 => { ctx.exec_inc16::<SP>();       06 },
-        0x34 => { ctx.exec_inc8::<IND_HL>();    11 },
-        0x35 => { ctx.exec_dec8::<IND_HL>();    11 },
-        0x36 => { ctx.exec_ld::<IND_HL, L8>();  10 },
-        0x37 => { ctx.exec_scf();               4 },
-        0x38 => { ctx.exec_jr_cond::<CFLAG, L8>() },
-        0x39 => { ctx.exec_add16::<HL, SP>();   11 },
-        0x3a => { ctx.exec_ld::<A, IND8_L16>(); 13 },
-        0x3b => { ctx.exec_dec16::<SP>();       06 },
-        0x3c => { ctx.exec_inc8::<A>();         04 },
-        0x3d => { ctx.exec_dec8::<A>();         04 },
-        0x3e => { ctx.exec_ld::<A, L8>();       07 },
-        0x3f => { ctx.exec_ccf();               04 },
-        0x40 => { ctx.exec_ld::<B, B>();        04 },
-        0x41 => { ctx.exec_ld::<B, C>();        04 },
-        0x42 => { ctx.exec_ld::<B, D>();        04 },
-        0x43 => { ctx.exec_ld::<B, E>();        04 },
-        0x44 => { ctx.exec_ld::<B, H>();        04 },
-        0x45 => { ctx.exec_ld::<B, L>();        04 },
-        0x46 => { ctx.exec_ld::<B, IND_HL>();   07 },
-        0x47 => { ctx.exec_ld::<B, A>();        04 },
-        0x48 => { ctx.exec_ld::<C, B>();        04 },
-        0x49 => { ctx.exec_ld::<C, C>();        04 },
-        0x4a => { ctx.exec_ld::<C, D>();        04 },
-        0x4b => { ctx.exec_ld::<C, E>();        04 },
-        0x4c => { ctx.exec_ld::<C, H>();        04 },
-        0x4d => { ctx.exec_ld::<C, L>();        04 },
-        0x4e => { ctx.exec_ld::<C, IND_HL>();   07 },
-        0x4f => { ctx.exec_ld::<C, A>();        04 },
-        0x50 => { ctx.exec_ld::<D, B>();        04 },
-        0x51 => { ctx.exec_ld::<D, C>();        04 },
-        0x52 => { ctx.exec_ld::<D, D>();        04 },
-        0x53 => { ctx.exec_ld::<D, E>();        04 },
-        0x54 => { ctx.exec_ld::<D, H>();        04 },
-        0x55 => { ctx.exec_ld::<D, L>();        04 },
-        0x56 => { ctx.exec_ld::<D, IND_HL>();   07 },
-        0x57 => { ctx.exec_ld::<D, A>();        04 },
-        0x58 => { ctx.exec_ld::<E, B>();        04 },
-        0x59 => { ctx.exec_ld::<E, C>();        04 },
-        0x5a => { ctx.exec_ld::<E, D>();        04 },
-        0x5b => { ctx.exec_ld::<E, E>();        04 },
-        0x5c => { ctx.exec_ld::<E, H>();        04 },
-        0x5d => { ctx.exec_ld::<E, L>();        04 },
-        0x5e => { ctx.exec_ld::<E, IND_HL>();   07 },
-        0x5f => { ctx.exec_ld::<E, A>();        04 },
-        0x60 => { ctx.exec_ld::<H, B>();        04 },
-        0x61 => { ctx.exec_ld::<H, C>();        04 },
-        0x62 => { ctx.exec_ld::<H, D>();        04 },
-        0x63 => { ctx.exec_ld::<H, E>();        04 },
-        0x64 => { ctx.exec_ld::<H, H>();        04 },
-        0x65 => { ctx.exec_ld::<H, L>();        04 },
-        0x66 => { ctx.exec_ld::<H, IND_HL>();   07 },
-        0x67 => { ctx.exec_ld::<H, A>();        04 },
-        0x68 => { ctx.exec_ld::<L, B>();        04 },
-        0x69 => { ctx.exec_ld::<L, C>();        04 },
-        0x6a => { ctx.exec_ld::<L, D>();        04 },
-        0x6b => { ctx.exec_ld::<L, E>();        04 },
-        0x6c => { ctx.exec_ld::<L, H>();        04 },
-        0x6d => { ctx.exec_ld::<L, L>();        04 },
-        0x6e => { ctx.exec_ld::<L, IND_HL>();   07 },
-        0x6f => { ctx.exec_ld::<L, A>();        04 },
-        0x70 => { ctx.exec_ld::<IND_HL, B>();   07 },
-        0x71 => { ctx.exec_ld::<IND_HL, C>();   07 },
-        0x72 => { ctx.exec_ld::<IND_HL, D>();   07 },
-        0x73 => { ctx.exec_ld::<IND_HL, E>();   07 },
-        0x74 => { ctx.exec_ld::<IND_HL, H>();   07 },
-        0x75 => { ctx.exec_ld::<IND_HL, L>();   07 },
-        0x76 => { ctx.exec_halt();              04 },
-        0x77 => { ctx.exec_ld::<IND_HL, A>();   07 },
-        0x78 => { ctx.exec_ld::<A, B>();        04 },
-        0x79 => { ctx.exec_ld::<A, C>();        04 },
-        0x7a => { ctx.exec_ld::<A, D>();        04 },
-        0x7b => { ctx.exec_ld::<A, E>();        04 },
-        0x7c => { ctx.exec_ld::<A, H>();        04 },
-        0x7d => { ctx.exec_ld::<A, L>();        04 },
-        0x7e => { ctx.exec_ld::<A, IND_HL>();   07 },
-        0x7f => { ctx.exec_ld::<A, A>();        04 },
-        0x80 => { ctx.exec_add8::<A, B>();      04 },
-        0x81 => { ctx.exec_add8::<A, C>();      04 },
-        0x82 => { ctx.exec_add8::<A, D>();      04 },
-        0x83 => { ctx.exec_add8::<A, E>();      04 },
-        0x84 => { ctx.exec_add8::<A, H>();      04 },
-        0x85 => { ctx.exec_add8::<A, L>();      04 },
-        0x86 => { ctx.exec_add8::<A, IND_HL>(); 07 },
-        0x87 => { ctx.exec_add8::<A, A>();      04 },
-        0x88 => { ctx.exec_adc8::<A, B>();      04 },
-        0x89 => { ctx.exec_adc8::<A, C>();      04 },
-        0x8a => { ctx.exec_adc8::<A, D>();      04 },
-        0x8b => { ctx.exec_adc8::<A, E>();      04 },
-        0x8c => { ctx.exec_adc8::<A, H>();      04 },
-        0x8d => { ctx.exec_adc8::<A, L>();      04 },
-        0x8e => { ctx.exec_adc8::<A, IND_HL>(); 07 },
-        0x8f => { ctx.exec_adc8::<A, A>();      04 },
-
-        0xc3 => { ctx.exec_jp::<L16>();         10 },
-        _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
-    }
+// Returns the size of the given operand encoded in the instruction
+macro_rules! op_size {
+    // Something relative to the PC occupies 1 byte
+    (*) => { 1 };
+    // Something relative to the PC read as word occupies 2 byte
+    (**) => { 2 };
+    ((**)) => { 2 };
+    ((**):u16) => { 2 };
+    // Anything else occupies 0 bytes
+    ($($_:tt)+) => { 0 };
 }
 
-/********************************************************/
-
-trait Execute : Context + Sized {
-    fn exec_adc8<D: Src8 + Dest8, S: Src8>(&mut self) {
-        let (a, a_size) = D::read_arg(self);
-        let (b, b_size) = S::read_arg(self);
-
-        let mut flags = cpu_eval!(self, F);
-        let c = self.alu().adc8_with_flags(a, b, &mut flags);
-        D::write_arg(self, c);
-        cpu_eval!(self, PC ++<- 1 + a_size + b_size);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_add8<D: Src8 + Dest8, S: Src8>(&mut self) {
-        let (a, a_size) = D::read_arg(self);
-        let (b, b_size) = S::read_arg(self);
-
+macro_rules! cpu_exec {
+    ($cpu:expr, ADD8 $dst:tt, $src:tt) => ({
+        let a = cpu_eval!($cpu, $dst);
+        let b = cpu_eval!($cpu, $src);
         let mut flags = 0;
-        let c = self.alu().add8_with_flags(a, b, &mut flags);
-        D::write_arg(self, c);
-        cpu_eval!(self, PC ++<- 1 + a_size + b_size);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_add16<D: Src16 + Dest16, S: Src16>(&mut self) {
-        let (a, a_size) = D::read_arg(self);
-        let (b, b_size) = S::read_arg(self);
-
+        let c = $cpu.alu().add8_with_flags(a, b, &mut flags);
+        cpu_eval!($cpu, $dst <- c);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, ADC8 $dst:tt, $src:tt) => ({
+        let a = cpu_eval!($cpu, $dst);
+        let b = cpu_eval!($cpu, $src);
+        let mut flags = cpu_eval!($cpu, F);
+        let c = $cpu.alu().adc8_with_flags(a, b, &mut flags);
+        cpu_eval!($cpu, $dst <- c);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, ADD16 $dst:tt, $src:tt) => ({
+        let a = cpu_eval!($cpu, $dst);
+        let b = cpu_eval!($cpu, $src);
         let c = (a as u32) + (b as u32);
-        D::write_arg(self, c as u16);
-        cpu_eval!(self, PC ++<- 1 + a_size + b_size);
+        cpu_eval!($cpu, $dst <- c as u16);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
 
-        let flags = flags_apply!(cpu_eval!(self, F),
+        let flags = flags_apply!(cpu_eval!($cpu, F),
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_ccf(&mut self) {
-        let mut flags = cpu_eval!(self, F);
+        cpu_eval!($cpu, F <- flags);    
+    });
+    ($cpu:expr, CCF) => ({
+        let mut flags = cpu_eval!($cpu, F);
         if flag!(C, flags) == 0 {
             flags = flags_apply!(flags, H:0 N:0 C:1);
         } else {
             flags = flags_apply!(flags, H:1 N:0 C:0);
         }
-        cpu_eval!(self, F <- flags);
-    }
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, CPL) => ({
+        let a = cpu_eval!($cpu, A);
+        cpu_eval!($cpu, A <- !a);
 
-    fn exec_cpl(&mut self) {
-        let a = cpu_eval!(self, A);
-        cpu_eval!(self, A <- !a);
-
-        let mut flags = cpu_eval!(self, F);
+        let mut flags = cpu_eval!($cpu, F);
         flags = flags_apply!(flags, H:1 N:1);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_daa(&mut self) {
-        let prev_a = cpu_eval!(self, A);
+        cpu_eval!($cpu, F <- flags);    
+    });
+    ($cpu:expr, DAA) => ({
+        let prev_a = cpu_eval!($cpu, A);
         let mut a = prev_a;
-        let mut flags = cpu_eval!(self, F);
+        let mut flags = cpu_eval!($cpu, F);
         if flag!(N, flags) == 0 {
             if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
-                a = self.alu().add8(a, 0x06);
+                a = $cpu.alu().add8(a, 0x06);
             }
             if flag!(C, flags) == 1 || a > 0x99 {
-                a = self.alu().add8(a, 0x60);
+                a = $cpu.alu().add8(a, 0x60);
             }
         } else {
             if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
-                let (r, _) = self.alu().sub8(a, 0x06);
+                let (r, _) = $cpu.alu().sub8(a, 0x06);
                 a = r;
             }
             if flag!(C, flags) == 1 || a > 0x99 {
-                let (r, _) = self.alu().sub8(a, 0x60);
+                let (r, _) = $cpu.alu().sub8(a, 0x60);
                 a = r;
             }
         }
-        cpu_eval!(self, A <- a);
-        cpu_eval!(self, PC++);
+        cpu_eval!($cpu, A <- a);
+        cpu_eval!($cpu, PC++);
 
         flags = flags_apply!(flags,
             S:[a & 0x80 > 0]
@@ -263,379 +111,285 @@ trait Execute : Context + Sized {
             H:[(a ^ prev_a) & 0x10 > 0]
             C:[flag!(C, flags) > 0 || prev_a > 0x99]
         );
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_dec8<D: Src8 + Dest8>(&mut self) {
-        let (dest, nbytes) = D::read_arg(self);
-        let mut flags = cpu_eval!(self, F);
-        let result = self.alu().dec8_with_flags(dest, &mut flags);
-        D::write_arg(self, result);
-        cpu_eval!(self, PC ++<- 1 + nbytes);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_dec16<D: Src16 + Dest16>(&mut self) {
-        let (dest, nbytes) = D::read_arg(self);
-        let result = self.alu().sub16(dest, 1);
-        D::write_arg(self, result);
-        cpu_eval!(self, PC ++<- 1 + nbytes);
-    }
-
-    fn exec_djnz(&mut self) -> bool {
-        let (b, _) = self.alu().sub8(cpu_eval!(self, B), 1);
-        cpu_eval!(self, B <- b);
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, DEC8 $dst:tt) => ({
+        let dest = cpu_eval!($cpu, $dst);
+        let mut flags = cpu_eval!($cpu, F);
+        let result = $cpu.alu().dec8_with_flags(dest, &mut flags);
+        cpu_eval!($cpu, $dst <- result);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, DEC16 $dst:tt) => ({
+        let dest = cpu_eval!($cpu, $dst);
+        let result = $cpu.alu().sub16(dest, 1);
+        cpu_eval!($cpu, $dst <- result);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
+    });
+    ($cpu:expr, DJNZ) => ({
+        let (b, _) = $cpu.alu().sub8(cpu_eval!($cpu, B), 1);
+        cpu_eval!($cpu, B <- b);
         if b > 0 {
-            let s = self.read_from_pc(1);
-            cpu_eval!(self, PC +<- s);
+            let s = $cpu.read_from_pc(1);
+            cpu_eval!($cpu, PC +<- s);
             true
         } else {
-            cpu_eval!(self, PC ++<- 2);
+            cpu_eval!($cpu, PC ++<- 2);
             false
         }
-    }
-
-    fn exec_exaf(&mut self) {
-        cpu_eval!(self, AF <-> AF_);
-        cpu_eval!(self, PC++);
-    }
-
-    fn exec_halt(&mut self) {}
-
-    fn exec_inc8<D: Src8 + Dest8>(&mut self) {
-        let (dest, nbytes) = D::read_arg(self);
-        let mut flags = cpu_eval!(self, F);
-        let result = self.alu().inc8_with_flags(dest, &mut flags);
-        D::write_arg(self, result);
-        cpu_eval!(self, PC ++<- 1 + nbytes);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_inc16<D: Src16 + Dest16>(&mut self) {
-        let (dest, nbytes) = D::read_arg(self);
-        let result = (dest as u32 + 1) as u16;
-        D::write_arg(self, result);
-        cpu_eval!(self, PC ++<- 1 + nbytes);
-    }
-
-    fn exec_jp<S: Src16>(&mut self) {
-        let (dest, _) = S::read_arg(self);
-        cpu_eval!(self, PC <- dest);
-    }
-
-    fn exec_jr<S: Src8>(&mut self) {
-        let (dest, _) = S::read_arg(self);
-        cpu_eval!(self, PC +<- dest);
-    }
-
-    fn exec_jr_cond<C: Cond, S: Src8>(&mut self) -> usize {
-        let cond = C::condition_met(self);
-        if cond {
-            let (dest, _) = S::read_arg(self);
-            cpu_eval!(self, PC +<- dest);
+    });
+    ($cpu:expr, EXAF) => ({
+        cpu_eval!($cpu, AF <-> AF_);
+        cpu_eval!($cpu, PC++);
+    });
+    ($cpu:expr, HALT) => ({
+    });
+    ($cpu:expr, INC8 $dst:tt) => ({
+        let dest = cpu_eval!($cpu, $dst);
+        let mut flags = cpu_eval!($cpu, F);
+        let result = $cpu.alu().inc8_with_flags(dest, &mut flags);
+        cpu_eval!($cpu, $dst <- result);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, INC16 $dst:tt) => ({
+        let dest = cpu_eval!($cpu, $dst);
+        let (result, _) = $cpu.alu().add16(dest, 1);
+        cpu_eval!($cpu, $dst <- result);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
+    });    
+    ($cpu:expr, JP $($dst:tt)+) => ({
+        let dest = cpu_eval!($cpu, $($dst)+);
+        cpu_eval!($cpu, PC <- dest);
+    });
+    ($cpu:expr, JR $dst:tt) => ({
+        let dest = cpu_eval!($cpu, $dst);
+        cpu_eval!($cpu, PC +<- dest);
+    });
+    ($cpu:expr, JR $f:tt, $dst:tt) => ({
+        let flag = cpu_eval!($cpu, F[$f]);
+        if flag == 1 {
+            let dst = cpu_eval!($cpu, $dst);
+            cpu_eval!($cpu, PC +<- dst);
             12
         } else {
-            cpu_eval!(self, PC +<- 2);
+            cpu_eval!($cpu, PC +<- 2);
             7
         }
-    }
-
-    fn exec_ld<D: Dest, S: Src>(&mut self)
-    where D: Dest<Item=S::Item> {
-        let (src, src_nbytes) = S::read_arg(self);
-        let dst_nbytes = D::write_arg(self, src);
-        cpu_eval!(self, PC ++<- 1 + src_nbytes + dst_nbytes);
-    }
-
-    fn exec_nop(&mut self) {
-        cpu_eval!(self, PC++);
-    }
-
-    fn exec_rla(&mut self) {
-        let mut flags = cpu_eval!(self, F);
-        let orig = cpu_eval!(self, A);
-        let carry = flag!(C, cpu_eval!(self, F));
-        let dest = self.alu().rotate_left(orig, carry, &mut flags);
-        cpu_eval!(self, A <- dest);
-        cpu_eval!(self, PC++);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_rlca(&mut self) {
-        let mut flags = cpu_eval!(self, F);
-        let orig = cpu_eval!(self, A);
+    });
+    ($cpu:expr, LD ($($dst:tt)+): u16, $src:tt) => ({
+        let src = cpu_eval!($cpu, $src);
+        cpu_eval!($cpu, ($($dst)+): u16 <- src);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!(($($dst)+): u16) + op_size!($src));
+    });
+    ($cpu:expr, LD $dst:tt, $($src:tt)+) => ({
+        let src = cpu_eval!($cpu, $($src)+);
+        cpu_eval!($cpu, $dst <- src);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($($src)+));
+    });
+    ($cpu:expr, NOP) => ({
+        cpu_eval!($cpu, PC++);
+    });
+    ($cpu:expr, RLA) => ({
+        let mut flags = cpu_eval!($cpu, F);
+        let orig = cpu_eval!($cpu, A);
+        let carry = flag!(C, cpu_eval!($cpu, F));
+        let dest = $cpu.alu().rotate_left(orig, carry, &mut flags);
+        cpu_eval!($cpu, A <- dest);
+        cpu_eval!($cpu, PC++);
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, RLCA) => ({
+        let mut flags = cpu_eval!($cpu, F);
+        let orig = cpu_eval!($cpu, A);
         let carry = (orig & 0x80) >> 7;
-        let dest = self.alu().rotate_left(orig, carry, &mut flags);
-        cpu_eval!(self, A <- dest);
-        cpu_eval!(self, PC++);
-        cpu_eval!(self, F <- flags);
-    }
+        let dest = $cpu.alu().rotate_left(orig, carry, &mut flags);
+        cpu_eval!($cpu, A <- dest);
+        cpu_eval!($cpu, PC++);
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, RRA) => ({
+        let mut flags = cpu_eval!($cpu, F);
+        let orig = cpu_eval!($cpu, A);
+        let carry = flag!(C, cpu_eval!($cpu, F));
+        let dest = $cpu.alu().rotate_right(orig, carry, &mut flags);
+        cpu_eval!($cpu, A <- dest);
+        cpu_eval!($cpu, PC++);
+        cpu_eval!($cpu, F <- flags);
+    });
 
-    fn exec_rra(&mut self) {
-        let mut flags = cpu_eval!(self, F);
-        let orig = cpu_eval!(self, A);
-        let carry = flag!(C, cpu_eval!(self, F));
-        let dest = self.alu().rotate_right(orig, carry, &mut flags);
-        cpu_eval!(self, A <- dest);
-        cpu_eval!(self, PC++);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_rrca(&mut self) {
-        let mut flags = cpu_eval!(self, F);
-        let orig = cpu_eval!(self, A);
+    ($cpu:expr, RRCA) => ({
+        let mut flags = cpu_eval!($cpu, F);
+        let orig = cpu_eval!($cpu, A);
         let carry = orig & 0x01;
-        let dest = self.alu().rotate_right(orig, carry, &mut flags);
-        cpu_eval!(self, A <- dest);
-        cpu_eval!(self, PC++);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn exec_scf(&mut self) {
-        let mut flags = cpu_eval!(self, F);
+        let dest = $cpu.alu().rotate_right(orig, carry, &mut flags);
+        cpu_eval!($cpu, A <- dest);
+        cpu_eval!($cpu, PC++);
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, SCF) => ({
+        let mut flags = cpu_eval!($cpu, F);
         flags = flags_apply!(flags, H:0 N:0 C:1);
-        cpu_eval!(self, F <- flags);
-    }
-
-    fn alu_add8(a: u8, b: u8, flags: u8) -> (u8, u8) {
-        let c = ((a as u16) + (b as u16)) as u8;
-        let new_flags = flags_apply!(flags,
-            S:[(c & 0x80) != 0]
-            Z:[c == 0]
-            H:[((a & 0x0f) + (b & 0x0f)) & 0x10 != 0]
-            PV:[(a ^ b ^ 0x80) & (b ^ c) & 0x80 != 0]
-            N:0
-            C:[c < a]);
-        (c as u8, new_flags)
-    }
+        cpu_eval!($cpu, F <- flags);
+    });
 }
 
-impl<T> Execute for T where T: Context + Sized {}
 
 
-/********************************************************/
+pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
+    let pc = cpu_eval!(ctx, PC);
+    let opcode = ctx.read_from_pc(0);
+    match opcode {
+        0x00 => { cpu_exec!(ctx, NOP);              04 },
+        0x01 => { cpu_exec!(ctx, LD BC, **);        10 },
+        0x02 => { cpu_exec!(ctx, LD (BC), A);       07 },
+        0x03 => { cpu_exec!(ctx, INC16 BC);         06 },
+        0x04 => { cpu_exec!(ctx, INC8 B);           04 },
+        0x05 => { cpu_exec!(ctx, DEC8 B);           04 },
+        0x06 => { cpu_exec!(ctx, LD B, *);          07 },
+        0x07 => { cpu_exec!(ctx, RLCA);             04 },
+        0x08 => { cpu_exec!(ctx, EXAF);             04 },
+        0x09 => { cpu_exec!(ctx, ADD16 HL, BC);     11 },
+        0x0a => { cpu_exec!(ctx, LD A, (BC));       07 },
+        0x0b => { cpu_exec!(ctx, DEC16 BC);         06 },
+        0x0c => { cpu_exec!(ctx, INC8 C);           04 },
+        0x0d => { cpu_exec!(ctx, DEC8 C);           04 },
+        0x0e => { cpu_exec!(ctx, LD C, *);          07 },
+        0x0f => { cpu_exec!(ctx, RRCA);             04 },
+        0x10 => { if cpu_exec!(ctx, DJNZ) { 13 } else { 8 } },
+        0x11 => { cpu_exec!(ctx, LD DE, **);        10 },
+        0x12 => { cpu_exec!(ctx, LD (DE), A);       07 },
+        0x13 => { cpu_exec!(ctx, INC16 DE);         06 },
+        0x14 => { cpu_exec!(ctx, INC8 D);           04 },
+        0x15 => { cpu_exec!(ctx, DEC8 D);           04 },
+        0x16 => { cpu_exec!(ctx, LD D, *);          07 },
+        0x17 => { cpu_exec!(ctx, RLA);              04 },
+        0x18 => { cpu_exec!(ctx, JR *);             12 },
+        0x19 => { cpu_exec!(ctx, ADD16 HL, DE);     11 },
+        0x1a => { cpu_exec!(ctx, LD A, (DE));       07 },
+        0x1b => { cpu_exec!(ctx, DEC16 DE);         06 },
+        0x1c => { cpu_exec!(ctx, INC8 E);           04 },
+        0x1d => { cpu_exec!(ctx, DEC8 E);           04 },
+        0x1e => { cpu_exec!(ctx, LD E, *);          07 },
+        0x1f => { cpu_exec!(ctx, RRA);              04 },
+        0x20 => { cpu_exec!(ctx, JR NZ, *) },
+        0x21 => { cpu_exec!(ctx, LD HL, **);        10 },
+        0x22 => { cpu_exec!(ctx, LD (**):u16, HL);  16 },
+        0x23 => { cpu_exec!(ctx, INC16 HL);         06 },
+        0x24 => { cpu_exec!(ctx, INC8 H);           04 },
+        0x25 => { cpu_exec!(ctx, DEC8 H);           04 },
+        0x26 => { cpu_exec!(ctx, LD H, *);          07 },
+        0x27 => { cpu_exec!(ctx, DAA);              04 },
+        0x28 => { cpu_exec!(ctx, JR Z, *) },
+        0x29 => { cpu_exec!(ctx, ADD16 HL, HL);     11 },
+        0x2a => { cpu_exec!(ctx, LD HL, (**):u16);  16 },
+        0x2b => { cpu_exec!(ctx, DEC16 HL);         06 },
+        0x2c => { cpu_exec!(ctx, INC8 L);           04 },
+        0x2d => { cpu_exec!(ctx, DEC8 L);           04 },
+        0x2e => { cpu_exec!(ctx, LD L, *);          07 },
+        0x2f => { cpu_exec!(ctx, CPL);              04 },
+        0x30 => { cpu_exec!(ctx, JR NC, *) },
+        0x31 => { cpu_exec!(ctx, LD SP, **);        10 },
+        0x32 => { cpu_exec!(ctx, LD (**), A);       13 },
+        0x33 => { cpu_exec!(ctx, INC16 SP);         06 },
+        0x34 => { cpu_exec!(ctx, INC8 (HL));        11 },
+        0x35 => { cpu_exec!(ctx, DEC8 (HL));        11 },
+        0x36 => { cpu_exec!(ctx, LD (HL), *);       10 },
+        0x37 => { cpu_exec!(ctx, SCF);              04 },
+        0x38 => { cpu_exec!(ctx, JR C, *) },
+        0x39 => { cpu_exec!(ctx, ADD16 HL, SP);     11 },
+        0x3a => { cpu_exec!(ctx, LD A, (**));       13 },
+        0x3b => { cpu_exec!(ctx, DEC16 SP);         06 },
+        0x3c => { cpu_exec!(ctx, INC8 A);           04 },
+        0x3d => { cpu_exec!(ctx, DEC8 A);           04 },
+        0x3e => { cpu_exec!(ctx, LD A, *);          07 },
+        0x3f => { cpu_exec!(ctx, CCF);              04 },
+        0x40 => { cpu_exec!(ctx, LD B, B);          04 },
+        0x41 => { cpu_exec!(ctx, LD B, C);          04 },
+        0x42 => { cpu_exec!(ctx, LD B, D);          04 },
+        0x43 => { cpu_exec!(ctx, LD B, E);          04 },
+        0x44 => { cpu_exec!(ctx, LD B, H);          04 },
+        0x45 => { cpu_exec!(ctx, LD B, L);          04 },
+        0x46 => { cpu_exec!(ctx, LD B, (HL));       07 },
+        0x47 => { cpu_exec!(ctx, LD B, A);          04 },
+        0x48 => { cpu_exec!(ctx, LD C, B);          04 },
+        0x49 => { cpu_exec!(ctx, LD C, C);          04 },
+        0x4a => { cpu_exec!(ctx, LD C, D);          04 },
+        0x4b => { cpu_exec!(ctx, LD C, E);          04 },
+        0x4c => { cpu_exec!(ctx, LD C, H);          04 },
+        0x4d => { cpu_exec!(ctx, LD C, L);          04 },
+        0x4e => { cpu_exec!(ctx, LD C, (HL));       07 },
+        0x4f => { cpu_exec!(ctx, LD C, A);          04 },
+        0x50 => { cpu_exec!(ctx, LD D, B);          04 },
+        0x51 => { cpu_exec!(ctx, LD D, C);          04 },
+        0x52 => { cpu_exec!(ctx, LD D, D);          04 },
+        0x53 => { cpu_exec!(ctx, LD D, E);          04 },
+        0x54 => { cpu_exec!(ctx, LD D, H);          04 },
+        0x55 => { cpu_exec!(ctx, LD D, L);          04 },
+        0x56 => { cpu_exec!(ctx, LD D, (HL));       07 },
+        0x57 => { cpu_exec!(ctx, LD D, A);          04 },
+        0x58 => { cpu_exec!(ctx, LD E, B);          04 },
+        0x59 => { cpu_exec!(ctx, LD E, C);          04 },
+        0x5a => { cpu_exec!(ctx, LD E, D);          04 },
+        0x5b => { cpu_exec!(ctx, LD E, E);          04 },
+        0x5c => { cpu_exec!(ctx, LD E, H);          04 },
+        0x5d => { cpu_exec!(ctx, LD E, L);          04 },
+        0x5e => { cpu_exec!(ctx, LD E, (HL));       07 },
+        0x5f => { cpu_exec!(ctx, LD E, A);          04 },
+        0x60 => { cpu_exec!(ctx, LD H, B);          04 },
+        0x61 => { cpu_exec!(ctx, LD H, C);          04 },
+        0x62 => { cpu_exec!(ctx, LD H, D);          04 },
+        0x63 => { cpu_exec!(ctx, LD H, E);          04 },
+        0x64 => { cpu_exec!(ctx, LD H, H);          04 },
+        0x65 => { cpu_exec!(ctx, LD H, L);          04 },
+        0x66 => { cpu_exec!(ctx, LD H, (HL));       07 },
+        0x67 => { cpu_exec!(ctx, LD H, A);          04 },
+        0x68 => { cpu_exec!(ctx, LD L, B);          04 },
+        0x69 => { cpu_exec!(ctx, LD L, C);          04 },
+        0x6a => { cpu_exec!(ctx, LD L, D);          04 },
+        0x6b => { cpu_exec!(ctx, LD L, E);          04 },
+        0x6c => { cpu_exec!(ctx, LD L, H);          04 },
+        0x6d => { cpu_exec!(ctx, LD L, L);          04 },
+        0x6e => { cpu_exec!(ctx, LD L, (HL));       07 },
+        0x6f => { cpu_exec!(ctx, LD L, A);          04 },
+        0x70 => { cpu_exec!(ctx, LD (HL), B);       07 },
+        0x71 => { cpu_exec!(ctx, LD (HL), C);       07 },
+        0x72 => { cpu_exec!(ctx, LD (HL), D);       07 },
+        0x73 => { cpu_exec!(ctx, LD (HL), E);       07 },
+        0x74 => { cpu_exec!(ctx, LD (HL), H);       07 },
+        0x75 => { cpu_exec!(ctx, LD (HL), L);       07 },
+        0x76 => { cpu_exec!(ctx, HALT);             04 },
+        0x77 => { cpu_exec!(ctx, LD (HL), A);       07 },
+        0x78 => { cpu_exec!(ctx, LD A, B);          04 },
+        0x79 => { cpu_exec!(ctx, LD A, C);          04 },
+        0x7a => { cpu_exec!(ctx, LD A, D);          04 },
+        0x7b => { cpu_exec!(ctx, LD A, E);          04 },
+        0x7c => { cpu_exec!(ctx, LD A, H);          04 },
+        0x7d => { cpu_exec!(ctx, LD A, L);          04 },
+        0x7e => { cpu_exec!(ctx, LD A, (HL));       07 },
+        0x7f => { cpu_exec!(ctx, LD A, A);          04 },
+        0x80 => { cpu_exec!(ctx, ADD8 A, B);        04 },
+        0x81 => { cpu_exec!(ctx, ADD8 A, C);        04 },
+        0x82 => { cpu_exec!(ctx, ADD8 A, D);        04 },
+        0x83 => { cpu_exec!(ctx, ADD8 A, E);        04 },
+        0x84 => { cpu_exec!(ctx, ADD8 A, H);        04 },
+        0x85 => { cpu_exec!(ctx, ADD8 A, L);        04 },
+        0x86 => { cpu_exec!(ctx, ADD8 A, (HL));     07 },
+        0x87 => { cpu_exec!(ctx, ADD8 A, A);        04 },
+        0x88 => { cpu_exec!(ctx, ADC8 A, B);        04 },
+        0x89 => { cpu_exec!(ctx, ADC8 A, C);        04 },
+        0x8a => { cpu_exec!(ctx, ADC8 A, D);        04 },
+        0x8b => { cpu_exec!(ctx, ADC8 A, E);        04 },
+        0x8c => { cpu_exec!(ctx, ADC8 A, H);        04 },
+        0x8d => { cpu_exec!(ctx, ADC8 A, L);        04 },
+        0x8e => { cpu_exec!(ctx, ADC8 A, (HL));     07 },
+        0x8f => { cpu_exec!(ctx, ADC8 A, A);        04 },
 
-
-type FetchedBytes = usize;
-type Operand<T> = (T, FetchedBytes);
-
-trait Src {
-    type Item;
-    fn read_arg<C: Context>(ctx: &C) -> Operand<Self::Item>;
-}
-
-trait Src8 : Src<Item=u8> {}
-impl<T> Src8 for T where T: Src<Item=u8> {}
-
-trait Src16 : Src<Item=u16> {}
-impl<T> Src16 for T where T: Src<Item=u16> {}
-
-trait Dest {
-    type Item;
-    fn write_arg<C: Context>(ctx: &mut C, val: Self::Item) -> FetchedBytes;
-}
-
-trait Dest8 : Dest<Item=u8> {}
-impl<T> Dest8 for T where T: Dest<Item=u8> {}
-
-trait Dest16 : Dest<Item=u16> {}
-impl<T> Dest16 for T where T: Dest<Item=u16> {}
-
-macro_rules! def_reg8_arg {
-    ($reg:tt) => (
-        struct $reg;
-
-        impl Src for $reg {
-            type Item = u8;
-
-            #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-                (cpu_eval!(ctx, $reg), 0)
-            }
-        }
-
-        impl Dest for $reg {
-            type Item = u8;
-
-            #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
-                cpu_eval!(ctx, $reg <- val);
-                0
-            }
-        }
-    );
-}
-
-macro_rules! def_reg16_arg {
-    ($reg:tt) => (
-        struct $reg;
-
-        impl Src for $reg {
-            type Item = u16;
-
-            #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
-                (cpu_eval!(ctx, $reg), 0)
-            }
-        }
-
-        impl Dest for $reg {
-            type Item = u16;
-
-            #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
-                cpu_eval!(ctx, $reg <- val);
-                0
-            }
-        }
-    );
-}
-
-macro_rules! def_indreg16_arg {
-    ($reg:tt, $regname:ident) => (
-        struct $reg;
-
-        impl Src for $reg {
-            type Item = u8;
-
-            #[inline]
-            fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-                (cpu_eval!(ctx, ($regname)), 0)
-            }
-        }
-
-        impl Dest for $reg {
-            type Item = u8;
-
-            #[inline]
-            fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
-                cpu_eval!(ctx, ($regname) <- val);
-                0
-            }
-        }
-    );
-}
-
-def_reg8_arg!(A);
-def_reg8_arg!(B);
-def_reg8_arg!(C);
-def_reg8_arg!(D);
-def_reg8_arg!(E);
-def_reg8_arg!(H);
-def_reg8_arg!(L);
-
-def_reg16_arg!(AF);
-def_reg16_arg!(BC);
-def_reg16_arg!(DE);
-def_reg16_arg!(HL);
-def_reg16_arg!(SP);
-
-def_indreg16_arg!(IND_BC, BC);
-def_indreg16_arg!(IND_DE, DE);
-def_indreg16_arg!(IND_HL, HL);
-
-struct IND8_L16;
-
-impl Src for IND8_L16 {
-    type Item = u8;
-
-    #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-        let pc = cpu_eval!(ctx, PC);
-        let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = cpu_eval!(ctx, (addr) as u16);
-        let data = cpu_eval!(ctx, (ind));
-        (data, 2)
-    }
-}
-
-impl Dest for IND8_L16 {
-    type Item = u8;
-
-    #[inline]
-    fn write_arg<C: Context>(ctx: &mut C, val: u8) -> FetchedBytes {
-        let pc = cpu_eval!(ctx, PC);
-        let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = cpu_eval!(ctx, (addr) as u16);
-        cpu_eval!(ctx, (ind) <- val);
-        2
+        0xc3 => { cpu_exec!(ctx, JP **);            10 },
+        _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
 }
-
-struct IND16_L16;
-
-impl Src for IND16_L16 {
-    type Item = u16;
-
-    #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
-        let pc = cpu_eval!(ctx, PC);
-        let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = cpu_eval!(ctx, (addr) as u16);
-        let data = cpu_eval!(ctx, (ind) as u16);
-        (data, 2)
-    }
-}
-
-impl Dest for IND16_L16 {
-    type Item = u16;
-
-    #[inline]
-    fn write_arg<C: Context>(ctx: &mut C, val: u16) -> FetchedBytes {
-        let pc = cpu_eval!(ctx, PC);
-        let (addr, _) = ctx.alu().add16(pc, 1);
-        let ind = cpu_eval!(ctx, (addr) as u16);
-        cpu_eval!(ctx, (ind) as u16 <- val);
-        2
-    }
-}
-
-struct L8;
-impl Src for L8 {
-    type Item = u8;
-
-    #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Operand<u8> {
-        let pc = cpu_eval!(ctx, PC);
-        (cpu_eval!(ctx, (pc + 1)), 1)
-    }
-}
-
-struct L16;
-impl Src for L16 {
-    type Item = u16;
-
-    #[inline]
-    fn read_arg<C: Context>(ctx: &C) -> Operand<u16> {
-        let pc = cpu_eval!(ctx, PC);
-        (cpu_eval!(ctx, (pc + 1) as u16), 2)
-    }
-}
-
-trait Cond {
-    fn condition_met<C: Context>(ctx: &C) -> bool;
-}
-
-macro_rules! def_cond {
-    ($name:ident, $f:ident, $flagvalue:expr) => {
-        struct $name;
-
-        impl Cond for $name {
-            fn condition_met<C: Context>(ctx: &C) -> bool {
-                let flags = cpu_eval!(ctx, F);                
-                let flag = flag!($f, flags);
-                flag == $flagvalue
-            }
-        }
-    }
-}
-
-def_cond!(ZFLAG, Z, 1);
-def_cond!(NZFLAG, Z, 0);
-def_cond!(CFLAG, C, 1);
-def_cond!(NCFLAG, C, 0);
-
-/********************************************************/
 
 #[cfg(test)]
 mod test {
@@ -714,11 +468,11 @@ mod test {
     // Produces a setup function to prepare the 16-bits source
     macro_rules! setup_src16 {
         (($a:ident)) => (|val: u16, cpu: &mut CPU| { 
-            setter!((0x1234) as u16)(val, cpu);
+            setter!((0x1234): u16)(val, cpu);
             setter!($a)(0x1234, cpu);
         });
         (($a:expr)) => (|val: u16, cpu: &mut CPU| { 
-            setter!(($a) as u16)(val, cpu);
+            setter!(($a): u16)(val, cpu);
         });
         ($a:tt) => (setter!($a));
     }
@@ -969,7 +723,7 @@ mod test {
                 let mut cpu = cpu!(LD (0x1234), $srcname);
                 assert_behaves_like_load16!($pcinc, &mut cpu,
                     setup_src16!($srcname),
-                    getter!((0x1234) as u16)
+                    getter!((0x1234): u16)
                 );
             });
         };

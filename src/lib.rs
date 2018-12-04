@@ -1,4 +1,5 @@
 #![cfg_attr(all(feature = "nightly", test), feature(test))]
+#![cfg_attr(feature = "nightly", feature(trace_macros))]
 
 #[cfg(all(feature = "nightly", test))]
 extern crate test;

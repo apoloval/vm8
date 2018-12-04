@@ -74,21 +74,30 @@ macro_rules! cpu_eval {
     ($cpu:expr, PC <- $eval:expr) => { $cpu.regs_mut().set_pc(cpu_eval!($cpu, $eval)) };
     ($cpu:expr, PC++) => { $cpu.regs_mut().inc_pc(1) };
 
-    ($cpu:expr, ($reg:ident) <- $eval:expr) => { 
-        let addr = cpu_eval!($cpu, $reg);
-        let val = cpu_eval!($cpu, $eval);
+    // Indirect write access of bytes
+    ($cpu:expr, ($($lhs:tt)+): u8 <- $($rhs:tt)+) => ({ 
+        let addr = cpu_eval!($cpu, $($lhs)+);
+        let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.mem_mut().write_to(addr, val)
-    };
+    });
 
-    ($cpu:expr, ($reg:ident) as u16 <- $eval:expr) => { 
-        let addr = cpu_eval!($cpu, $reg);
-        let val = cpu_eval!($cpu, $eval);
+    // Indirect write access of words
+    ($cpu:expr, ($($lhs:tt)+): u16 <- $rhs:expr) => ({ 
+        let addr = cpu_eval!($cpu, $($lhs)+);
+        println!(">>>> Writing to address {}", addr);
+        let val = cpu_eval!($cpu, $rhs);
         $cpu.mem_mut().write_word_to::<LittleEndian>(addr, val) 
-    };
+    });
 
-    ($cpu:expr, ($addr:expr) <- $eval:expr) => { $cpu.mem_mut().write_to($addr, cpu_eval!($cpu, $eval)) };
-    ($cpu:expr, ($addr:expr) as u16 <- $eval:expr) => { $cpu.mem_mut().write_word_to::<LittleEndian>($addr, cpu_eval!($cpu, $eval)) };
+    // Indirect write access (defaults to bytes)
+    ($cpu:expr, ($($lhs:tt)+) <- $($rhs:tt)+) => ({ 
+        cpu_eval!($cpu, ($($lhs)+): u8 <- $($rhs)+)
+    });
 
+    // Add operator
+    ($cpu:expr, $a:tt + $b:tt) => { cpu_eval!($cpu, $a) + cpu_eval!($cpu, $b) };
+
+    // Read registers
     ($cpu:expr, A) => { $cpu.regs().a() };
     ($cpu:expr, F) => { $cpu.regs().flags() };
     ($cpu:expr, B) => { $cpu.regs().b() };
@@ -104,12 +113,41 @@ macro_rules! cpu_eval {
     ($cpu:expr, HL) => { $cpu.regs().hl() };
     ($cpu:expr, SP) => { $cpu.regs().sp() };
     ($cpu:expr, PC) => { $cpu.regs().pc() };
-    ($cpu:expr, ($reg:ident) as u16) => { $cpu.mem().read_word_from::<LittleEndian>(cpu_eval!($cpu, $reg)) };
-    ($cpu:expr, ($reg:ident)) => { $cpu.mem().read_from(cpu_eval!($cpu, $reg)) };
+    ($cpu:expr, *) => { cpu_eval!($cpu, (PC+1)) };
+    ($cpu:expr, **) => { cpu_eval!($cpu, (PC+1):u16) };
 
-    ($cpu:expr, ($addr:expr) as u16) => { $cpu.mem().read_word_from::<LittleEndian>($addr) };
+    // Read single flag
+    ($cpu:expr, F[$f:ident]) => ({
+        let flags = cpu_eval!($cpu, F);
+        flag!($f, flags)
+    });
 
-    ($cpu:expr, ($addr:expr)) => { $cpu.mem().read_from($addr) };
+    // Indirect read access of bytes
+    ($cpu:expr, ($($val:tt)+): u8) => ({
+        let addr = cpu_eval!($cpu, $($val)+);
+        $cpu.mem().read_from(addr)
+    });
+
+    // Indirect read access of words
+    ($cpu:expr, ($($val:tt)+): u16) => ({ 
+        let addr = cpu_eval!($cpu, $($val)+);
+        $cpu.mem().read_word_from::<LittleEndian>(addr) 
+    });
+
+    // Indirect read access (defaults to bytes)
+    ($cpu:expr, ($($val:tt)+)) => ({
+        cpu_eval!($cpu, ($($val)+): u8)
+    });
+
+    ($cpu:expr, L8) => ({
+        let addr = cpu_eval!($cpu, PC) + 1;
+        cpu_eval!($cpu, (addr))
+    });
+
+    ($cpu:expr, L16) => ({
+        let addr = cpu_eval!($cpu, PC) + 1;
+        cpu_eval!($cpu, (addr): u16)
+    });
 
     ($cpu:expr, $val:expr) => { $val };
 }

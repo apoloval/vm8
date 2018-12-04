@@ -3,11 +3,14 @@ pub type Size = usize;
 pub type Cycles = usize;
 
 #[cfg(target_endian = "little")]
+
+#[cfg(test)]
 macro_rules! encode_literal {
     ($v:expr => 0) => (($v & 0x00ff) as u8);
     ($v:expr => 1) => ((($v & 0xff00) >> 8) as u8);
 }
 
+#[cfg(test)]
 macro_rules! inst {
     (ADC A, A)          => ([0x8f]);
     (ADC A, B)          => ([0x88]);
