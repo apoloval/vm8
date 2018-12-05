@@ -136,28 +136,3 @@ impl Registers {
     #[inline] pub fn inc_pc(&mut self, val: usize) { *self.pc += val as u16 }
     #[inline] pub fn inc_pc8(&mut self, val: u8) { self.inc_pc(val as i8 as usize) }
 }
-
-macro_rules! reg_read {
-    ($cpu:expr, A) => { $cpu.regs().a() };
-    ($cpu:expr, B) => { $cpu.regs().b() };
-    ($cpu:expr, C) => { $cpu.regs().c() };
-    ($cpu:expr, D) => { $cpu.regs().d() };
-    ($cpu:expr, E) => { $cpu.regs().e() };
-    ($cpu:expr, H) => { $cpu.regs().h() };
-    ($cpu:expr, L) => { $cpu.regs().l() };
-    ($cpu:expr, BC) => { $cpu.regs().bc() };
-    ($cpu:expr, DE) => { $cpu.regs().de() };
-    ($cpu:expr, HL) => { $cpu.regs().hl() };
-    ($cpu:expr, ($reg:tt)) => { $cpu.mem().read_from(reg_read!($cpu, $reg)) };
-    ($cpu:expr, $val:tt) => { $val };
-}
-
-macro_rules! reg_write {
-    ($cpu:expr, A, $val:expr) => { { $cpu.regs_mut().set_a($val); $val } };
-    ($cpu:expr, B, $val:expr) => { { $cpu.regs_mut().set_b($val); $val } };
-    ($cpu:expr, C, $val:expr) => { { $cpu.regs_mut().set_c($val); $val } };
-    ($cpu:expr, D, $val:expr) => { { $cpu.regs_mut().set_d($val); $val } };
-    ($cpu:expr, E, $val:expr) => { { $cpu.regs_mut().set_e($val); $val } };
-    ($cpu:expr, H, $val:expr) => { { $cpu.regs_mut().set_h($val); $val } };
-    ($cpu:expr, L, $val:expr) => { { $cpu.regs_mut().set_l($val); $val } };
-}
