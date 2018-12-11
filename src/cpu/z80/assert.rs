@@ -1,47 +1,38 @@
+macro_rules! assert_cpu {
+    ($type:ident, $cpu:expr, $eval:tt, $expected:expr) => ({
+        let actual = cpu_eval!($cpu, $eval);
+        assert_result!($type, stringify!($eval), $expected, actual);
+    });
+}
+
 macro_rules! assert_r8 {
-    ($cpu:expr, $reg:ident, $expected:expr) => ({
-        let actual = cpu_eval!($cpu, $reg);
-        assert_result!(HEX8, stringify!($reg), $expected, actual);
+    ($cpu:expr, $reg:tt, $expected:expr) => ({
+        assert_cpu!(HEX8, $cpu, $reg, $expected);
     })
 }
 
 macro_rules! assert_r16 {
-    ($cpu:expr, $reg:ident, $expected:expr) => ({
-        let actual = cpu_eval!($cpu, $reg);
-        assert_result!(HEX16, stringify!($reg), $expected, actual);
+    ($cpu:expr, $reg:tt, $expected:expr) => ({
+        assert_cpu!(HEX16, $cpu, $reg, $expected);
     })
 }
 
 macro_rules! assert_flags {
     ($cpu:expr, $f0:expr, ($($flags:tt)+)) => ({
-        let initial = $f0;
-        let expected = flags_apply!(initial, $($flags)+);
-        let actual = cpu_eval!($cpu, F);
-        assert_result!(BIN8, "flags", expected, actual);
+        let expected = flags_apply!($f0, $($flags)+);
+        assert_cpu!(BIN8, $cpu, F, expected);
     });
     (unaffected, $cpu:expr, $f0:expr) => ({
-        let expected = $f0;
-        let actual = cpu_eval!($cpu, F);
-        assert_result!(BIN8, "flags", expected, actual);
+        assert_cpu!(BIN8, $cpu, F, $f0);
     });
     ($cpu:expr, $expected:expr, $f0:expr) => ({
-        let initial = $f0;
-        let expected = $expected(initial);
-        let actual = cpu_eval!($cpu, F);
-        assert_result!(BIN8, "flags", expected, actual);
+        let expected = $expected($f0);
+        assert_cpu!(BIN8, $cpu, F, expected);
     });
 }
 
-macro_rules! assert_program_counter {
-    ($cpu:expr, $expected:expr) => ({
-        let actual = cpu_eval!($cpu, PC);
-        assert_result!(HEX16, "program counter", $expected, actual);
-    });
-}
-
-macro_rules! assert_dest {
-    ($type:ty, $cpu:expr, $dstget:expr, $expected:expr) => ({
-        let actual = $dstget($cpu);
-        assert_result!(HEX16, "dest", $expected, actual);
-    });
+macro_rules! assert_pc {
+    ($cpu:expr, $expected:expr) => { 
+        assert_cpu!(HEX16, $cpu, PC, $expected)
+    };
 }

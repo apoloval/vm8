@@ -2,14 +2,15 @@ use bus;
 use mem;
 
 #[macro_use] pub mod inst;
+#[macro_use] pub mod eval;
 #[macro_use] pub mod flags;
-#[macro_use] mod cpu;
 
 #[cfg(test)]
 #[macro_use]
 mod assert;
 
 mod alu;
+mod cpu;
 mod error;
 mod exec;
 mod reg;
