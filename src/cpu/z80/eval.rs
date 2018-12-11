@@ -2,63 +2,70 @@
 macro_rules! cpu_eval {
 
     // Assign to register A
-    ($cpu:expr, A <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, A <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_a(val);
         val
     });
 
     // Assign and set flags
-    ($cpu:expr, F +<- $($flags:tt)+) => ({ 
+    ($cpu:expr, F +<- ($($flags:tt)+)) => ({
+        let mut flags = cpu_eval!($cpu, F);
+        flags = flags_apply!(flags, $($flags)+);
+        cpu_eval!($cpu, F <- flags);
+    });
+
+    // Assign and set flags
+    ($cpu:expr, F +<- $($flags:tt)+) => ({
         let mut flags = cpu_eval!($cpu, F);
         flags = flags_apply!(flags, $($flags)+);
         cpu_eval!($cpu, F <- flags);
     });
 
     // Assign to register F
-    ($cpu:expr, F <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, F <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_flags(val);
         val
     });
 
     // Assign to register B
-    ($cpu:expr, B <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, B <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_b(val);
         val
     });
 
     // Assign to register C
-    ($cpu:expr, C <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, C <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_c(val);
         val
     });
 
     // Assign to register D
-    ($cpu:expr, D <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, D <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_d(val);
         val
     });
 
     // Assign to register E
-    ($cpu:expr, E <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, E <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_e(val);
         val
     });
 
     // Assign to register H
-    ($cpu:expr, H <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, H <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_h(val);
         val
     });
 
     // Assign to register L
-    ($cpu:expr, L <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, L <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_l(val);
         val
@@ -68,61 +75,61 @@ macro_rules! cpu_eval {
     ($cpu:expr, AF <-> AF_) => { $cpu.regs_mut().swap_af() };
 
     // Assign to AF register
-    ($cpu:expr, AF <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, AF <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_af(val);
         val
     });
 
     // Assign to AF' register
-    ($cpu:expr, AF_ <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, AF_ <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_af_(val);
         val
     });
 
     // Assign to BC register
-    ($cpu:expr, BC <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, BC <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_bc(val);
         val
     });
 
     // Assign to DE register
-    ($cpu:expr, DE <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, DE <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_de(val);
         val
     });
 
     // Assign to HL register
-    ($cpu:expr, HL <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, HL <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_hl(val);
         val
     });
 
     // Assign to SP register
-    ($cpu:expr, SP <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, SP <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_sp(val);
         val
     });
 
     // Assign and increment PC register using 8-bits
-    ($cpu:expr, PC +<- $($rhs:tt)+) => ({ 
+    ($cpu:expr, PC +<- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().inc_pc8(val)
     });
 
     // Assign and increment PC register using 16 bits
-    ($cpu:expr, PC ++<- $($rhs:tt)+) => ({ 
+    ($cpu:expr, PC ++<- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().inc_pc(val)
     });
 
     // Assign to PC register
-    ($cpu:expr, PC <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, PC <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_pc(val);
         val
@@ -132,7 +139,7 @@ macro_rules! cpu_eval {
     ($cpu:expr, PC++) => { $cpu.regs_mut().inc_pc(1) };
 
     // Indirect write access of bytes
-    ($cpu:expr, (*$lhs:tt) <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, (*$lhs:tt) <- $($rhs:tt)+) => ({
         let addr = cpu_eval!($cpu, $lhs);
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.mem_mut().write_to(addr, val);
@@ -140,7 +147,7 @@ macro_rules! cpu_eval {
     });
 
     // Indirect write access of words
-    ($cpu:expr, (**$lhs:tt) <- $($rhs:tt)+) => ({ 
+    ($cpu:expr, (**$lhs:tt) <- $($rhs:tt)+) => ({
         let addr = cpu_eval!($cpu, $lhs);
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.mem_mut().write_word_to::<LittleEndian>(addr, val) ;
@@ -182,9 +189,9 @@ macro_rules! cpu_eval {
     });
 
     // Indirect read access of words
-    ($cpu:expr, (**$val:tt)) => ({ 
+    ($cpu:expr, (**$val:tt)) => ({
         let addr = cpu_eval!($cpu, $val);
-        $cpu.mem().read_word_from::<LittleEndian>(addr) 
+        $cpu.mem().read_word_from::<LittleEndian>(addr)
     });
 
     ($cpu:expr, L8) => ({

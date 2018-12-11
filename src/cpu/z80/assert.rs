@@ -18,15 +18,11 @@ macro_rules! assert_r16 {
 }
 
 macro_rules! assert_flags {
-    ($cpu:expr, $f0:expr, ($($flags:tt)+)) => ({
-        let expected = flags_apply!($f0, $($flags)+);
-        assert_cpu!(BIN8, $cpu, F, expected);
-    });
-    (unaffected, $cpu:expr, $f0:expr) => ({
+    ($cpu:expr, $f0:expr, unaffected) => ({
         assert_cpu!(BIN8, $cpu, F, $f0);
     });
-    ($cpu:expr, $expected:expr, $f0:expr) => ({
-        let expected = $expected($f0);
+    ($cpu:expr, $f0:expr, ($($flags:tt)+)) => ({
+        let expected = flags_apply!($f0, $($flags)+);
         assert_cpu!(BIN8, $cpu, F, expected);
     });
 }

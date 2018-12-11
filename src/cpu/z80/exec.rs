@@ -62,7 +62,7 @@ macro_rules! cpu_exec {
             C:[c>0xffff]
             H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
             N:0);
-        cpu_eval!($cpu, F <- flags);    
+        cpu_eval!($cpu, F <- flags);
     });
     ($cpu:expr, CCF) => ({
         let mut flags = cpu_eval!($cpu, F);
@@ -79,7 +79,7 @@ macro_rules! cpu_exec {
 
         let mut flags = cpu_eval!($cpu, F);
         flags = flags_apply!(flags, H:1 N:1);
-        cpu_eval!($cpu, F <- flags);    
+        cpu_eval!($cpu, F <- flags);
     });
     ($cpu:expr, DAA) => ({
         let prev_a = cpu_eval!($cpu, A);
@@ -158,7 +158,7 @@ macro_rules! cpu_exec {
         let (result, _) = $cpu.alu().add16(dest, 1);
         cpu_eval!($cpu, $dst <- result);
         cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
-    });    
+    });
     ($cpu:expr, JP $($dst:tt)+) => ({
         let dest = cpu_eval!($cpu, $($dst)+);
         cpu_eval!($cpu, PC <- dest);
@@ -392,12 +392,10 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
 
 #[cfg(test)]
 mod test {
-    use std::fmt;
     use std::io::Write;
 
-    use rand;
-
     use cpu::z80;
+    use testutil::Sample;
 
     use super::*;
 
@@ -410,7 +408,7 @@ mod test {
                 // Random flags, but do not set F5 and F3
                 cpu_eval!(cpu, F <- u8::sample() & 0b11010111);
 
-                // Pointer regs should reference valid memory addresses to be used as indirect 
+                // Pointer regs should reference valid memory addresses to be used as indirect
                 // access arguments.
                 cpu_eval!(cpu, BC <- 0x8000);
                 cpu_eval!(cpu, DE <- 0x8010);
@@ -427,7 +425,7 @@ mod test {
             }
         };
     }
-    
+
     macro_rules! exec_step {
         ($cpu:expr) => (
             {
@@ -437,15 +435,6 @@ mod test {
                 f0
             }
         )
-    }
-
-    macro_rules! decl_test {
-        ($fname:ident, $body:block) => {
-            #[test]
-            fn $fname() {
-                $body
-            }
-        };
     }
 
     /********************/
@@ -460,7 +449,7 @@ mod test {
                 let f0 = exec_step!(&mut cpu);
                 assert_pc!(cpu, $pcinc);
                 assert_r8!(cpu, $dst, input);
-                assert_flags!(unaffected, cpu, f0);
+                assert_flags!(cpu, f0, unaffected);
             });
         };
         ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
@@ -471,7 +460,7 @@ mod test {
                 let f0 = exec_step!(&mut cpu);
                 assert_pc!(cpu, $pcinc);
                 assert_r8!(cpu, $dst, input);
-                assert_flags!(unaffected, cpu, f0);
+                assert_flags!(cpu, f0, unaffected);
             });
         };
     }
@@ -559,7 +548,7 @@ mod test {
     test_exec_ld8!(test_exec_ld8_indhl_l8, 2, (*HL), n);
 
     test_exec_ld8!(test_ld_a_indl16, 3, A, (*0x1234));
-        
+
 
     /*********************/
     /* 16-Bit Load Group */
@@ -574,7 +563,7 @@ mod test {
                 let f0 = exec_step!(&mut cpu);
                 assert_pc!(cpu, $pcinc);
                 assert_r8!(cpu, (**0x4000), input);
-                assert_flags!(unaffected, cpu, f0);
+                assert_flags!(cpu, f0, unaffected);
             });
         };
         ($fname:ident, $pcinc:expr, $dst:tt, nn) => {
@@ -585,7 +574,7 @@ mod test {
                 let f0 = exec_step!(&mut cpu);
                 assert_pc!(cpu, $pcinc);
                 assert_r8!(cpu, $dst, input);
-                assert_flags!(unaffected, cpu, f0);
+                assert_flags!(cpu, f0, unaffected);
             });
         };
         ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
@@ -596,7 +585,7 @@ mod test {
                 let f0 = exec_step!(&mut cpu);
                 assert_pc!(cpu, $pcinc);
                 assert_r8!(cpu, $dst, input);
-                assert_flags!(unaffected, cpu, f0);
+                assert_flags!(cpu, f0, unaffected);
             });
         };
     }
@@ -643,26 +632,25 @@ mod test {
 
     macro_rules! test_exec_add8 {
         ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            mod $fname {
-                use super::*;
-                decl_test!(regular_case, { 
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
                     test_exec_add8_case!($dst, $src, 0x21, 0x42, (S:0 Z:0 H:0 PV:0 N:0 C:0));
                 });
-                decl_test!(overflow_plus_signed, { 
+                decl_test!(overflow_plus_signed, {
                     test_exec_add8_case!($dst, $src, 0x51, 0xa2, (S:1 Z:0 H:0 PV:1 N:0 C:0));
                 });
-                decl_test!(half_carry, { 
+                decl_test!(half_carry, {
                     test_exec_add8_case!($dst, $src, 0x29, 0x52, (S:0 Z:0 H:1 PV:0 N:0 C:0));
                 });
-                decl_test!(zero, { 
+                decl_test!(zero, {
                     test_exec_add8_case!($dst, $src, 0, 0, (S:0 Z:1 H:0 PV:0 N:0 C:0));
                 });
-                decl_test!(carry, { 
+                decl_test!(carry, {
                     test_exec_add8_case!($dst, $src, 0x90, 0x20, (S:0 Z:0 H:0 PV:1 N:0 C:1));
                 });
-            }
+            });
         };
-    }            
+    }
 
     test_exec_add8!(test_exec_add_a_a, 1, A, A);
     test_exec_add8!(test_exec_add_a_a_2, 1, A, A);
@@ -690,29 +678,28 @@ mod test {
 
     macro_rules! test_exec_adc8 {
         ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            mod $fname {
-                use super::*;
-                decl_test!(regular_case, { 
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
                     test_exec_adc8_case!($dst, $src, 0x21, false, 0x42, (S:0 Z:0 H:0 PV:0 N:0 C:0));
                 });
-                decl_test!(regular_case_with_carry, { 
+                decl_test!(regular_case_with_carry, {
                     test_exec_adc8_case!($dst, $src, 0x21, true, 0x43, (S:0 Z:0 H:0 PV:0 N:0 C:0));
                 });
-                decl_test!(overflow_plus_signed, { 
+                decl_test!(overflow_plus_signed, {
                     test_exec_adc8_case!($dst, $src, 0x51, false, 0xa2, (S:1 Z:0 H:0 PV:1 N:0 C:0));
                 });
-                decl_test!(half_carry, { 
+                decl_test!(half_carry, {
                     test_exec_adc8_case!($dst, $src, 0x29, false, 0x52, (S:0 Z:0 H:1 PV:0 N:0 C:0));
                 });
-                decl_test!(zero, { 
+                decl_test!(zero, {
                     test_exec_adc8_case!($dst, $src, 0, false, 0, (S:0 Z:1 H:0 PV:0 N:0 C:0));
                 });
-                decl_test!(carry, { 
+                decl_test!(carry, {
                     test_exec_adc8_case!($dst, $src, 0x90, false, 0x20, (S:0 Z:0 H:0 PV:1 N:0 C:1));
                 });
-            }
+            });
         };
-    }      
+    }
 
     test_exec_adc8!(test_exec_adc_a_a, 1, A, A);
     test_exec_adc8!(test_exec_adc_a_b, 1, A, B);
@@ -737,21 +724,20 @@ mod test {
 
     macro_rules! test_exec_inc8 {
         ($fname:ident, $pcinc:expr, $dst:tt) => {
-            mod $fname {
-                use super::*;
-                decl_test!(regular_case, { 
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
                     test_exec_inc8_case!($dst, 0x01, 0x02, (S:0 Z:0 H:0 PV:0 N:0));
                 });
-                decl_test!(half_carry, { 
+                decl_test!(half_carry, {
                     test_exec_inc8_case!($dst, 0x0f, 0x10, (S:0 Z:0 H:1 PV:0 N:0));
                 });
-                decl_test!(overflow, { 
+                decl_test!(overflow, {
                     test_exec_inc8_case!($dst, 0x7f, 0x80, (S:1 Z:0 H:1 PV:1 N:0));
                 });
-                decl_test!(carry, { 
+                decl_test!(carry, {
                     test_exec_inc8_case!($dst, 0xff, 0x00, (S:0 Z:1 H:1 PV:0 N:0));
                 });
-            }
+            });
         };
     }
 
@@ -777,26 +763,25 @@ mod test {
 
     macro_rules! test_exec_dec8 {
         ($fname:ident, $pcinc:expr, $dst:tt) => {
-            mod $fname {
-                use super::*;
-                decl_test!(regular_case, { 
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
                     test_exec_dec8_case!($dst, 0x02, 0x01, (S:0 Z:0 H:0 PV:0 N:1));
                 });
-                decl_test!(half_carry, { 
+                decl_test!(half_carry, {
                     test_exec_dec8_case!($dst, 0x10, 0x0f, (S:0 Z:0 H:1 PV:0 N:1));
                 });
-                decl_test!(overflow, { 
+                decl_test!(overflow, {
                     test_exec_dec8_case!($dst, 0x80, 0x7f, (S:0 Z:0 H:1 PV:1 N:1));
                 });
-                decl_test!(zero, { 
+                decl_test!(zero, {
                     test_exec_dec8_case!($dst, 0x01, 0x00, (S:0 Z:1 H:0 PV:0 N:1));
                 });
-                decl_test!(no_carry, { 
+                decl_test!(no_carry, {
                     test_exec_dec8_case!($dst, 0x00, 0xff, (S:1 Z:0 H:1 PV:0 N:1));
                 });
-            }
+            });
         };
-    }    
+    }
 
     test_exec_dec8!(test_exec_dec_a, 1, A);
     test_exec_dec8!(test_exec_dec_b, 1, B);
@@ -806,7 +791,7 @@ mod test {
     test_exec_dec8!(test_exec_dec_h, 1, H);
     test_exec_dec8!(test_exec_dec_l, 1, L);
 
-    test_exec_dec8!(test_exec_dec_indhl, 1, (*HL));    
+    test_exec_dec8!(test_exec_dec_indhl, 1, (*HL));
 
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
@@ -821,737 +806,362 @@ mod test {
         assert_flags!(cpu, f0, (H:1 N:1));
     });
 
-    #[test]
-    fn test_exec_daa() {
-        struct Case {
-            name: &'static str,
-            pre_a: u8,
-            pre_flags: u8,
-            expected_a: u8,
-            expected_flags: u8,
-        }
-        let mut test = ExecTest::for_inst(&inst!(DAA));
-        table_test!(
-            &[
-            Case {
-                name: "Already adjusted",
-                pre_a: 0x42,
-                pre_flags: flags_apply!(0, N:0 H:0 C:0),
-                expected_a: 0x42,
-                expected_flags: 0,
-            },
-            Case {
-                name: "Need to adjust low nibble after add",
-                pre_a: 0x4d,
-                pre_flags: flags_apply!(0, N:0 H:0 C:0),
-                expected_a: 0x53,
-                expected_flags: flags_apply!(0, N:0 H:1 C:0),
-            },
-            Case {
-                name: "Need to adjust low nibble after subtract",
-                pre_a: 0x4d,
-                pre_flags: flags_apply!(0, N:1 H:0 C:0),
-                expected_a: 0x47,
-                expected_flags: flags_apply!(0, N:1 H:0 C:0),
-            },
-            Case {
-                name: "Need to adjust high nibble after add",
-                pre_a: 0xd4,
-                pre_flags: flags_apply!(0, N:0 H:0 C:0),
-                expected_a: 0x34,
-                expected_flags: flags_apply!(0, N:0 H:0 C:1),
-            },
-            Case {
-                name: "Need to adjust high nibble after subtract",
-                pre_a: 0xd4,
-                pre_flags: flags_apply!(0, N:1 H:0 C:0),
-                expected_a: 0x74,
-                expected_flags: flags_apply!(0, N:1 H:0 C:1),
-            },
-            ],
-            |case: &Case| {
-                test.cpu.regs_mut().set_a(case.pre_a);
-                test.cpu.regs_mut().set_flags(case.pre_flags);
-                test.exec_step();
-
-                let given_a = test.cpu.regs().a();
-                let given_flags = test.cpu.regs().flags();
-                assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-                assert_result!(HEX8, "register A", case.expected_a, given_a);
-                assert_result!(BIN8, "flags", case.expected_flags, given_flags);
-            }
-        );
+    macro_rules! test_exec_daa_case {
+        ($input:expr, $input_flags:expr, $output:expr, $output_flags:expr) => ({
+            let mut cpu = cpu!(DAA);
+            cpu_eval!(cpu, A <- $input);
+            cpu_eval!(cpu, F <- $input_flags);
+            exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $output);
+            assert_r8!(cpu, F, $output_flags);
+        });
     }
 
-    #[test]
-    fn test_exec_nop() {
-        let mut test = ExecTest::for_inst(&inst!(NOP));
-        test.exec_step();
-        assert_eq!(0x0001, test.cpu.regs().pc());
-        test.assert_all_flags_unaffected("nop");
-    }
+    decl_suite!(test_exec_daa, {
+        decl_test!(already_adjusted, {
+            test_exec_daa_case!(
+                0x42, flags_apply!(0, N:0 H:0 C:0),
+                0x42, 0);
+        });
+        decl_test!(need_adjust_low_nibble_after_add, {
+            test_exec_daa_case!(
+                0x4d, flags_apply!(0, N:0 H:0 C:0),
+                0x53, flags_apply!(0, N:0 H:1 C:0));
+        });
+        decl_test!(need_adjust_low_nibble_after_subtract, {
+            test_exec_daa_case!(
+                0x4d, flags_apply!(0, N:1 H:0 C:0),
+                0x47, flags_apply!(0, N:1 H:0 C:0));
+        });
+        decl_test!(need_adjust_high_nibble_after_add, {
+            test_exec_daa_case!(
+                0xd4, flags_apply!(0, N:0 H:0 C:0),
+                0x34, flags_apply!(0, N:0 H:0 C:1));
+        });
+        decl_test!(need_adjust_high_nibble_after_subtract, {
+            test_exec_daa_case!(
+                0xd4, flags_apply!(0, N:1 H:0 C:0),
+                0x74, flags_apply!(0, N:1 H:0 C:1));
+        });
+    });
 
-    #[test]
-    fn test_exec_scf() {
-        let mut test = ExecTest::for_inst(&inst!(SCF));
-        test.exec_step();
-        
-        test.assert_hflag_if("SCF", false);
-        test.assert_nflag_if("SCF", false);
-        test.assert_cflag_if("SCF", true);
-    }
+    decl_test!(test_exec_nop, {
+        let mut cpu = cpu!(NOP);
+        let f0 = exec_step!(&mut cpu);
+        assert_pc!(cpu, 0x0001);
+        assert_flags!(cpu, f0, unaffected);
+    });
 
-    #[test]
-    fn test_exec_ccf() {
-        let mut test = ExecTest::for_inst(&inst!(CCF));
-        // Case: flag C is reset
-        test.cpu.regs_mut().set_flags(0x00);
-        test.exec_step();
-        
-        test.assert_hflag_if("CCF", false);
-        test.assert_nflag_if("CCF", false);
-        test.assert_cflag_if("CCF", true);
+    decl_test!(test_exec_scf, {
+        let mut cpu = cpu!(SCF);
+        let f0 = exec_step!(&mut cpu);
+        assert_flags!(cpu, f0, (H:0 N:0 C:1));
+    });
 
-        // Case: flag C is set
-        test.cpu.regs_mut().set_flags(0x01);
-        test.exec_step();
-        
-        test.assert_hflag_if("CCF", true);
-        test.assert_nflag_if("CCF", false);
-        test.assert_cflag_if("CCF", false);
-    }
+    decl_suite!(test_exec_ccf, {
+        decl_test!(flag_c_is_reset, {
+            let mut cpu = cpu!(CCF);
+            cpu_eval!(cpu, F <- 0);
+            let f0 = exec_step!(&mut cpu);
 
-    #[test]
-    fn test_exec_halt() {
-        let mut test = ExecTest::for_inst(&inst!(HALT));
-        test.exec_step();
-        assert_result!(HEX16, "program counter", 0x0000, test.cpu.regs().pc());
-        test.assert_all_flags_unaffected("halt");
-    }
+            assert_flags!(cpu, f0, (H:0 N:0 C:1));
+        });
+
+        decl_test!(flag_c_is_set, {
+            let mut cpu = cpu!(CCF);
+            cpu_eval!(cpu, F <- 1);
+            let f0 = exec_step!(&mut cpu);
+
+            assert_flags!(cpu, f0, (H:1 N:0 C:0));
+        });
+    });
+
+    decl_test!(test_exec_halt, {
+        let mut cpu = cpu!(HALT);
+        let f0 = exec_step!(&mut cpu);
+        assert_pc!(cpu, 0x0000);
+        assert_flags!(cpu, f0, unaffected);
+    });
 
     /***************************/
     /* 16-Bit Arithmetic group */
     /***************************/
 
-    macro_rules! test_inc_reg16 {
-        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(INC $regname));
-                test.assert_behaves_like_inc16(
-                    |v, cpu| cpu.regs_mut().$regset(v),
-                    |cpu| cpu.regs().$regget(),
-                );
-            });
-        }
-    }
-
-    test_inc_reg16!(test_exec_inc_bc, BC, bc, set_bc);
-    test_inc_reg16!(test_exec_inc_de, DE, de, set_de);
-    test_inc_reg16!(test_exec_inc_hl, HL, hl, set_hl);
-    test_inc_reg16!(test_exec_inc_sp, SP, sp, set_sp);
-
-    macro_rules! test_dec_reg16 {
-        ($fname:ident, $regname:ident, $regget:ident, $regset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(DEC $regname));
-                test.assert_behaves_like_dec16(
-                    |v, cpu| cpu.regs_mut().$regset(v),
-                    |cpu| cpu.regs().$regget(),
-                );
-            });
-        }
-    }
-
-    test_dec_reg16!(test_exec_dec_bc, BC, bc, set_bc);
-    test_dec_reg16!(test_exec_dec_de, DE, de, set_de);
-    test_dec_reg16!(test_exec_dec_hl, HL, hl, set_hl);
-    test_dec_reg16!(test_exec_dec_sp, SP, sp, set_sp);
-
-    macro_rules! test_add_reg16_reg16 {
-        ($fname:ident, $dstname:ident, $srcname:ident,
-         $dstget:ident, $dstset:ident, $srcset:ident) => {
-            decl_test!($fname, {
-                let mut test = ExecTest::for_inst(&inst!(ADD $dstname, $srcname));
-                test.asset_behaves_like_add16(
-                    |a, b, cpu| {
-                        cpu.regs_mut().$dstset(a);
-                        cpu.regs_mut().$srcset(b);
-                    },
-                    |cpu| cpu.regs().$dstget(),
-                );
-            });
-        }
-    }
-
-    test_add_reg16_reg16!(test_exec_add_hl_bc, HL, BC, hl, set_hl, set_bc);
-    test_add_reg16_reg16!(test_exec_add_hl_de, HL, DE, hl, set_hl, set_de);
-    test_add_reg16_reg16!(test_exec_add_hl_sp, HL, SP, hl, set_hl, set_sp);
-
-    #[test]
-    fn test_exec_add_hl_hl() {
-        struct Case {
-            name: &'static str,
-            a: u16,
-            expected: u16,
-            expected_flags: fn(u8) -> u8,
-        }
-        let mut test = ExecTest::for_inst(&inst!(ADD HL, HL));
-        table_test!(&[
-            Case {
-                name: "Regular case",
-                a: 0x1245,
-                expected: 0x248a,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C:0),
-            },
-            Case {
-                name: "Half carry",
-                a: 0x1f45,
-                expected: 0x3e8a,
-                expected_flags: |f| flags_apply!(f, H:1 N:0 C:0),
-            },
-            Case {
-                name: "Carry",
-                a: 0xff45,
-                expected: 0xfe8a,
-                expected_flags: |f| flags_apply!(f, H:1 N:0 C:1),
-            },
-        ], |case: &Case| {
-            test.cpu.regs_mut().set_hl(case.a);
-            test.exec_step();
-            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-            let actual = test.cpu.regs().hl();
-            let expected_flags = (case.expected_flags)(test.cpu.regs().flags());
-            let actual_flags = test.cpu.regs().flags();
-            assert_result!(HEX16, "dest", case.expected, actual);
-            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+    macro_rules! test_inc16_case {
+        ($dst:tt, $input:expr, $output:expr) => ({
+            let mut cpu = cpu!(INC $dst);
+            cpu_eval!(cpu, $dst <- $input);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r16!(cpu, $dst, $output);
+            assert_flags!(cpu, f0, unaffected);
         });
     }
+
+    macro_rules! test_inc_reg16 {
+        ($fname:ident, $dst:tt) => {
+            decl_suite!($fname, {
+                decl_test!(regular_case, { test_inc16_case!($dst, 0x0001, 0x0002) });
+                decl_test!(carry, { test_inc16_case!($dst, 0xffff, 0x0000) });
+            });
+        }
+    }
+
+    test_inc_reg16!(test_exec_inc_bc, BC);
+    test_inc_reg16!(test_exec_inc_de, DE);
+    test_inc_reg16!(test_exec_inc_hl, HL);
+    test_inc_reg16!(test_exec_inc_sp, SP);
+
+    macro_rules! test_dec16_case {
+        ($dst:tt, $input:expr, $output:expr) => ({
+            let mut cpu = cpu!(DEC $dst);
+            cpu_eval!(cpu, $dst <- $input);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r16!(cpu, $dst, $output);
+            assert_flags!(cpu, f0, unaffected);
+        });
+    }
+
+    macro_rules! test_dec_reg16 {
+        ($fname:ident, $dst:tt) => {
+            decl_suite!($fname, {
+                decl_test!(regular_case, { test_dec16_case!($dst, 0x0002, 0x0001) });
+                decl_test!(carry, { test_dec16_case!($dst, 0x0000, 0xffff) });
+            });
+        }
+    }
+
+    test_dec_reg16!(test_exec_dec_bc, BC);
+    test_dec_reg16!(test_exec_dec_de, DE);
+    test_dec_reg16!(test_exec_dec_hl, HL);
+    test_dec_reg16!(test_exec_dec_sp, SP);
+
+    macro_rules! test_add16_case {
+        ($dst:tt, $src:tt, $a:expr, $b:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(ADD $dst, $src);
+            cpu_eval!(cpu, $dst <- $a);
+            cpu_eval!(cpu, $src <- $b);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r16!(cpu, $dst, $output);
+            assert_flags!(cpu, f0, $flags);
+        });
+    }
+
+    macro_rules! test_add16 {
+        ($fname:ident, $dst:tt, $src:tt) => {
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
+                    test_add16_case!($dst, $src, 0x1245, 0x1921, 0x2b66, (H:0 N:0 C:0));
+                });
+                decl_test!(half_carry, {
+                    test_add16_case!($dst, $src, 0x1f45, 0x1921, 0x3866, (H:1 N:0 C:0));
+                });
+                decl_test!(carry, {
+                    test_add16_case!($dst, $src, 0xff45, 0x1921, 0x1866, (H:1 N:0 C:1));
+                });
+            });
+        };
+        ($fname:ident, $dst:tt) => {
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
+                    test_add16_case!($dst, $dst, 0x1245, 0x1245, 0x248a, (H:0 N:0 C:0));
+                });
+                decl_test!(half_carry, {
+                    test_add16_case!($dst, $dst, 0x1f45, 0x1f45, 0x3e8a, (H:1 N:0 C:0));
+                });
+                decl_test!(carry, {
+                    test_add16_case!($dst, $dst, 0xff45, 0xff45, 0xfe8a, (H:1 N:0 C:1));
+                });
+            });
+        };
+    }
+
+    test_add16!(test_exec_add_hl_bc, HL, BC);
+    test_add16!(test_exec_add_hl_de, HL, DE);
+    test_add16!(test_exec_add_hl_sp, HL, SP);
+    test_add16!(test_exec_add_hl_hl, HL);
 
     /**************************/
     /* Rotate and Shift Group */
     /**************************/
 
-    #[test]
-    fn test_exec_rlca() {
-        struct Case {
-            name: &'static str,
-            a: u8,
-            expected: u8,
-            expected_flags: fn(u8) -> u8,
-        }
-        let mut test = ExecTest::for_inst(&inst!(RLCA));
-        table_test!(&[
-            Case {
-                name: "No carry",
-                a: 0x12,
-                expected: 0x24,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
-            },
-            Case {
-                name: "Carry",
-                a: 0xc8,
-                expected: 0x91,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
-            },
-        ], |case: &Case| {
-            let prev_flags = test.cpu.regs().flags();
-            test.cpu.regs_mut().set_a(case.a);
-            test.exec_step();
+    macro_rules! test_exec_rlca_case {
+        ($input:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(RLCA);
+            cpu_eval!(cpu, A <- $input);
+            let f0 = exec_step!(&mut cpu);
 
-            let actual = test.cpu.regs().a();
-            let expected_flags = (case.expected_flags)(prev_flags);
-            let actual_flags = test.cpu.regs().flags();
-            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-            assert_result!(HEX8, "dest", case.expected, actual);
-            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $output);
+            assert_flags!(cpu, f0, $flags);
         });
     }
 
-    #[test]
-    fn test_exec_rrca() {
-        struct Case {
-            name: &'static str,
-            a: u8,
-            expected: u8,
-            expected_flags: fn(u8) -> u8,
-        }
-        let mut test = ExecTest::for_inst(&inst!(RRCA));
-        table_test!(&[
-            Case {
-                name: "No carry",
-                a: 0x24,
-                expected: 0x12,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
-            },
-            Case {
-                name: "Carry",
-                a: 0x91,
-                expected: 0xc8,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
-            },
-        ], |case: &Case| {
-            let prev_flags = test.cpu.regs().flags();
-            test.cpu.regs_mut().set_a(case.a);
-            test.exec_step();
+    decl_suite!(test_exec_rlca, {
+        decl_test!(no_carry, {
+            test_exec_rlca_case!(0x12, 0x24, (H:0 N:0 C:0));
+        });
+        decl_test!(carry, {
+            test_exec_rlca_case!(0xc8, 0x91, (H:0 N:0 C:1));
+        });
+    });
 
-            let actual = test.cpu.regs().a();
-            let expected_flags = (case.expected_flags)(prev_flags);
-            let actual_flags = test.cpu.regs().flags();
-            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-            assert_result!(HEX8, "dest", case.expected, actual);
-            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+    macro_rules! test_exec_rrca_case {
+        ($input:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(RRCA);
+            cpu_eval!(cpu, A <- $input);
+            let f0 = exec_step!(&mut cpu);
+
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $output);
+            assert_flags!(cpu, f0, $flags);
         });
     }
 
-    #[test]
-    fn test_exec_rla() {
-        struct Case {
-            name: &'static str,
-            a: u8,
-            carry: u8,
-            expected: u8,
-            expected_flags: fn(u8) -> u8,
-        }
-        let mut test = ExecTest::for_inst(&inst!(RLA));
-        table_test!(&[
-            Case {
-                name: "No carry",
-                a: 0x12,
-                carry: 0,
-                expected: 0x24,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
-            },
-            Case {
-                name: "Carry in",
-                a: 0x12,
-                carry: 1,
-                expected: 0x25,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
-            },
-            Case {
-                name: "Carry out",
-                a: 0xc8,
-                carry: 0,
-                expected: 0x90,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
-            },
-            Case {
-                name: "Carry inout",
-                a: 0xc8,
-                carry: 1,
-                expected: 0x91,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
-            },
-        ], |case: &Case| {
-            let mut prev_flags = test.cpu.regs().flags();
-            prev_flags = flags_apply!(prev_flags, C:[case.carry == 1]);
-            test.cpu.regs_mut().set_flags(prev_flags);
-            test.cpu.regs_mut().set_a(case.a);
-            test.exec_step();
+    decl_suite!(test_exec_rrca, {
+        decl_test!(no_carry, {
+            test_exec_rrca_case!(0x24, 0x12, (H:0 N:0 C:0));
+        });
+        decl_test!(carry, {
+            test_exec_rrca_case!(0x91, 0xc8, (H:0 N:0 C:1));
+        });
+    });
 
-            let actual = test.cpu.regs().a();
-            let expected_flags = (case.expected_flags)(prev_flags);
-            let actual_flags = test.cpu.regs().flags();
-            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-            assert_result!(HEX8, "dest", case.expected, actual);
-            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+    macro_rules! test_exec_rla_case {
+        ($input:expr, $carry:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(RLA);
+            cpu_eval!(cpu, A <- $input);
+            cpu_eval!(cpu, F +<- C:[$carry]);
+            let f0 = exec_step!(&mut cpu);
+
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $output);
+            assert_flags!(cpu, f0, $flags);
         });
     }
 
-    #[test]
-    fn test_exec_rra() {
-        struct Case {
-            name: &'static str,
-            a: u8,
-            carry: u8,
-            expected: u8,
-            expected_flags: fn(u8) -> u8,
-        }
-        let mut test = ExecTest::for_inst(&inst!(RRA));
-        table_test!(&[
-            Case {
-                name: "No carry",
-                a: 0x24,
-                carry: 0,
-                expected: 0x12,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
-            },
-            Case {
-                name: "Carry in",
-                a: 0x24,
-                carry: 1,
-                expected: 0x92,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 0),
-            },
-            Case {
-                name: "Carry out",
-                a: 0x91,
-                carry: 0,
-                expected: 0x48,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
-            },
-            Case {
-                name: "Carry inout",
-                a: 0x91,
-                carry: 1,
-                expected: 0xc8,
-                expected_flags: |f| flags_apply!(f, H:0 N:0 C: 1),
-            },
-        ], |case: &Case| {
-            let mut prev_flags = test.cpu.regs().flags();
-            prev_flags = flags_apply!(prev_flags, C:[case.carry == 1]);
-            test.cpu.regs_mut().set_flags(prev_flags);
-            test.cpu.regs_mut().set_a(case.a);
-            test.exec_step();
+    decl_suite!(test_exec_rla, {
+        decl_test!(no_carry, {
+            test_exec_rla_case!(0x12, false, 0x24, (H:0 N:0 C:0));
+        });
+        decl_test!(carry_in, {
+            test_exec_rla_case!(0x12, true, 0x25, (H:0 N:0 C:0));
+        });
+        decl_test!(carry_out, {
+            test_exec_rla_case!(0xc8, false, 0x90, (H:0 N:0 C:1));
+        });
+        decl_test!(carry_inout, {
+            test_exec_rla_case!(0xc8, true, 0x91, (H:0 N:0 C:1));
+        });
+    });
 
-            let actual = test.cpu.regs().a();
-            let expected_flags = (case.expected_flags)(prev_flags);
-            let actual_flags = test.cpu.regs().flags();
-            assert_result!(HEX16, "program counter", 0x0001, test.cpu.regs().pc());
-            assert_result!(HEX8, "dest", case.expected, actual);
-            assert_result!(BIN8, "flags", expected_flags, actual_flags);
+    macro_rules! test_exec_rra_case {
+        ($input:expr, $carry:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(RRA);
+            cpu_eval!(cpu, A <- $input);
+            cpu_eval!(cpu, F +<- C:[$carry]);
+            let f0 = exec_step!(&mut cpu);
+
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $output);
+            assert_flags!(cpu, f0, $flags);
         });
     }
+
+    decl_suite!(test_exec_rra, {
+        decl_test!(no_carry, {
+            test_exec_rra_case!(0x24, false, 0x12, (H:0 N:0 C:0));
+        });
+        decl_test!(carry_in, {
+            test_exec_rra_case!(0x24, true, 0x92, (H:0 N:0 C:0));
+        });
+        decl_test!(carry_out, {
+            test_exec_rra_case!(0x91, false, 0x48, (H:0 N:0 C:1));
+        });
+        decl_test!(carry_inout, {
+            test_exec_rra_case!(0x91, true, 0xc8, (H:0 N:0 C:1));
+        });
+    });
 
     /**************/
     /* Jump Group */
     /**************/
 
-    #[test]
-    fn test_exec_djnz_l8() {
-        struct Case {
-            name: &'static str,
-            input: u8,
-            dest: i8,
-            expected: u8,
-            expected_pc: u16,
-        }
-        let mut test = ExecTest::new();
-        table_test!(&[
-            Case {
-                name: "Branch forwards",
-                input: 10,
-                dest: 0x55,
-                expected: 09,
-                expected_pc: 0x0055,
-            },
-            Case {
-                name: "Branch backwards",
-                input: 10,
-                dest: -0x10,
-                expected: 09,
-                expected_pc: 0xfff0,
-            },
-            Case {
-                name: "No branch",
-                input: 1,
-                dest: 0x55,
-                expected: 0,
-                expected_pc: 0x0002,
-            },
-        ], |case: &Case| {
-            test.cpu.mem_mut().write(&inst!(DJNZ case.dest as u8)).unwrap();
-            test.cpu.regs_mut().set_b(case.input);
-            test.exec_step();
+    macro_rules! test_exec_djnz_l8_case {
+        ($dst:expr, $input:expr, $output:expr, $pc:expr) => ({
+            let mut cpu = cpu!(DJNZ $dst as u8);
+            cpu_eval!(cpu, B <- $input);
+            let f0 = exec_step!(&mut cpu);
 
-            let actual = test.cpu.regs().b();
-            let actual_pc = test.cpu.regs().pc();
-            assert_result!(HEX8, "B", case.expected, actual);
-            assert_result!(HEX16, "program counter", case.expected_pc, actual_pc);
-
-            test.assert_all_flags_unaffected("DJNZ");
+            assert_r8!(cpu, B, $output);
+            assert_pc!(cpu, $pc);
+            assert_flags!(cpu, f0, unaffected);
         });
     }
 
-    #[test]
-    fn test_exec_jr_l8() {
-        struct Case {
-            name: &'static str,
-            dest: i8,
-            expected_pc: u16,
-        }
-        let mut test = ExecTest::new();
-        table_test!(&[
-            Case {
-                name: "Branch forwards",
-                dest: 0x55,
-                expected_pc: 0x0055,
-            },
-            Case {
-                name: "Branch backwards",
-                dest: -0x10,
-                expected_pc: 0xfff0,
-            },
-        ], |case: &Case| {
-            test.cpu.mem_mut().write(&inst!(JR case.dest as u8)).unwrap();
-            test.exec_step();
+    decl_suite!(test_exec_djnz_l8, {
+        decl_test!(branch_forwards, {
+            test_exec_djnz_l8_case!(0x55, 10, 9, 0x0055);
+        });
+        decl_test!(branch_backwards, {
+            test_exec_djnz_l8_case!(-0x10i8, 10, 9, 0xfff0);
+        });
+        decl_test!(no_branch, {
+            test_exec_djnz_l8_case!(0x55, 1, 0, 0x0002);
+        });
+    });
 
-            let actual_pc = test.cpu.regs().pc();
-            assert_result!(HEX16, "program counter", case.expected_pc, actual_pc);
+    macro_rules! test_exec_jr_l8_case {
+        ($dst:expr, $pc:expr) => ({
+            let mut cpu = cpu!(JR $dst as u8);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, $pc);
+            assert_flags!(cpu, f0, unaffected);
+        });
+    }
 
-            test.assert_all_flags_unaffected("JR");
+    decl_suite!(test_exec_jr_l8, {
+        decl_test!(branch_forwards, {
+            test_exec_jr_l8_case!(0x55, 0x0055);
+        });
+        decl_test!(branch_backwards, {
+            test_exec_jr_l8_case!(-0x10i8, 0xfff0);
+        });
+    });
+
+    macro_rules! test_exec_jr_cond_l8_case {
+        ($cond:ident, $dst:expr, $input_flags:tt, $pc:expr) => ({
+            let mut cpu = cpu!(JR $cond, $dst as u8);
+            cpu_eval!(cpu, F +<- $input_flags);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, $pc);
+            assert_flags!(cpu, f0, unaffected);
         });
     }
 
     macro_rules! test_jr_cond_l8 {
-        ($fname:ident, $condname:ident, $flagget:ident, $met:expr, $unmet:expr) => {
-            decl_test!($fname, {
-                struct Case {
-                    name: &'static str,
-                    dest: i8,
-                    branch: bool,
-                    expected_pc: u16,
-                }
-                let mut test = ExecTest::new();
-                table_test!(&[
-                    Case {
-                        name: "Branch forwards",
-                        dest: 0x55,
-                        branch: true,
-                        expected_pc: 0x0055,
-                    },
-                    Case {
-                        name: "Branch backwards",
-                        dest: -0x10,
-                        branch: true,
-                        expected_pc: 0xfff0,
-                    },
-                    Case {
-                        name: "No branch",
-                        dest: 0x55,
-                        branch: false,
-                        expected_pc: 0x0002,
-                    },
-                ], |case: &Case| {
-                    test.cpu.mem_mut().write(&inst!(JR $condname, case.dest as u8)).unwrap();
-                    let mut flags = test.cpu.regs().flags();
-                    if case.branch { flags = $met(flags); }
-                    else { flags = $unmet(flags); }
-                    test.cpu.regs_mut().set_flags(flags);
-                    test.exec_step();
-
-                    let actual_pc = test.cpu.regs().pc();
-                    assert_result!(HEX16, "program counter", case.expected_pc, actual_pc);
-
-                    test.assert_all_flags_unaffected("JR");
+        ($fname:ident, $cond:ident, $met_flags:tt, $unmet_flags:tt) => {
+            decl_suite!($fname, {
+                decl_test!(branch_forwards, {
+                    test_exec_jr_cond_l8_case!($cond, 0x55, $met_flags, 0x0055);
+                });
+                decl_test!(branch_backwards, {
+                    test_exec_jr_cond_l8_case!($cond, -0x10i8, $met_flags, 0xfff0);
+                });
+                decl_test!(no_branch, {
+                    test_exec_jr_cond_l8_case!($cond, 0x55, $unmet_flags, 0x0002);
                 });
             });
-        }
+        };
     }
 
-    test_jr_cond_l8!(test_exec_jr_c_l8, C, flag_c, |f| f | 0b00000001, |f| f & 0b11111110);
-    test_jr_cond_l8!(test_exec_jr_nc_l8, NC, flag_c, |f| f & 0b11111110, |f| f | 0b00000001);
-    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, flag_z, |f| f & 0b10111111, |f| f | 0b01000000);
-    test_jr_cond_l8!(test_exec_jr_z_l8, Z, flag_z, |f| f | 0b01000000, |f| f & 0b10111111);
-
-    /****************************************/
-    /* Test suite for instruction execution */
-    /****************************************/
-
-    type CPU = z80::CPU<z80::MemoryBank>;
-
-    struct ExecTest {
-        pub cpu: CPU,
-        prev_flags: u8,
-    }
-
-    trait Data : fmt::Display + fmt::Debug + fmt::UpperHex + Copy + PartialEq {
-        fn sample() -> Self;
-    }
-
-    impl Data for u8 {
-        fn sample() -> u8 { rand::random() }
-    }
-
-    impl Data for u16 {
-        fn sample() -> u16 { rand::random() }
-    }
-
-    impl ExecTest {
-        fn new() -> Self {
-            let prev_flags = u8::sample() & 0b11010111; // Do not set F5 and F3
-            let mem = z80::MemoryBank::new();
-            let mut cpu = z80::CPU::new(z80::Options::default(), mem);
-            cpu.regs_mut().set_flags(prev_flags);
-            Self { cpu, prev_flags }
-        }
-
-        fn for_inst(inst: &[u8]) -> Self {
-            let mut test = Self::new();
-            Write::write(test.cpu.mem_mut(), inst).unwrap();
-            test
-        }
-
-        fn exec_step(&mut self) {
-            self.cpu.regs_mut().set_pc(0x0000);
-            self.prev_flags = self.cpu.regs().flags();
-            exec_step(&mut self.cpu);
-        }
-
-        fn assert_behaves_like_inc16<S, G>(&mut self, set: S, get: G)
-        where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            struct Case {
-                name: &'static str,
-                input: u16,
-                expected: u16,
-            }
-            table_test!(&[
-                Case {
-                    name: "Regular case",
-                    input: 0x0001,
-                    expected: 0x0002,
-                },
-                Case {
-                    name: "Carry",
-                    input: 0xffff,
-                    expected: 0x0000,
-                },
-            ], |case: &Case| {
-                set(case.input, &mut self.cpu);
-                self.exec_step();
-                let actual = get(&self.cpu);
-
-                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
-                assert_result!(HEX16, "result", case.expected, actual);
-                self.assert_all_flags_unaffected("INC (16-bits)");
-            });
-        }        
-
-        fn assert_behaves_like_dec16<S, G>(&mut self, set: S, get: G)
-        where S: Fn(u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            struct Case {
-                name: &'static str,
-                input: u16,
-                expected: u16,
-            }
-            table_test!(&[
-                Case {
-                    name: "Regular case",
-                    input: 0x0002,
-                    expected: 0x0001,
-                },
-                Case {
-                    name: "Carry",
-                    input: 0x0000,
-                    expected: 0xffff,
-                },
-            ], |case: &Case| {
-                set(case.input, &mut self.cpu);
-                self.exec_step();
-                let actual = get(&self.cpu);
-
-                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
-                assert_result!(HEX16, "result", case.expected, actual);
-                self.assert_all_flags_unaffected("DEC (16-bits)");
-            });
-        }
-
-        fn asset_behaves_like_add16<S, G>(&mut self, set: S, get: G)
-        where S: Fn(u16, u16, &mut CPU), G: Fn(&CPU) -> u16 {
-            struct Case {
-                name: &'static str,
-                a: u16,
-                b: u16,
-                expected: u16,
-                expected_flags: fn(u8) -> u8,
-            }
-            table_test!(&[
-                Case {
-                    name: "Regular case",
-                    a: 0x1245,
-                    b: 0x1921,
-                    expected: 0x2b66,
-                    expected_flags: |f| flags_apply!(f, H:0 N:0 C:0),
-                },
-                Case {
-                    name: "Half carry",
-                    a: 0x1f45,
-                    b: 0x1921,
-                    expected: 0x3866,
-                    expected_flags: |f| flags_apply!(f, H:1 N:0 C:0),
-                },
-                Case {
-                    name: "Carry",
-                    a: 0xff45,
-                    b: 0x1921,
-                    expected: 0x1866,
-                    expected_flags: |f| flags_apply!(f, H:1 N:0 C:1),
-                },
-            ], |case: &Case| {
-                set(case.a, case.b, &mut self.cpu);
-                self.exec_step();
-                assert_result!(HEX16, "program counter", 0x0001, self.cpu.regs().pc());
-                let actual = get(&self.cpu);
-                let expected_flags = (case.expected_flags)(self.cpu.regs().flags());
-                let actual_flags = self.cpu.regs().flags();
-                assert_result!(HEX16, "dest", case.expected, actual);
-                assert_result!(BIN8, "flags", expected_flags, actual_flags);
-            });
-        }
-
-        fn assert_hflag_if(&self, pre: &str, active: bool) {
-            self.assert_flag_if(pre, active, "H", 0x10);
-        }
-
-        fn assert_nflag_if(&self, pre: &str, active: bool) {
-            self.assert_flag_if(pre, active, "N", 0x02);
-        }
-
-        fn assert_cflag_if(&self, pre: &str, active: bool) {
-            self.assert_flag_if(pre, active, "C", 0x01);
-        }
-
-        fn assert_flag_if(&self, pre: &str, active: bool, name: &str, mask: u8) {
-            let flags = self.cpu.regs().flags();
-            if active {
-                assert!(flags & mask != 0,
-                    "{}: expected {} flag to be set in 0b{:08b}", pre, name, flags);
-            } else {
-                assert!(flags & mask == 0,
-                    "{}: expected {} flag to be unset in 0b{:08b}", pre, name, flags);
-            }
-        }
-
-        fn assert_sflag_unaffected(&self, pre: &str) {
-            self.assert_flag_unaffected(pre, "S", 0x80);
-        }
-
-        fn assert_zflag_unaffected(&self, pre: &str) {
-            self.assert_flag_unaffected(pre, "Z", 0x40);
-        }
-
-        fn assert_hflag_unaffected(&self, pre: &str) {
-            self.assert_flag_unaffected(pre, "H", 0x10);
-        }
-
-        fn assert_pvflag_unaffected(&self, pre: &str) {
-            self.assert_flag_unaffected(pre, "PV", 0x04);
-        }
-
-        fn assert_nflag_unaffected(&self, pre: &str) {
-            self.assert_flag_unaffected(pre, "N", 0x02);
-        }
-
-        fn assert_cflag_unaffected(&self, pre: &str) {
-            self.assert_flag_unaffected(pre, "C", 0x01);
-        }
-
-        fn assert_all_flags_unaffected(&self, pre: &str) {
-            self.assert_sflag_unaffected(pre);
-            self.assert_zflag_unaffected(pre);
-            self.assert_hflag_unaffected(pre);
-            self.assert_pvflag_unaffected(pre);
-            self.assert_nflag_unaffected(pre);
-            self.assert_cflag_unaffected(pre);
-        }
-
-        fn assert_flag_unaffected(&self, pre: &str, name: &str, mask: u8) {
-            let flags = self.cpu.regs().flags();
-            assert!(flags & mask == self.prev_flags & mask,
-                "{}: expected {} flag to be unaffected in b{:08b} (previous flags were b{:08b}",
-                pre, name, flags, self.prev_flags);
-        }
-    }
+    test_jr_cond_l8!(test_exec_jr_c_l8, C, (C:1), (C:0));
+    test_jr_cond_l8!(test_exec_jr_nc_l8, NC, (C:0), (C:1));
+    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, (Z:0), (Z:1));
+    test_jr_cond_l8!(test_exec_jr_z_l8, Z, (Z:1), (Z:0));
 }
 
 #[cfg(all(feature = "nightly", test))]

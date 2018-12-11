@@ -66,7 +66,7 @@ impl ALU {
     #[inline]
     pub fn add16_with_flags(&self, a: u16, b: u16, flags: &mut u8) -> u16 {
         let (c, carry) = self.add16(a, b);
-        *flags = flags_apply!(*flags, 
+        *flags = flags_apply!(*flags,
             H:[(a & 0x0fff) + (b & 0x0fff) > 0x1000]
             N:0
             C:[carry]
@@ -89,7 +89,7 @@ impl ALU {
     }
 
     #[inline]
-    pub fn dec8_with_flags(&self, a: u8, flags: &mut u8) -> u8 {        
+    pub fn dec8_with_flags(&self, a: u8, flags: &mut u8) -> u8 {
         let (c, _) = self.sub8(a, 1);
         let index = Self::pre_flags_index(a, c);
         *flags = (*flags & 0x01) | (self.pre_flags[index].sub & 0xfe);
@@ -116,13 +116,13 @@ impl ALU {
     }
 
     fn init_pre_flags() -> PreFlagsTable {
-        let mut pre_flags = vec![PreFlags::default(); 256*256];        
+        let mut pre_flags = vec![PreFlags::default(); 256*256];
         for a in 0..=255 {
             for c in 0..=255 {
                 let index = Self::pre_flags_index(a, c);
                 {
                     let b = ((c as i16) - (a as i16)) as u8;
-                    pre_flags[index].add = flags_apply!(0, 
+                    pre_flags[index].add = flags_apply!(0,
                         S:[(c & 0x80) != 0]
                         Z:[c == 0]
                         H:[(a & 0x0f) > (c & 0x0f)]
@@ -133,7 +133,7 @@ impl ALU {
                 }
                 {
                     let b = ((a as i16) - (c as i16)) as u8;
-                    pre_flags[index].sub = flags_apply!(0, 
+                    pre_flags[index].sub = flags_apply!(0,
                         S:[(c & 0x80) != 0]
                         Z:[c == 0]
                         H:[(a & 0x0f) < (c & 0x0f)]
@@ -157,43 +157,25 @@ impl ALU {
 mod test {
     use super::*;
 
-    #[test]
-    fn test_alu_add8() {
+    decl_test!(test_alu_add8, {
         let alu = ALU::new();
         assert_eq!(3, alu.add8(1, 2));
         assert_eq!(-1 as i8 as u8, alu.add8(1, -2 as i8 as u8));
         assert_eq!(-1 as i8 as u8, alu.add8(1, -2 as i8 as u8));
-    }
+    });
 
-    #[test]
-    fn test_alu_add16() {
-        struct Case {
-            name: &'static str,
-            a: u16,
-            b: u16,
-            c: u16,
-            carry: bool,
-        }
-        let alu = ALU::new();
-        table_test!(&[
-            Case {
-                name: "No carry",
-                a: 0x20,
-                b: 0x42,
-                c: 0x62,
-                carry: false,
-            },
-            Case {
-                name: "Carry",
-                a: 0xe012,
-                b: 0x4245,
-                c: 0x2257,
-                carry: true,
-            },
-        ], |case: &Case| {
-            let (c, carry) =  alu.add16(case.a, case.b);
-            assert_eq!(case.c, c);
-            assert_eq!(case.carry, carry);
+    decl_suite!(test_alu_add16, {
+        decl_test!(no_carry, {
+            let alu = ALU::new();
+            let (c, carry) =  alu.add16(0x20, 0x42);
+            assert_eq!(0x62, c);
+            assert!(!carry);
         });
-    }
+        decl_test!(carry, {
+            let alu = ALU::new();
+            let (c, carry) =  alu.add16(0xe012, 0x4245);
+            assert_eq!(0x2257, c);
+            assert!(carry);
+        });
+    });
 }
