@@ -66,7 +66,7 @@ macro_rules! cpu_exec {
     });
     ($cpu:expr, CCF) => ({
         let mut flags = cpu_eval!($cpu, F);
-        if flag!(C, flags) == 0 {
+        if flag!(flags, C) == 0 {
             flags = flags_apply!(flags, H:0 N:0 C:1);
         } else {
             flags = flags_apply!(flags, H:1 N:0 C:0);
@@ -85,19 +85,19 @@ macro_rules! cpu_exec {
         let prev_a = cpu_eval!($cpu, A);
         let mut a = prev_a;
         let mut flags = cpu_eval!($cpu, F);
-        if flag!(N, flags) == 0 {
-            if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
+        if flag!(flags, N) == 0 {
+            if flag!(flags, H) == 1 || a & 0x0f > 0x09 {
                 a = $cpu.alu().add8(a, 0x06);
             }
-            if flag!(C, flags) == 1 || a > 0x99 {
+            if flag!(flags, C) == 1 || a > 0x99 {
                 a = $cpu.alu().add8(a, 0x60);
             }
         } else {
-            if flag!(H, flags) == 1 || a & 0x0f > 0x09 {
+            if flag!(flags, H) == 1 || a & 0x0f > 0x09 {
                 let (r, _) = $cpu.alu().sub8(a, 0x06);
                 a = r;
             }
-            if flag!(C, flags) == 1 || a > 0x99 {
+            if flag!(flags, C) == 1 || a > 0x99 {
                 let (r, _) = $cpu.alu().sub8(a, 0x60);
                 a = r;
             }
@@ -109,7 +109,7 @@ macro_rules! cpu_exec {
             S:[a & 0x80 > 0]
             Z:[a == 0]
             H:[(a ^ prev_a) & 0x10 > 0]
-            C:[flag!(C, flags) > 0 || prev_a > 0x99]
+            C:[flag!(flags, C) > 0 || prev_a > 0x99]
         );
         cpu_eval!($cpu, F <- flags);
     });
@@ -194,7 +194,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RLA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
-        let carry = flag!(C, cpu_eval!($cpu, F));
+        let carry = flag!(cpu_eval!($cpu, F), C);
         let dest = $cpu.alu().rotate_left(orig, carry, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
@@ -212,7 +212,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RRA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
-        let carry = flag!(C, cpu_eval!($cpu, F));
+        let carry = cpu_eval!($cpu, F[C]);
         let dest = $cpu.alu().rotate_right(orig, carry, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
@@ -668,7 +668,7 @@ mod test {
             let mut cpu = cpu!(ADC $dst, $src);
             cpu_eval!(cpu, $dst <- $input);
             cpu_eval!(cpu, $src <- $input);
-            cpu_eval!(cpu, F +<- C:[$carry]);
+            cpu_eval!(cpu, F +<- (C:[$carry]));
             let f0 = exec_step!(&mut cpu);
             assert_pc!(cpu, 0x0001);
             assert_r8!(cpu, $dst, $output);
@@ -1034,7 +1034,7 @@ mod test {
         ($input:expr, $carry:expr, $output:expr, $flags:tt) => ({
             let mut cpu = cpu!(RLA);
             cpu_eval!(cpu, A <- $input);
-            cpu_eval!(cpu, F +<- C:[$carry]);
+            cpu_eval!(cpu, F +<- (C:[$carry]));
             let f0 = exec_step!(&mut cpu);
 
             assert_pc!(cpu, 0x0001);
@@ -1062,7 +1062,7 @@ mod test {
         ($input:expr, $carry:expr, $output:expr, $flags:tt) => ({
             let mut cpu = cpu!(RRA);
             cpu_eval!(cpu, A <- $input);
-            cpu_eval!(cpu, F +<- C:[$carry]);
+            cpu_eval!(cpu, F +<- (C:[$carry]));
             let f0 = exec_step!(&mut cpu);
 
             assert_pc!(cpu, 0x0001);

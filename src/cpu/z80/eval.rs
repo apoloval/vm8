@@ -15,13 +15,6 @@ macro_rules! cpu_eval {
         cpu_eval!($cpu, F <- flags);
     });
 
-    // Assign and set flags
-    ($cpu:expr, F +<- $($flags:tt)+) => ({
-        let mut flags = cpu_eval!($cpu, F);
-        flags = flags_apply!(flags, $($flags)+);
-        cpu_eval!($cpu, F <- flags);
-    });
-
     // Assign to register F
     ($cpu:expr, F <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
@@ -179,7 +172,7 @@ macro_rules! cpu_eval {
     // Read single flag
     ($cpu:expr, F[$f:ident]) => ({
         let flags = cpu_eval!($cpu, F);
-        flag!($f, flags)
+        flag!(flags, $f)
     });
 
     // Indirect read access of bytes

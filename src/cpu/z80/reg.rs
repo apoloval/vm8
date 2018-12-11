@@ -16,7 +16,7 @@ pub union Register {
 impl Register {
     pub fn low(&self) -> u8 { unsafe { self.as_byte.l } }
     pub fn high(&self) -> u8 { unsafe { self.as_byte.h } }
-    
+
     pub fn set_low(&mut self, val: u8) { unsafe { self.as_byte.l = val } }
     pub fn set_high(&mut self, val: u8) { unsafe { self.as_byte.h = val } }
 }
@@ -112,12 +112,12 @@ impl Registers {
     #[inline] pub fn set_pc(&mut self, val: u16) { *self.pc = val }
     #[inline] pub fn set_sp(&mut self, val: u16) { *self.sp = val }
 
-    #[inline] pub fn flag_s(&self) -> u8 { flag!(S, self.flags()) }
-    #[inline] pub fn flag_z(&self) -> u8 { flag!(Z, self.flags()) }
-    #[inline] pub fn flag_h(&self) -> u8 { flag!(H, self.flags()) }
-    #[inline] pub fn flag_pv(&self) -> u8 { flag!(PV, self.flags()) }
-    #[inline] pub fn flag_n(&self) -> u8 { flag!(N, self.flags()) }
-    #[inline] pub fn flag_c(&self) -> u8 { flag!(C, self.flags()) }
+    #[inline] pub fn flag_s(&self) -> u8 { flag!(self.flags(), S) }
+    #[inline] pub fn flag_z(&self) -> u8 { flag!(self.flags(), Z) }
+    #[inline] pub fn flag_h(&self) -> u8 { flag!(self.flags(), H) }
+    #[inline] pub fn flag_pv(&self) -> u8 { flag!(self.flags(), PV) }
+    #[inline] pub fn flag_n(&self) -> u8 { flag!(self.flags(), N) }
+    #[inline] pub fn flag_c(&self) -> u8 { flag!(self.flags(), C) }
 
     // Swap the primary and alternative registers AF/AF'
     #[inline]

@@ -43,7 +43,7 @@ impl ALU {
 
     #[inline]
     pub fn adc8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
-        let c = self.adc8(a, b, flag!(C, *flags));
+        let c = self.adc8(a, b, flag!(*flags, C));
         let index = Self::pre_flags_index(a, c);
         *flags = self.pre_flags[index].add;
         c
