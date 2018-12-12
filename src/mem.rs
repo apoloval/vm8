@@ -1,7 +1,7 @@
 use std::io;
 use std::marker::PhantomData;
 
-use bus;
+use crate::bus;
 
 pub struct MemoryBank<A: bus::Address> {
     address: PhantomData<A>,

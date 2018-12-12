@@ -1,8 +1,9 @@
 [package]
-authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
-build = "build.rs"
 name = "vm8"
 version = "0.1.0"
+authors = ["Alvaro Polo <alvaro.polo@cabify.com>"]
+edition = "2015"
+build = "build.rs"
 
 [features]
 nightly = []

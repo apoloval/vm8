@@ -1,8 +1,8 @@
 use byteorder::LittleEndian;
 
-use bus::{Bus, ReadFromBytes, WriteFromBytes};
-use cpu::z80::{Cycles, MemoryBus, Registers};
-use cpu::z80::alu::ALU;
+use crate::bus::{Bus, ReadFromBytes, WriteFromBytes};
+use crate::cpu::z80::{Cycles, MemoryBus, Registers};
+use crate::cpu::z80::alu::ALU;
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
@@ -394,8 +394,8 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
 mod test {
     use std::io::Write;
 
-    use cpu::z80;
-    use testutil::Sample;
+    use crate::cpu::z80;
+    use crate::testutil::Sample;
 
     use super::*;
 

@@ -1,5 +1,5 @@
-use bus;
-use mem;
+use crate::bus;
+use crate::mem;
 
 #[macro_use] pub mod inst;
 #[macro_use] pub mod eval;
