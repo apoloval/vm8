@@ -1,9 +1,4 @@
-pub type OpCode = u32;
-pub type Size = usize;
-pub type Cycles = usize;
-
 #[cfg(target_endian = "little")]
-
 #[cfg(test)]
 macro_rules! encode_literal {
     ($v:expr => 0) => (($v & 0x00ff) as u8);

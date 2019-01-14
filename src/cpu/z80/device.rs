@@ -1,6 +1,8 @@
 use crate::cpu::{ExecutionPlan, ExecutionResult, Processor};
-use crate::cpu::z80::{Context, MemoryBus, Registers, exec_step};
 use crate::cpu::z80::alu::ALU;
+use crate::cpu::z80::exec::{Context, exec_step};
+use crate::cpu::z80::mem::MemoryBus;
+use crate::cpu::z80::reg::Registers;
 
 pub struct Options {
     pub m1_wait_cycles: usize,

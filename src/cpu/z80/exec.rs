@@ -1,8 +1,9 @@
 use byteorder::LittleEndian;
 
 use crate::bus::{Bus, ReadFromBytes, WriteFromBytes};
-use crate::cpu::z80::{Cycles, MemoryBus, Registers};
 use crate::cpu::z80::alu::ALU;
+use crate::cpu::z80::mem::MemoryBus;
+use crate::cpu::z80::reg::Registers;
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
@@ -235,9 +236,8 @@ macro_rules! cpu_exec {
     });
 }
 
-
-
-pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> Cycles {
+/// Perform a execution step over the given context, returning the number of clock cyles required.
+pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
     let opcode = ctx.read_from_pc(0);
     match opcode {
         0x00 => { cpu_exec!(ctx, NOP);              04 },
