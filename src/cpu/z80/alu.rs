@@ -1,4 +1,3 @@
-
 #[derive(Clone, Copy, Default)]
 struct PreFlags {
     pub add: u8,

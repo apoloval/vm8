@@ -1,10 +1,4 @@
-#[macro_use] pub mod inst;
-#[macro_use] pub mod eval;
-#[macro_use] pub mod flags;
-
-#[cfg(test)]
-#[macro_use]
-mod assert;
+#[macro_use] mod macros;
 
 mod alu;
 mod device;
