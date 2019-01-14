@@ -234,6 +234,15 @@ macro_rules! cpu_exec {
         flags = flags_apply!(flags, H:0 N:0 C:1);
         cpu_eval!($cpu, F <- flags);
     });
+    ($cpu:expr, SUB $src:tt) => ({
+        let a = cpu_eval!($cpu, A);
+        let b = cpu_eval!($cpu, $src);
+        let mut flags = 0;
+        let c = $cpu.alu().sub8_with_flags(a, b, &mut flags);
+        cpu_eval!($cpu, A <- c);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
+        cpu_eval!($cpu, F <- flags);
+    });
 }
 
 /// Perform a execution step over the given context, returning the number of clock cyles required.
@@ -384,6 +393,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0x8d => { cpu_exec!(ctx, ADC8 A, L);        04 },
         0x8e => { cpu_exec!(ctx, ADC8 A, (*HL));    07 },
         0x8f => { cpu_exec!(ctx, ADC8 A, A);        04 },
+        0x90 => { cpu_exec!(ctx, SUB B);            04 },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -710,6 +720,42 @@ mod test {
     test_exec_adc8!(test_exec_adc_a_l, 1, A, L);
 
     test_exec_adc8!(test_exec_adc_a_indhl, 3, A, (*HL));
+
+    macro_rules! test_exec_sub_case {
+        ($src:tt, $dstinput:expr, $srcinput:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(SUB $src);
+            cpu_eval!(cpu, A <- $dstinput);
+            cpu_eval!(cpu, $src <- $srcinput);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $output);
+            assert_flags!(cpu, f0, $flags);
+        });
+    }
+
+    macro_rules! test_exec_sub {
+        ($fname:ident, $pcinc:expr, $src:tt) => {
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
+                    test_exec_sub_case!($src, 0x44, 0x02, 0x42, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+                });
+                decl_test!(overflow, {
+                    test_exec_sub_case!($src, 0x80, 0x01, 0x7f, (S:0 Z:0 H:1 PV:1 N:1 C:0));
+                });
+                decl_test!(half_carry, {
+                    test_exec_sub_case!($src, 0x40, 0x01, 0x3f, (S:0 Z:0 H:1 PV:0 N:1 C:0));
+                });
+                decl_test!(zero, {
+                    test_exec_sub_case!($src, 0x01, 0x01, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+                });
+                decl_test!(carry, {
+                    test_exec_sub_case!($src, 0x00, 0x01, 0xff, (S:1 Z:0 H:1 PV:0 N:1 C:1));
+                });
+            });
+        };
+    }
+
+    test_exec_sub!(test_exec_sub_b, 1, B);
 
     macro_rules! test_exec_inc8_case {
         ($dst:tt, $input:expr, $output:expr, $flags:tt) => ({
