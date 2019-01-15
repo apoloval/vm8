@@ -394,6 +394,13 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0x8e => { cpu_exec!(ctx, ADC8 A, (*HL));    07 },
         0x8f => { cpu_exec!(ctx, ADC8 A, A);        04 },
         0x90 => { cpu_exec!(ctx, SUB B);            04 },
+        0x91 => { cpu_exec!(ctx, SUB C);            04 },
+        0x92 => { cpu_exec!(ctx, SUB D);            04 },
+        0x93 => { cpu_exec!(ctx, SUB E);            04 },
+        0x94 => { cpu_exec!(ctx, SUB H);            04 },
+        0x95 => { cpu_exec!(ctx, SUB L);            04 },
+        0x96 => { cpu_exec!(ctx, SUB (*HL));        07 },
+        0x97 => { cpu_exec!(ctx, SUB A);            04 },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -734,6 +741,13 @@ mod test {
     }
 
     macro_rules! test_exec_sub {
+        ($fname:ident, $pcinc:expr, A) => {
+            decl_suite!($fname, {
+                decl_test!(zero, {
+                    test_exec_sub_case!(A, 0x01, 0x01, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+                });
+            });
+        };
         ($fname:ident, $pcinc:expr, $src:tt) => {
             decl_suite!($fname, {
                 decl_test!(regular_case, {
@@ -756,6 +770,13 @@ mod test {
     }
 
     test_exec_sub!(test_exec_sub_b, 1, B);
+    test_exec_sub!(test_exec_sub_c, 1, C);
+    test_exec_sub!(test_exec_sub_d, 1, D);
+    test_exec_sub!(test_exec_sub_e, 1, E);
+    test_exec_sub!(test_exec_sub_h, 1, H);
+    test_exec_sub!(test_exec_sub_l, 1, L);
+    test_exec_sub!(test_exec_sub_ind_hl, 1, (*HL));
+    test_exec_sub!(test_exec_sub_a, 1, A);
 
     macro_rules! test_exec_inc8_case {
         ($dst:tt, $input:expr, $output:expr, $flags:tt) => ({
