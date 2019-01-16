@@ -152,6 +152,14 @@ macro_rules! inst {
     (RRA)                 => ([0x1f]);
     (RRCA)                => ([0x0f]);
     (SCF)                 => ([0x37]);
+    (SBC A, B)            => ([0x98]);
+    (SBC A, C)            => ([0x99]);
+    (SBC A, D)            => ([0x9a]);
+    (SBC A, E)            => ([0x9b]);
+    (SBC A, H)            => ([0x9c]);
+    (SBC A, L)            => ([0x9d]);
+    (SBC A, (*HL))        => ([0x9e]);
+    (SBC A, A)            => ([0x9f]);
     (SUB B)               => ([0x90]);
     (SUB C)               => ([0x91]);
     (SUB D)               => ([0x92]);

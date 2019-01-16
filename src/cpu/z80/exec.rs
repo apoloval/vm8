@@ -95,11 +95,11 @@ macro_rules! cpu_exec {
             }
         } else {
             if flag!(flags, H) == 1 || a & 0x0f > 0x09 {
-                let (r, _) = $cpu.alu().sub8(a, 0x06);
+                let r = $cpu.alu().sub8(a, 0x06);
                 a = r;
             }
             if flag!(flags, C) == 1 || a > 0x99 {
-                let (r, _) = $cpu.alu().sub8(a, 0x60);
+                let r = $cpu.alu().sub8(a, 0x60);
                 a = r;
             }
         }
@@ -129,7 +129,7 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
     });
     ($cpu:expr, DJNZ) => ({
-        let (b, _) = $cpu.alu().sub8(cpu_eval!($cpu, B), 1);
+        let b = $cpu.alu().sub8(cpu_eval!($cpu, B), 1);
         cpu_eval!($cpu, B <- b);
         if b > 0 {
             let s = $cpu.read_from_pc(1);
@@ -227,6 +227,15 @@ macro_rules! cpu_exec {
         let dest = $cpu.alu().rotate_right(orig, carry, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
+        cpu_eval!($cpu, F <- flags);
+    });
+    ($cpu:expr, SBC $dst:tt, $src:tt) => ({
+        let a = cpu_eval!($cpu, $dst);
+        let b = cpu_eval!($cpu, $src);
+        let mut flags = cpu_eval!($cpu, F);
+        let c = $cpu.alu().sbc8_with_flags(a, b, &mut flags);
+        cpu_eval!($cpu, $dst <- c);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
         cpu_eval!($cpu, F <- flags);
     });
     ($cpu:expr, SCF) => ({
@@ -401,6 +410,14 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0x95 => { cpu_exec!(ctx, SUB L);            04 },
         0x96 => { cpu_exec!(ctx, SUB (*HL));        07 },
         0x97 => { cpu_exec!(ctx, SUB A);            04 },
+        0x98 => { cpu_exec!(ctx, SBC A, B);         04 },
+        0x99 => { cpu_exec!(ctx, SBC A, C);         04 },
+        0x9a => { cpu_exec!(ctx, SBC A, D);         04 },
+        0x9b => { cpu_exec!(ctx, SBC A, E);         04 },
+        0x9c => { cpu_exec!(ctx, SBC A, H);         04 },
+        0x9d => { cpu_exec!(ctx, SBC A, L);         04 },
+        0x9e => { cpu_exec!(ctx, SBC A, (*HL));     04 },
+        0x9f => { cpu_exec!(ctx, SBC A, A);         04 },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -777,6 +794,63 @@ mod test {
     test_exec_sub!(test_exec_sub_l, 1, L);
     test_exec_sub!(test_exec_sub_ind_hl, 1, (*HL));
     test_exec_sub!(test_exec_sub_a, 1, A);
+
+    macro_rules! test_exec_sbc8_case {
+        ($dst:tt, $src:tt, $dstinput:expr, $srcinput:expr, $carry:expr, $output:expr, $flags:tt) => ({
+            let mut cpu = cpu!(SBC $dst, $src);
+            cpu_eval!(cpu, $dst <- $dstinput);
+            cpu_eval!(cpu, $src <- $srcinput);
+            cpu_eval!(cpu, F +<- (C:[$carry]));
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, $dst, $output);
+            assert_flags!(cpu, f0, $flags);
+        });
+    }
+
+    macro_rules! test_exec_sbc8 {
+        ($fname:ident, $pcinc:expr, A, A) => {
+            decl_suite!($fname, {
+                decl_test!(zero, {
+                    test_exec_sbc8_case!(A, A, 0x01, 0x01, false, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+                });
+                decl_test!(regular_case_with_carry, {
+                    test_exec_sbc8_case!(A, A, 0x01, 0x01, true, 0xff, (S:1 Z:0 H:1 PV:0 N:1 C:1));
+                });
+            });
+        };
+        ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
+            decl_suite!($fname, {
+                decl_test!(regular_case, {
+                    test_exec_sbc8_case!($dst, $src, 0x44, 0x02, false, 0x42, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+                });
+                decl_test!(regular_case_with_carry, {
+                    test_exec_sbc8_case!($dst, $src, 0x44, 0x02, true, 0x41, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+                });
+                decl_test!(overflow, {
+                    test_exec_sbc8_case!($dst, $src, 0x80, 0x01, false, 0x7f, (S:0 Z:0 H:1 PV:1 N:1 C:0));
+                });
+                decl_test!(half_carry, {
+                    test_exec_sbc8_case!($dst, $src, 0x40, 0x01, false, 0x3f, (S:0 Z:0 H:1 PV:0 N:1 C:0));
+                });
+                decl_test!(zero, {
+                    test_exec_sbc8_case!($dst, $src, 0x01, 0x01, false, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+                });
+                decl_test!(carry, {
+                    test_exec_sbc8_case!($dst, $src, 0x00, 0x01, false, 0xff, (S:1 Z:0 H:1 PV:0 N:1 C:1));
+                });
+            });
+        };
+    }
+
+    test_exec_sbc8!(test_exec_sbc_a_b, 1, A, B);
+    test_exec_sbc8!(test_exec_sbc_a_c, 1, A, C);
+    test_exec_sbc8!(test_exec_sbc_a_d, 1, A, D);
+    test_exec_sbc8!(test_exec_sbc_a_e, 1, A, E);
+    test_exec_sbc8!(test_exec_sbc_a_h, 1, A, H);
+    test_exec_sbc8!(test_exec_sbc_a_l, 1, A, L);
+    test_exec_sbc8!(test_exec_sbc_a_hl, 1, A, (*HL));
+    test_exec_sbc8!(test_exec_sbc_a_a, 1, A, A);
 
     macro_rules! test_exec_inc8_case {
         ($dst:tt, $input:expr, $output:expr, $flags:tt) => ({
@@ -1241,27 +1315,58 @@ mod bench {
     use super::*;
 
     #[bench]
-    fn bench_exec_100_nops(b: &mut Bencher) {
-        exec_inst(b, &inst!(NOP));
+    fn bench_exec_1000_cycles_of_add8(b: &mut Bencher) {
+        exec_inst(b, &inst!(ADD A, B), 1000);
     }
 
     #[bench]
-    fn bench_exec_100_add16(b: &mut Bencher) {
-        exec_inst(b, &inst!(ADD HL, BC));
+    fn bench_exec_1000_cycles_of_add16(b: &mut Bencher) {
+        exec_inst(b, &inst!(ADD HL, BC), 1000);
     }
 
     #[bench]
-    fn bench_exec_100_ld8(b: &mut Bencher) {
-        exec_inst(b, &inst!(LD B, 0x42));
+    fn bench_exec_1000_cycles_of_dec8(b: &mut Bencher) {
+        exec_inst(b, &inst!(DEC B), 1000);
     }
 
-    fn exec_inst(b: &mut Bencher, mut inst: &[u8]) {
-        let mem = z80::MemoryBank::from_data(&mut inst).unwrap();
+    #[bench]
+    fn bench_exec_1000_cycles_of_inc8(b: &mut Bencher) {
+        exec_inst(b, &inst!(INC B), 1000);
+    }
+
+    #[bench]
+    fn bench_exec_1000_cycles_of_jp_addr(b: &mut Bencher) {
+        exec_inst(b, &inst!(JP 0x0000), 1000);
+    }
+
+    #[bench]
+    fn bench_exec_1000_cycles_of_ld8(b: &mut Bencher) {
+        exec_inst(b, &inst!(LD B, 0x42), 1000);
+    }
+
+    #[bench]
+    fn bench_exec_1000_cycles_of_nops(b: &mut Bencher) {
+        exec_inst(b, &inst!(NOP), 1000);
+    }
+
+    fn exec_inst(b: &mut Bencher, inst: &[u8], cycles: usize) {
+        let mut mem = z80::MemoryBank::new();
+        fill_instruction(&mut mem, inst, cycles);
         let mut cpu = z80::CPU::new(z80::Options::default(), mem);
         b.iter(|| {
-            for _ in 1..100 {
-                test::black_box(exec_step(&mut cpu));
+            cpu_eval!(cpu, PC <- 0);
+            let mut total_cycles = 0;
+            while total_cycles < cycles {
+                total_cycles += test::black_box(exec_step(&mut cpu));
             }
         })
+    }
+
+    fn fill_instruction(mem: &mut z80::MemoryBank, inst: &[u8], count: usize) {
+        let mut addr = 0;
+        for _ in 1..count {
+            let mut src = inst;
+            addr += mem.copy_to(addr, &mut src).unwrap() as u16;
+        }
     }
 }

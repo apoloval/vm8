@@ -26,7 +26,7 @@ impl ALU {
     #[inline]
     pub fn adc8(&self, a: u8, b: u8, c: u8) -> u8 {
         if c > 0 {
-            ((a as u16) + (b as u16) + 1) as u8
+            ((self.add8(a, b) as u8) + 1) as u8
         } else {
             self.add8(a, b)
         }
@@ -74,14 +74,31 @@ impl ALU {
     }
 
     #[inline]
-    pub fn sub8(&self, a: u8, b: u8) -> (u8, bool) {
+    pub fn sub8(&self, a: u8, b: u8) -> u8 {
         let c = (a as i16) - (b as i16);
-        (c as u8, c > 0xff)
+        c as u8
+    }
+
+    #[inline]
+    pub fn sbc8(&self, a: u8, b: u8, c: u8) -> u8 {
+        if c > 0 {
+            ((self.sub8(a, b) as i16) -  1) as u8
+        } else {
+            self.sub8(a, b)
+        }
     }
 
     #[inline]
     pub fn sub8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
-        let (c, _) = self.sub8(a, b);
+        let c = self.sub8(a, b);
+        let index = Self::pre_flags_index(a, c);
+        *flags = self.pre_flags[index].sub;
+        c
+    }
+
+    #[inline]
+    pub fn sbc8_with_flags(&self, a: u8, b: u8, flags: &mut u8) -> u8 {
+        let c = self.sbc8(a, b, flag!(*flags, C));
         let index = Self::pre_flags_index(a, c);
         *flags = self.pre_flags[index].sub;
         c
@@ -89,7 +106,7 @@ impl ALU {
 
     #[inline]
     pub fn dec8_with_flags(&self, a: u8, flags: &mut u8) -> u8 {
-        let (c, _) = self.sub8(a, 1);
+        let c = self.sub8(a, 1);
         let index = Self::pre_flags_index(a, c);
         *flags = (*flags & 0x01) | (self.pre_flags[index].sub & 0xfe);
         c
