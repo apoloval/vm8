@@ -1,6 +1,8 @@
 use std::fmt;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use time::PreciseTime;
 
 pub type Cycles = usize;
 
@@ -30,6 +32,10 @@ impl Frequency {
         let nanos = secs * 1_000_000_000.0;
         Duration::new(secs as u64, nanos as u32)
     }
+
+    pub fn to_mhz(&self) -> f64 {
+        self.0 / 1_000_000.0
+    }
 }
 
 impl fmt::Display for Frequency {
@@ -42,44 +48,66 @@ impl fmt::Display for Frequency {
     }
 }
 
-pub struct Clock { 
-    cycle_period: Duration,   
-    synced_at: Instant,
+pub struct SyncReport {
+    pub real_duration: Duration,
+    pub emulated_duration: Duration,
+    pub native_freq: Frequency,
+}
+
+pub struct Clock {
+    cycle_period: Duration,
+    synced_at: PreciseTime,
 }
 
 impl Clock {
     pub fn new(freq: Frequency) -> Clock {
-        Clock { 
-            cycle_period: freq.period(), 
-            synced_at: Instant::now(),
+        Clock {
+            cycle_period: freq.period(),
+            synced_at: PreciseTime::now(),
         }
     }
 
+    pub fn reset(&mut self) {
+        self.synced_at = PreciseTime::now();
+    }
+
     /// Synchronize the real time clock according to the frequency and the elapsed cycles.
-    /// It returns the actual, native frequency inferred from the synchronization.
-    pub fn sync(&mut self, cycles: Cycles) -> Frequency {
-        let actual_elapsed = self.synced_at.elapsed();
+    /// It returns a report with useful stats about the synchronization.
+    pub fn sync(&mut self, cycles: Cycles, wait: bool) -> SyncReport {
+        let actual_elapsed = self.synced_at.to(PreciseTime::now()).to_std().unwrap();
         let expected_elapsed = self.cycle_period * cycles as u32;
         let actual_freq = Frequency::from_elapsed(cycles, actual_elapsed);
 
-        if expected_elapsed > actual_elapsed {
-            thread::sleep(expected_elapsed - actual_elapsed);
-        } else {                
-            panic!(
-                "emulated clock is faster than physical ({}ns late per {} cycles, reached {})", 
-                (actual_elapsed - expected_elapsed).subsec_nanos(), 
-                cycles,
-                actual_freq,
-            );
+        if wait {
+            if expected_elapsed > actual_elapsed {
+                thread::sleep(expected_elapsed - actual_elapsed);
+            } else {
+                panic!(
+                    "emulated clock is faster than physical ({}ns late per {} cycles, reached {})",
+                    (actual_elapsed - expected_elapsed).subsec_nanos(),
+                    cycles,
+                    actual_freq,
+                );
+            }
         }
-        self.synced_at = Instant::now();
-        actual_freq
+        self.synced_at = PreciseTime::now();
+        SyncReport {
+            real_duration: actual_elapsed,
+            emulated_duration: expected_elapsed,
+            native_freq: actual_freq,
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn frequency_from_elapsed() {
+        let freq = Frequency::from_elapsed(10_000_000, Duration::from_millis(10));
+        assert_eq!(1000.0, freq.to_mhz());
+    }
 
     #[test]
     fn frequency_period() {

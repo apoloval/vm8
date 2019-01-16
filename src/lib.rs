@@ -6,6 +6,7 @@ extern crate test;
 
 extern crate byteorder;
 extern crate num_traits;
+extern crate time;
 
 #[cfg(test)]
 extern crate rand;

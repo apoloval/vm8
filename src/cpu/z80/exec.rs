@@ -1310,8 +1310,7 @@ mod bench {
     use test;
     use test::Bencher;
 
-    use cpu::z80;
-
+    use crate::cpu::z80;
     use super::*;
 
     #[bench]

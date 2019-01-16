@@ -50,9 +50,9 @@ pub struct Registers {
 
     // Alternative 16-bits registers
     af_: Register,
-    bc_: Register,
-    de_: Register,
-    hl_: Register,
+    _bc_: Register,
+    _de_: Register,
+    _hl_: Register,
 
     // Index registers
     _ix: Register,
@@ -68,12 +68,12 @@ impl Registers {
         Self::default()
     }
 
-    #[inline] pub fn af(&self) -> u16 { *self.af }
+    #[inline] #[cfg(test)] pub fn af(&self) -> u16 { *self.af }
     #[inline] pub fn bc(&self) -> u16 { *self.bc }
     #[inline] pub fn de(&self) -> u16 { *self.de }
     #[inline] pub fn hl(&self) -> u16 { *self.hl }
 
-    #[inline] pub fn set_af(&mut self, val: u16) { *self.af = val }
+    #[inline] #[cfg(test)] pub fn set_af(&mut self, val: u16) { *self.af = val }
     #[inline] pub fn set_bc(&mut self, val: u16) { *self.bc = val  }
     #[inline] pub fn set_de(&mut self, val: u16) { *self.de = val  }
     #[inline] pub fn set_hl(&mut self, val: u16) { *self.hl = val  }
@@ -94,15 +94,9 @@ impl Registers {
     #[inline] pub fn set_h(&mut self, val: u8) { self.hl.set_high(val) }
     #[inline] pub fn set_l(&mut self, val: u8) { self.hl.set_low(val) }
 
-    #[inline] pub fn af_(&self) -> u16 { *self.af_ }
-    #[inline] pub fn bc_(&self) -> u16 { *self.bc_ }
-    #[inline] pub fn de_(&self) -> u16 { *self.de_ }
-    #[inline] pub fn hl_(&self) -> u16 { *self.hl_ }
+    #[inline] #[cfg(test)] pub fn af_(&self) -> u16 { *self.af_ }
 
-    #[inline] pub fn set_af_(&mut self, val: u16) { *self.af_ = val }
-    #[inline] pub fn set_bc_(&mut self, val: u16) { *self.bc_ = val  }
-    #[inline] pub fn set_de_(&mut self, val: u16) { *self.de_ = val  }
-    #[inline] pub fn set_hl_(&mut self, val: u16) { *self.hl_ = val  }
+    #[inline] #[cfg(test)] pub fn set_af_(&mut self, val: u16) { *self.af_ = val }
 
     #[inline] pub fn flags(&self) -> u8 { self.af.low() }
     #[inline] pub fn pc(&self) -> u16 { *self.pc }
@@ -112,25 +106,10 @@ impl Registers {
     #[inline] pub fn set_pc(&mut self, val: u16) { *self.pc = val }
     #[inline] pub fn set_sp(&mut self, val: u16) { *self.sp = val }
 
-    #[inline] pub fn flag_s(&self) -> u8 { flag!(self.flags(), S) }
-    #[inline] pub fn flag_z(&self) -> u8 { flag!(self.flags(), Z) }
-    #[inline] pub fn flag_h(&self) -> u8 { flag!(self.flags(), H) }
-    #[inline] pub fn flag_pv(&self) -> u8 { flag!(self.flags(), PV) }
-    #[inline] pub fn flag_n(&self) -> u8 { flag!(self.flags(), N) }
-    #[inline] pub fn flag_c(&self) -> u8 { flag!(self.flags(), C) }
-
     // Swap the primary and alternative registers AF/AF'
     #[inline]
     pub fn swap_af(&mut self) {
         mem::swap(&mut self.af, &mut self.af_);
-    }
-
-    // Swap the primary and alternative registers BC DE HL/AF' DE' HL'
-    #[inline]
-    pub fn swap(&mut self) {
-        mem::swap(&mut self.bc, &mut self.bc_);
-        mem::swap(&mut self.de, &mut self.de_);
-        mem::swap(&mut self.hl, &mut self.hl_);
     }
 
     #[inline] pub fn inc_pc(&mut self, val: usize) -> u16 { *self.pc += val as u16; *self.pc }

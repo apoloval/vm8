@@ -63,17 +63,6 @@ impl ALU {
     }
 
     #[inline]
-    pub fn add16_with_flags(&self, a: u16, b: u16, flags: &mut u8) -> u16 {
-        let (c, carry) = self.add16(a, b);
-        *flags = flags_apply!(*flags,
-            H:[(a & 0x0fff) + (b & 0x0fff) > 0x1000]
-            N:0
-            C:[carry]
-        );
-        c
-    }
-
-    #[inline]
     pub fn sub8(&self, a: u8, b: u8) -> u8 {
         let c = (a as i16) - (b as i16);
         c as u8
