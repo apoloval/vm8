@@ -27,6 +27,14 @@ macro_rules! inst {
     (ADD HL, HL)          => ([0x29]);
     (ADD HL, DE)          => ([0x19]);
     (ADD HL, SP)          => ([0x39]);
+    (AND B)               => ([0xa0]);
+    (AND C)               => ([0xa1]);
+    (AND D)               => ([0xa2]);
+    (AND E)               => ([0xa3]);
+    (AND H)               => ([0xa4]);
+    (AND L)               => ([0xa5]);
+    (AND (*HL))           => ([0xa6]);
+    (AND A)               => ([0xa7]);
     (CCF)                 => ([0x3f]);
     (CPL)                 => ([0x2f]);
     (DAA)                 => ([0x27]);

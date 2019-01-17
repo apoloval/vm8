@@ -65,6 +65,15 @@ macro_rules! cpu_exec {
             N:0);
         cpu_eval!($cpu, F <- flags);
     });
+    ($cpu:expr, AND $src:tt) => ({
+        let a = cpu_eval!($cpu, A);
+        let b = cpu_eval!($cpu, $src);
+        let mut flags = 0;
+        let c = $cpu.alu().bitwise_and(a, b, &mut flags);
+        cpu_eval!($cpu, A <- c);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
+        cpu_eval!($cpu, F <- flags);
+    });
     ($cpu:expr, CCF) => ({
         let mut flags = cpu_eval!($cpu, F);
         if flag!(flags, C) == 0 {
@@ -418,6 +427,14 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0x9d => { cpu_exec!(ctx, SBC A, L);         04 },
         0x9e => { cpu_exec!(ctx, SBC A, (*HL));     04 },
         0x9f => { cpu_exec!(ctx, SBC A, A);         04 },
+        0xa0 => { cpu_exec!(ctx, AND B);            04 },
+        0xa1 => { cpu_exec!(ctx, AND C);            04 },
+        0xa2 => { cpu_exec!(ctx, AND D);            04 },
+        0xa3 => { cpu_exec!(ctx, AND E);            04 },
+        0xa4 => { cpu_exec!(ctx, AND H);            04 },
+        0xa5 => { cpu_exec!(ctx, AND L);            04 },
+        0xa6 => { cpu_exec!(ctx, AND (*HL));        07 },
+        0xa7 => { cpu_exec!(ctx, AND A);            04 },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -851,6 +868,40 @@ mod test {
     test_exec_sbc8!(test_exec_sbc_a_l, 1, A, L);
     test_exec_sbc8!(test_exec_sbc_a_hl, 1, A, (*HL));
     test_exec_sbc8!(test_exec_sbc_a_a, 1, A, A);
+
+    macro_rules! test_exec_and_case {
+        ($src:tt, $a:expr, $b:expr, $c:expr, $flags:tt) => ({
+            let mut cpu = cpu!(AND $src);
+            cpu_eval!(cpu, A <- $a);
+            cpu_eval!(cpu, $src <- $b);
+            let f0 = exec_step!(&mut cpu);
+            assert_pc!(cpu, 0x0001);
+            assert_r8!(cpu, A, $c);
+            assert_flags!(cpu, f0, $flags);
+        });
+    }
+
+    macro_rules! test_exec_and {
+        ($fname:ident, A) => {
+            decl_test!($fname, {
+                test_exec_and_case!(A, 0b0101_1010, 0b0101_1010, 0b0101_1010, (S:0 Z:0 H:1 PV:1 N:0 C:0));
+            });
+        };
+        ($fname:ident, $src:tt) => {
+            decl_test!($fname, {
+                test_exec_and_case!($src, 0b0101_1010, 0b1010_1111, 0b0000_1010, (S:0 Z:0 H:1 PV:1 N:0 C:0));
+            });
+        };
+    }
+
+    test_exec_and!(test_exec_and_b, B);
+    test_exec_and!(test_exec_and_c, C);
+    test_exec_and!(test_exec_and_d, D);
+    test_exec_and!(test_exec_and_e, E);
+    test_exec_and!(test_exec_and_h, H);
+    test_exec_and!(test_exec_and_l, L);
+    test_exec_and!(test_exec_and_ind_hl, (*HL));
+    test_exec_and!(test_exec_and_a, A);
 
     macro_rules! test_exec_inc8_case {
         ($dst:tt, $input:expr, $output:expr, $flags:tt) => ({
