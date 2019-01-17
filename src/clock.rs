@@ -40,7 +40,9 @@ impl Frequency {
 
 impl fmt::Display for Frequency {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        if self.0 > 1_000_000.0 {
+        if self.0 > 1_000_000_000.0 {
+            write!(f, "{:.2}Ghz", self.0 / 1_000_000_000.0)
+        } else if self.0 > 1_000_000.0 {
             write!(f, "{:.2}Mhz", self.0 / 1_000_000.0)
         } else {
             write!(f, "{:.2}Khz", self.0 / 1_000.0)
@@ -119,5 +121,6 @@ mod test {
     fn frequency_display() {
         assert_eq!("256.29Khz", format!("{}", Frequency::from_khz(256.29)));
         assert_eq!("3.58Mhz", format!("{}", Frequency::from_mhz(3.58)));
+        assert_eq!("1.25Ghz", format!("{}", Frequency::from_mhz(1250.0)));
     }
 }
