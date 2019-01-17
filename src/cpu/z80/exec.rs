@@ -1375,6 +1375,11 @@ mod bench {
     }
 
     #[bench]
+    fn bench_exec_1000_cycles_of_and(b: &mut Bencher) {
+        exec_inst(b, &inst!(AND B), 1000);
+    }
+
+    #[bench]
     fn bench_exec_1000_cycles_of_dec8(b: &mut Bencher) {
         exec_inst(b, &inst!(DEC B), 1000);
     }

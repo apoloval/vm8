@@ -27,16 +27,19 @@ impl FlagsTable {
     }
 
     /// Returns the precomputed flags for adding
+    #[inline]
     pub fn add_flags(&self, oldval: u8, newval: u8) -> u8 {
         self.add[Self::index_of_binops(oldval, newval)]
     }
 
     /// Returns the precomputed flags for subtracting
+    #[inline]
     pub fn sub_flags(&self, oldval: u8, newval: u8) -> u8 {
         self.sub[Self::index_of_binops(oldval, newval)]
     }
 
     /// Returns the precomputed flags for bitwise AND
+    #[inline]
     pub fn and_flags(&self, newval: u8) -> u8 {
         self.and[newval as usize]
     }
