@@ -3,6 +3,7 @@ struct FlagsTable {
     add: Vec<u8>,
     sub: Vec<u8>,
     and: Vec<u8>,
+    daa: Vec<u8>,
 }
 
 impl FlagsTable {
@@ -11,9 +12,11 @@ impl FlagsTable {
         let mut add_flags = vec![0u8; 256*256];
         let mut sub_flags = vec![0u8; 256*256];
         let mut and_flags = vec![0u8; 256];
-        for a in 0u8..=255 {
-            and_flags[a as usize] = Self::flags_for_bitwise(a, true);
-            for c in 0u8..=255 {
+        let mut daa_flags = vec![0u8; 256];
+        for c in 0u8..=255 {
+            and_flags[c as usize] = Self::flags_for_bitwise(c, true);
+            daa_flags[c as usize] = Self::flags_for_daa(c);
+            for a in 0u8..=255 {
                 let index = Self::index_of_binops(a, c);
                 add_flags[index] = Self::flags_for_add(a, c);
                 sub_flags[index] = Self::flags_for_sub(a, c);
@@ -23,6 +26,7 @@ impl FlagsTable {
             add: add_flags,
             sub: sub_flags,
             and: and_flags,
+            daa: daa_flags,
         }
     }
 
@@ -42,6 +46,39 @@ impl FlagsTable {
     #[inline]
     pub fn and_flags(&self, newval: u8) -> u8 {
         self.and[newval as usize]
+    }
+
+    /// Returns the flags for BCD adjustment.
+    ///
+    /// The flags table memoizes flags for S, Z and PV. The rest, H, N and C
+    /// are calculated on the fly.
+    #[inline]
+    pub fn bcd_adjust_flags(&self, a: u8, c: u8, cf: u8, hf: u8, nf: u8) -> u8 {
+        let h = a >> 4;
+        let l = a & 0x0f;
+        // Tables obtained from The Undocumented Z80 Documented, page 17.
+        // http://datasheets.chipdb.org/Zilog/Z80/z80-documented-0.90.pdf
+        let carry = match (cf, h, l) {
+            (0, 0x0...0x9, 0x0...0x9) => false,
+            (0, 0x0...0x8, 0xa...0xf) => false,
+            (0, 0x9...0xf, 0xa...0xf) => true,
+            (0, 0xa...0xf, 0x0...0x9) => true,
+            (1,  _, _) => true,
+            _ => unreachable!(),
+        };
+        let halfcarry = match (nf, hf, l) {
+            (0, _, 0x0...0x9) => false,
+            (0, _, 0xa...0xf) => true,
+            (1, 0, _) => false,
+            (1, 1, 0x6...0xf) => false,
+            (1, 1, 0x0...0x5) => true,
+            _ => unreachable!(),
+        };
+        flags_apply!(self.daa[c as usize],
+            H:[halfcarry]
+            N:[nf != 0]
+            C:[carry]
+        )
     }
 
     #[inline]
@@ -81,6 +118,14 @@ impl FlagsTable {
             PV:[Self::parity_of(c) % 2 == 0]
             N:0
             C:0
+        )
+    }
+
+    fn flags_for_daa(c: u8) -> u8 {
+        flags_apply!(0,
+            S:[Self::signed_flag(c)]
+            Z:[Self::zero_flag(c)]
+            PV:[Self::parity_of(c) % 2 == 0]
         )
     }
 
@@ -216,6 +261,36 @@ impl ALU {
         *flags = self.flags.and_flags(c);
         c
     }
+
+    #[inline]
+    pub fn bcd_adjust(&self, a: u8, flags: &mut u8) -> u8 {
+        let h = a >> 4;
+        let l = a & 0x0f;
+        let cf = flag!(*flags, C);
+        let hf = flag!(*flags, H);
+        let nf = flag!(*flags, N);
+        // Table obtained from The Undocumented Z80 Documented, page 17.
+        // http://datasheets.chipdb.org/Zilog/Z80/z80-documented-0.90.pdf
+        let diff = match (cf, h, hf, l) {
+            (0, 0x0...0x9, 0, 0x0...0x9) => 0x00,
+            (0, 0x0...0x9, 1, 0x0...0x9) => 0x06,
+            (0, 0x0...0x8, _, 0xa...0xf) => 0x06,
+            (0, 0xa...0xf, 0, 0x0...0x9) => 0x60,
+            (1, _,         0, 0x0...0x9) => 0x60,
+            (1, _,         1, 0x0...0x9) => 0x66,
+            (1, _,         _, 0xa...0xf) => 0x66,
+            (0, 0x9...0xf, _, 0xa...0xf) => 0x66,
+            (0, 0xa...0xf, 1, 0x0...0x9) => 0x66,
+            _ => unreachable!(),
+        };
+        let c = if nf == 0 {
+            self.add8(a, diff)
+        } else {
+            self.sub8(a, diff)
+        };
+        *flags = self.flags.bcd_adjust_flags(a, c, cf, hf, nf);
+        c
+    }
 }
 
 #[cfg(test)]
@@ -244,35 +319,111 @@ mod test {
         });
     });
 
-    decl_test!(test_alu_bitwise_and, {
-        let alu = ALU::new();
-        let mut flags = 0;
-        let c = alu.bitwise_and(0b0010_1001, 0b0110_0110, &mut flags);
-        assert_result!(BIN8, "result", 0b0010_0000, c);
-        assert_result!(BIN8, "flags", flags_apply!(0, S:0 Z:0 H:1 PV:0 N:0 C:0), flags);
+    decl_scenario!(alu_bitwise_and, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr; expected_output: $c:expr; expected_flags: $($flags:tt)+) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = 0;
+                    let c = alu.bitwise_and($a, $b, &mut flags);
+                    assert_result!(BIN8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(0, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0b0010_1001, 0b0110_0110;
+            expected_output: 0b0010_0000;
+            expected_flags: S:0 Z:0 H:1 PV:0 N:0 C:0);
+
+        decl_test_case!(signed_flag_set,
+            inputs: 0b1000_0000, 0b1111_1111;
+            expected_output: 0b1000_0000;
+            expected_flags: S:1 Z:0 H:1 PV:0 N:0 C:0);
+
+        decl_test_case!(zero_flag_set,
+            inputs: 0b0000_0000, 0b1111_1111;
+            expected_output: 0b0000_0000;
+            expected_flags: S:0 Z:1 H:1 PV:1 N:0 C:0);
+
+        decl_test_case!(parity_flag_set,
+            inputs: 0b0101_1010, 0b1111_1111;
+            expected_output: 0b0101_1010;
+            expected_flags: S:0 Z:0 H:1 PV:1 N:0 C:0);
     });
 
-    decl_test!(test_alu_bitwise_and_when_signed, {
-        let alu = ALU::new();
-        let mut flags = 0;
-        let c = alu.bitwise_and(0b1000_0000, 0b1111_1111, &mut flags);
-        assert_result!(BIN8, "result", 0b1000_0000, c);
-        assert_result!(BIN8, "flags", flags_apply!(0, S:1 Z:0 H:1 PV:0 N:0 C:0), flags);
-    });
+    decl_scenario!(alu_bcd_adjust, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $ival:expr, ($($iflags:tt)+); outputs: $oval:expr, ($($oflags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = flags_apply!(0, $($iflags)+);
+                    let c = alu.bcd_adjust($ival, &mut flags);
+                    assert_result!(HEX8, "result", $oval, c);
+                    assert_result!(BIN8, "flags", flags_apply!(flags, $($oflags)+), flags);
+                });
+            };
+            ($cname:ident, $input:expr, ($($flags:tt)+), $expected:expr) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = flags_apply!(0, $($flags)+);
+                    let c = alu.bcd_adjust($input, &mut flags);
+                    assert_result!(HEX8, "result", $expected, c);
+                });
+            };
+        }
 
-    decl_test!(test_alu_bitwise_and_when_zero, {
-        let alu = ALU::new();
-        let mut flags = 0;
-        let c = alu.bitwise_and(0b0000_0000, 0b1111_1111, &mut flags);
-        assert_result!(BIN8, "result", 0b0000_0000, c);
-        assert_result!(BIN8, "flags", flags_apply!(0, S:0 Z:1 H:1 PV:1 N:0 C:0), flags);
-    });
+        decl_scenario!(after_addition, {
+            decl_test_case!(low_nibble_adjusted,
+                inputs: 0x04, (N:0 C:0 H:0);
+                outputs: 0x04, (N:0 C:0 H:0 Z:0 S:0));
 
-    decl_test!(test_alu_bitwise_and_when_parity, {
-        let alu = ALU::new();
-        let mut flags = 0;
-        let c = alu.bitwise_and(0b0101_1010, 0b1111_1111, &mut flags);
-        assert_result!(BIN8, "result", 0b0101_1010, c);
-        assert_result!(BIN8, "flags", flags_apply!(0, S:0 Z:0 H:1 PV:1 N:0 C:0), flags);
+            decl_test_case!(low_nibble_with_overflow,
+                inputs: 0x0b, (N:0 C:0 H:0);
+                outputs: 0x11, (N:0 C:0 H:1 Z:0 S:0));
+
+            decl_test_case!(low_nibble_with_carry,
+                inputs: 0x02, (N:0 C:0 H:1);
+                outputs: 0x08, (N:0 C:0 H:0 Z:0 S:0));
+
+            decl_test_case!(high_nibble_adjusted,
+                inputs: 0x40, (N:0 C:0 H:0);
+                outputs: 0x40, (N:0 C:0 H:0 Z:0 S:0));
+
+            decl_test_case!(high_nibble_with_overflow,
+                inputs: 0xb0, (N:0 C:0 H:0);
+                outputs: 0x10, (N:0 C:1 H:0 Z:0 S:0));
+
+            decl_test_case!(high_nibble_with_carry,
+                inputs: 0x20, (N:0 C:1 H:0);
+                outputs: 0x80, (N:0 C:1 H:0 Z:0 S:1));
+        });
+
+        decl_scenario!(after_subtraction, {
+            decl_test_case!(low_nibble_adjusted,
+                inputs: 0x04, (N:1 C:0 H:0);
+                outputs: 0x04, (N:1 C:0 H:0 Z:0 S:0));
+
+            decl_test_case!(low_nibble_with_overflow,
+                inputs: 0x0b, (N:1 C:0 H:0);
+                outputs: 0x05, (N:1 C:0 H:0 Z:0 S:0));
+
+            decl_test_case!(low_nibble_with_carry,
+                inputs: 0x08, (N:1 C:0 H:1);
+                outputs: 0x02, (N:1 C:0 H:0 Z:0 S:0));
+
+            decl_test_case!(high_nibble_adjusted,
+                inputs: 0x40, (N:1 C:0 H:0);
+                outputs: 0x40, (N:1 C:0 H:0 Z:0 S:0));
+
+            decl_test_case!(high_nibble_with_overflow,
+                inputs: 0xb0, (N:1 C:0 H:0);
+                outputs: 0x50, (N:1 C:1 H:0 Z:0 S:0));
+
+            decl_test_case!(high_nibble_with_carry,
+                inputs: 0x80, (N:1 C:1 H:0);
+                outputs: 0x20, (N:1 C:1 H:0 Z:0 S:0));
+        });
     });
 }

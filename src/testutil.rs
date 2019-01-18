@@ -23,6 +23,14 @@ macro_rules! decl_suite {
     };
 }
 
+/// Declare a test suite.
+/// An alias of `decl_scenario!()`
+macro_rules! decl_scenario {
+    ($sname:ident, { $($items:item)+ }) => {
+        decl_suite!($sname, { $($items)+ });
+    };
+}
+
 /// A type that can produce a sample value of itself.
 pub trait Sample {
         fn sample() -> Self;

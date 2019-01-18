@@ -92,35 +92,10 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, F <- flags);
     });
     ($cpu:expr, DAA) => ({
-        let prev_a = cpu_eval!($cpu, A);
-        let mut a = prev_a;
         let mut flags = cpu_eval!($cpu, F);
-        if flag!(flags, N) == 0 {
-            if flag!(flags, H) == 1 || a & 0x0f > 0x09 {
-                a = $cpu.alu().add8(a, 0x06);
-            }
-            if flag!(flags, C) == 1 || a > 0x99 {
-                a = $cpu.alu().add8(a, 0x60);
-            }
-        } else {
-            if flag!(flags, H) == 1 || a & 0x0f > 0x09 {
-                let r = $cpu.alu().sub8(a, 0x06);
-                a = r;
-            }
-            if flag!(flags, C) == 1 || a > 0x99 {
-                let r = $cpu.alu().sub8(a, 0x60);
-                a = r;
-            }
-        }
+        let a = $cpu.alu().bcd_adjust(cpu_eval!($cpu, A), &mut flags);
         cpu_eval!($cpu, A <- a);
         cpu_eval!($cpu, PC++);
-
-        flags = flags_apply!(flags,
-            S:[a & 0x80 > 0]
-            Z:[a == 0]
-            H:[(a ^ prev_a) & 0x10 > 0]
-            C:[flag!(flags, C) > 0 || prev_a > 0x99]
-        );
         cpu_eval!($cpu, F <- flags);
     });
     ($cpu:expr, DEC8 $dst:tt) => ({
@@ -998,44 +973,14 @@ mod test {
         assert_flags!(cpu, f0, (H:1 N:1));
     });
 
-    macro_rules! test_exec_daa_case {
-        ($input:expr, $input_flags:expr, $output:expr, $output_flags:expr) => ({
-            let mut cpu = cpu!(DAA);
-            cpu_eval!(cpu, A <- $input);
-            cpu_eval!(cpu, F <- $input_flags);
-            exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $output);
-            assert_r8!(cpu, F, $output_flags);
-        });
-    }
-
-    decl_suite!(test_exec_daa, {
-        decl_test!(already_adjusted, {
-            test_exec_daa_case!(
-                0x42, flags_apply!(0, N:0 H:0 C:0),
-                0x42, 0);
-        });
-        decl_test!(need_adjust_low_nibble_after_add, {
-            test_exec_daa_case!(
-                0x4d, flags_apply!(0, N:0 H:0 C:0),
-                0x53, flags_apply!(0, N:0 H:1 C:0));
-        });
-        decl_test!(need_adjust_low_nibble_after_subtract, {
-            test_exec_daa_case!(
-                0x4d, flags_apply!(0, N:1 H:0 C:0),
-                0x47, flags_apply!(0, N:1 H:0 C:0));
-        });
-        decl_test!(need_adjust_high_nibble_after_add, {
-            test_exec_daa_case!(
-                0xd4, flags_apply!(0, N:0 H:0 C:0),
-                0x34, flags_apply!(0, N:0 H:0 C:1));
-        });
-        decl_test!(need_adjust_high_nibble_after_subtract, {
-            test_exec_daa_case!(
-                0xd4, flags_apply!(0, N:1 H:0 C:0),
-                0x74, flags_apply!(0, N:1 H:0 C:1));
-        });
+    decl_test!(test_exec_daa, {
+        let mut cpu = cpu!(DAA);
+        cpu_eval!(cpu, A <- 0xaa);
+        cpu_eval!(cpu, F <- flags_apply!(0, N:0 H:0 C:0));
+        let f0 = exec_step!(&mut cpu);
+        assert_pc!(cpu, 0x0001);
+        assert_r8!(cpu, A, 0x10);
+        assert_flags!(cpu, f0, (N:0 H:1 C:1));
     });
 
     decl_test!(test_exec_nop, {
@@ -1377,6 +1322,11 @@ mod bench {
     #[bench]
     fn bench_exec_1000_cycles_of_and(b: &mut Bencher) {
         exec_inst(b, &inst!(AND B), 1000);
+    }
+
+    #[bench]
+    fn bench_exec_1000_cycles_of_daa(b: &mut Bencher) {
+        exec_inst(b, &inst!(DAA), 1000);
     }
 
     #[bench]
