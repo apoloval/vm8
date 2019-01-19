@@ -297,6 +297,44 @@ impl ALU {
 mod test {
     use super::*;
 
+    decl_scenario!(alu_add8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr; outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = 0;
+                    let c = alu.add8_with_flags($a, $b, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(0, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0x21, 0x42;
+            outputs: 0x63, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(signed_flag_set,
+            inputs: 0xa0, 0x05;
+            outputs: 0xa5, (S:1 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(zero_flag_set,
+            inputs: 0x00, 0x00;
+            outputs: 0x00, (S:0 Z:1 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(halfcarry_flag_set,
+            inputs: 0x29, 0x38;
+            outputs: 0x61, (S:0 Z:0 H:1 PV:0 N:0 C:0));
+
+        decl_test_case!(overflow_flag_set,
+            inputs: 0x51, 0x32;
+            outputs: 0x83, (S:1 Z:0 H:0 PV:1 N:0 C:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0xf0, 0x20;
+            outputs: 0x10, (S:0 Z:0 H:0 PV:0 N:0 C:1));
+    });
+
     decl_test!(test_alu_add8, {
         let alu = ALU::new();
         assert_eq!(3, alu.add8(1, 2));

@@ -644,50 +644,28 @@ mod test {
     /* 8-Bit Arithmetic group */
     /**************************/
 
-    macro_rules! test_exec_add8_case {
-        ($dst:tt, $src:tt, $input:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(ADD $dst, $src);
-            cpu_eval!(cpu, $dst <- $input);
-            cpu_eval!(cpu, $src <- $input);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
     macro_rules! test_exec_add8 {
-        ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_exec_add8_case!($dst, $src, 0x21, 0x42, (S:0 Z:0 H:0 PV:0 N:0 C:0));
-                });
-                decl_test!(overflow_plus_signed, {
-                    test_exec_add8_case!($dst, $src, 0x51, 0xa2, (S:1 Z:0 H:0 PV:1 N:0 C:0));
-                });
-                decl_test!(half_carry, {
-                    test_exec_add8_case!($dst, $src, 0x29, 0x52, (S:0 Z:0 H:1 PV:0 N:0 C:0));
-                });
-                decl_test!(zero, {
-                    test_exec_add8_case!($dst, $src, 0, 0, (S:0 Z:1 H:0 PV:0 N:0 C:0));
-                });
-                decl_test!(carry, {
-                    test_exec_add8_case!($dst, $src, 0x90, 0x20, (S:0 Z:0 H:0 PV:1 N:0 C:1));
-                });
+        ($fname:ident, $dst:tt, $src:tt) => {
+            decl_test!($fname, {
+                let mut cpu = cpu!(ADD $dst, $src);
+                cpu_eval!(cpu, $dst <- 3);
+                cpu_eval!(cpu, $src <- 3);
+                let f0 = exec_step!(&mut cpu);
+                assert_pc!(cpu, 0x0001);
+                assert_r8!(cpu, $dst, 6);
+                assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:0 C:0));
             });
         };
     }
 
-    test_exec_add8!(test_exec_add_a_a, 1, A, A);
-    test_exec_add8!(test_exec_add_a_a_2, 1, A, A);
-    test_exec_add8!(test_exec_add_a_b, 1, A, B);
-    test_exec_add8!(test_exec_add_a_c, 1, A, C);
-    test_exec_add8!(test_exec_add_a_d, 1, A, D);
-    test_exec_add8!(test_exec_add_a_e, 1, A, E);
-    test_exec_add8!(test_exec_add_a_h, 1, A, H);
-    test_exec_add8!(test_exec_add_a_l, 1, A, L);
-
-    test_exec_add8!(test_exec_add_a_indhl, 1, A, (*HL));
+    test_exec_add8!(test_exec_add_a_a, A, A);
+    test_exec_add8!(test_exec_add_a_b, A, B);
+    test_exec_add8!(test_exec_add_a_c, A, C);
+    test_exec_add8!(test_exec_add_a_d, A, D);
+    test_exec_add8!(test_exec_add_a_e, A, E);
+    test_exec_add8!(test_exec_add_a_h, A, H);
+    test_exec_add8!(test_exec_add_a_l, A, L);
+    test_exec_add8!(test_exec_add_a_indhl, A, (*HL));
 
     macro_rules! test_exec_adc8_case {
         ($dst:tt, $src:tt, $input:expr, $carry:expr, $output:expr, $flags:tt) => ({
