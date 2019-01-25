@@ -42,6 +42,20 @@ impl FlagsTable {
         self.sub[Self::index_of_binops(oldval, newval)]
     }
 
+    /// Returns the flags for adding 16-bits numbers.
+    ///
+    /// Due to memory size limitations and considering 16-bits addition in Z80
+    /// is quite slow, these flags are not memoized but computed on the fly.
+    #[inline]
+    pub fn add16_flags(&self, oldval: u16, newval: u16, flags: &mut u8) {
+        let oldh = (oldval >> 8) as u8;
+        let newh = (newval >> 8) as u8;
+        *flags = flags_apply!(*flags,
+            C:[Self::carry_flag(oldval, newval)]
+            H:[Self::halfcarry_flag(oldh, newh)]
+            N:0);
+    }
+
     /// Returns the precomputed flags for bitwise AND
     #[inline]
     pub fn and_flags(&self, newval: u8) -> u8 {
@@ -135,8 +149,8 @@ impl FlagsTable {
     fn halfborrow_flag(a: u8, c: u8) -> bool { (a & 0x0f) < (c & 0x0f) }
     fn overflow_flag(a: u8, b: u8, c: u8) -> bool { (a ^ b ^ 0x80) & (b ^ c) & 0x80 != 0 }
     fn underflow_flag(a: u8, b: u8, c: u8) -> bool { (a ^ b) & ((a ^ c) & 0x80) != 0 }
-    fn carry_flag(a: u8, c: u8) -> bool { c < a }
-    fn borrow_flag(a: u8, c: u8) -> bool { c > a }
+    fn carry_flag<N: PartialOrd>(a: N, c: N) -> bool { c < a }
+    fn borrow_flag<N: PartialOrd>(a: N, c: N) -> bool { c > a }
 
     fn parity_of(mut n: u8) -> usize {
         let mut parity = 0;
@@ -195,9 +209,16 @@ impl ALU {
     }
 
     #[inline]
-    pub fn add16(&self, a: u16, b: u16) -> (u16, bool) {
+    pub fn add16(&self, a: u16, b: u16) -> u16 {
         let c = (a as u32) + (b as u32);
-        (c as u16, c > 0x00ff)
+        c as u16
+    }
+
+    #[inline]
+    pub fn add16_with_flags(&self, a: u16, b: u16, flags: &mut u8) -> u16 {
+        let c = self.add16(a, b);
+        self.flags.add16_flags(a, c, flags);
+        c
     }
 
     #[inline]
@@ -241,17 +262,51 @@ impl ALU {
         ((a as i32) - (b as i32)) as u16
     }
 
+    /// Rotates the given byte 1 bit to the left.
+    ///
+    /// The previous carry is moved to the rightmost bit. And the previous
+    /// leftmost bit is moved to the carry.
     #[inline]
-    pub fn rotate_left(&self, val: u8, carry: u8, flags: &mut u8) -> u8 {
-        let new_carry = val >> 7;
-        *flags = flags_apply!(*flags, C:[new_carry > 0] H:0 N:0);
+    pub fn rotate_left(&self, val: u8, flags: &mut u8) -> u8 {
+        let cf = flag!(*flags, C);
+        let carry = val >> 7;
+        *flags = flags_apply!(*flags, C:[carry > 0] H:0 N:0);
+        (val << 1) | cf
+    }
+
+    /// Rotates the given byte 1 bit to the left, with immediate rotation of
+    /// the carry.
+    ///
+    /// The previous carry is discarded. And the previous leftmost bit is moved
+    /// to the carry and the rightmost bit.
+    #[inline]
+    pub fn rotate_left_with_carry(&self, val: u8, flags: &mut u8) -> u8 {
+        let carry = val >> 7;
+        *flags = flags_apply!(*flags, C:[carry > 0] H:0 N:0);
         (val << 1) | carry
     }
 
+    /// Rotates the given byte 1 bit to the right.
+    ///
+    /// The previous carry is moved to the leftmost bit. And the previous
+    /// rightmost bit is moved to the carry.
     #[inline]
-    pub fn rotate_right(&self, val: u8, carry: u8, flags: &mut u8) -> u8 {
-        let new_carry = val & 0x01;
-        *flags = flags_apply!(*flags, C:[new_carry > 0] H:0 N:0);
+    pub fn rotate_right(&self, val: u8, flags: &mut u8) -> u8 {
+        let cf = flag!(*flags, C);
+        let carry = val & 0x01;
+        *flags = flags_apply!(*flags, C:[carry > 0] H:0 N:0);
+        (val >> 1) | (cf << 7)
+    }
+
+    /// Rotates the given byte 1 bit to the right, with immediate rotation of
+    /// the carry.
+    ///
+    /// The previous carry is discarded. And the previous rightmost bit is moved
+    /// to the carry and the leftmost bit.
+    #[inline]
+    pub fn rotate_right_with_carry(&self, val: u8, flags: &mut u8) -> u8 {
+        let carry = val & 0x01;
+        *flags = flags_apply!(*flags, C:[carry > 0] H:0 N:0);
         (val >> 1) | (carry << 7)
     }
 
@@ -335,26 +390,203 @@ mod test {
             outputs: 0x10, (S:0 Z:0 H:0 PV:0 N:0 C:1));
     });
 
-    decl_test!(test_alu_add8, {
-        let alu = ALU::new();
-        assert_eq!(3, alu.add8(1, 2));
-        assert_eq!(-1 as i8 as u8, alu.add8(1, -2 as i8 as u8));
-        assert_eq!(-1 as i8 as u8, alu.add8(1, -2 as i8 as u8));
+    decl_scenario!(alu_adc8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr, $cf:expr; outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = flags_apply!(0, C:[$cf != 0]);
+                    let c = alu.adc8_with_flags($a, $b, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(0, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(no_carry,
+            inputs: 0x21, 0x42, 0;
+            outputs: 0x63, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(carry,
+            inputs: 0x21, 0x42, 1;
+            outputs: 0x64, (S:0 Z:0 H:0 PV:0 N:0 C:0));
     });
 
-    decl_suite!(test_alu_add16, {
-        decl_test!(no_carry, {
-            let alu = ALU::new();
-            let (c, carry) =  alu.add16(0x20, 0x42);
-            assert_eq!(0x62, c);
-            assert!(!carry);
-        });
-        decl_test!(carry, {
-            let alu = ALU::new();
-            let (c, carry) =  alu.add16(0xe012, 0x4245);
-            assert_eq!(0x2257, c);
-            assert!(carry);
-        });
+    decl_scenario!(alu_sub8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr; outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = 0;
+                    let c = alu.sub8_with_flags($a, $b, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(0, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0x56, 0x21;
+            outputs: 0x35, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(signed_flag_set,
+            inputs: 0x95, 0x12;
+            outputs: 0x83, (S:1 Z:0 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(zero_flag_set,
+            inputs: 0x10, 0x10;
+            outputs: 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(halfcarry_flag_set,
+            inputs: 0x21, 0x02;
+            outputs: 0x1f, (S:0 Z:0 H:1 PV:0 N:1 C:0));
+
+        decl_test_case!(overflow_flag_set,
+            inputs: 0x85, 0x10;
+            outputs: 0x75, (S:0 Z:0 H:0 PV:1 N:1 C:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0x81, 0x90;
+            outputs: 0xf1, (S:1 Z:0 H:0 PV:0 N:1 C:1));
+    });
+
+    decl_scenario!(alu_sbc8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr, $cf:expr; outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = flags_apply!(0, C:[$cf != 0]);
+                    let c = alu.sbc8_with_flags($a, $b, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(0, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(no_carry,
+            inputs: 0x45, 0x21, 0;
+            outputs: 0x24, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(carry,
+            inputs: 0x45, 0x21, 1;
+            outputs: 0x23, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+    });
+
+    decl_scenario!(alu_inc8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, ($($f0:tt)+); outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let initial_flags = flags_apply!(0, $($f0)+);
+                    let mut flags = initial_flags;
+                    let c = alu.inc8_with_flags($a, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(initial_flags, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0x21, (C:0);
+            outputs: 0x22, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(carry_flag_preserved,
+            inputs: 0x21, (C:1);
+            outputs: 0x22, (S:0 Z:0 H:0 PV:0 N:0 C:1));
+
+        decl_test_case!(signed_flag_set,
+            inputs: 0xa0, (C:0);
+            outputs: 0xa1, (S:1 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(zero_flag_set,
+            inputs: 0xff, (C:0);
+            outputs: 0x00, (S:0 Z:1 H:1 PV:0 N:0 C:0));
+
+        decl_test_case!(halfcarry_flag_set,
+            inputs: 0x2f, (C:0);
+            outputs: 0x30, (S:0 Z:0 H:1 PV:0 N:0 C:0));
+
+        decl_test_case!(overflow_flag_set,
+            inputs: 0x7f, (C:0);
+            outputs: 0x80, (S:1 Z:0 H:1 PV:1 N:0 C:0));
+    });
+
+    decl_scenario!(alu_dec8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, ($($f0:tt)+); outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let initial_flags = flags_apply!(0, $($f0)+);
+                    let mut flags = initial_flags;
+                    let c = alu.dec8_with_flags($a, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(initial_flags, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0x22, (C:0);
+            outputs: 0x21, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(carry_flag_preserved,
+            inputs: 0x22, (C:1);
+            outputs: 0x21, (S:0 Z:0 H:0 PV:0 N:1 C:1));
+
+        decl_test_case!(signed_flag_set,
+            inputs: 0xa1, (C:0);
+            outputs: 0xa0, (S:1 Z:0 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(zero_flag_set,
+            inputs: 0x01, (C:0);
+            outputs: 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+
+        decl_test_case!(halfcarry_flag_set,
+            inputs: 0x30, (C:0);
+            outputs: 0x2f, (S:0 Z:0 H:1 PV:0 N:1 C:0));
+
+        decl_test_case!(overflow_flag_set,
+            inputs: 0x80, (C:0);
+            outputs: 0x7f, (S:0 Z:0 H:1 PV:1 N:1 C:0));
+    });
+
+    decl_scenario!(alu_add16, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr, ($($f0:tt)+); outputs: $c:expr, ($($flags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let initial_flags = flags_apply!(0, $($f0)+);
+                    let mut flags = initial_flags;
+                    let c = alu.add16_with_flags($a, $b, &mut flags);
+                    assert_result!(HEX8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(initial_flags, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0x6321, 0x1142, (S:0 Z:0 PV:0);
+            outputs: 0x7463, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(signed_flag_preserved,
+            inputs: 0x6321, 0x1142, (S:1 Z:0 PV:0);
+            outputs: 0x7463, (S:1 Z:0 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(zero_flag_preserved,
+            inputs: 0x6321, 0x1142, (S:0 Z:1 PV:0);
+            outputs: 0x7463, (S:0 Z:1 H:0 PV:0 N:0 C:0));
+
+        decl_test_case!(halfcarry_flag_set,
+            inputs: 0x1f21, 0x2142, (S:0 Z:0 PV:0);
+            outputs: 0x4063, (S:0 Z:0 H:1 PV:0 N:0 C:0));
+
+        decl_test_case!(overflow_flag_preserved,
+            inputs: 0x6321, 0x1142, (S:0 Z:0 PV:1);
+            outputs: 0x7463, (S:0 Z:0 H:0 PV:1 N:0 C:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0xf321, 0x2142, (S:0 Z:0 PV:0);
+            outputs: 0x1463, (S:0 Z:0 H:0 PV:0 N:0 C:1));
     });
 
     decl_scenario!(alu_bitwise_and, {
@@ -389,6 +621,102 @@ mod test {
             inputs: 0b0101_1010, 0b1111_1111;
             expected_output: 0b0101_1010;
             expected_flags: S:0 Z:0 H:1 PV:1 N:0 C:0);
+    });
+
+    decl_scenario!(alu_rotate_left, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $ival:expr, $carry:expr; outputs: $oval:expr, ($($oflags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = flags_apply!(0, C:[$carry != 0]);
+                    let c = alu.rotate_left($ival, &mut flags);
+                    assert_result!(BIN8, "result", $oval, c);
+                    assert_result!(BIN8, "flags", flags_apply!(flags, $($oflags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(carry_flag_reset,
+            inputs: 0b0000_0011, 0;
+            outputs: 0b0000_0110, (C:0 H:0 N:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0b1000_0011, 0;
+            outputs: 0b0000_0110, (C:1 H:0 N:0));
+
+        decl_test_case!(prev_carry_shifted,
+            inputs: 0b0000_0011, 1;
+            outputs: 0b0000_0111, (C:0 H:0 N:0));
+    });
+
+    decl_scenario!(alu_rotate_left_with_carry, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $ival:expr; outputs: $oval:expr, ($($oflags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = 0;
+                    let c = alu.rotate_left_with_carry($ival, &mut flags);
+                    assert_result!(BIN8, "result", $oval, c);
+                    assert_result!(BIN8, "flags", flags_apply!(flags, $($oflags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(carry_flag_reset,
+            inputs: 0b0000_0011;
+            outputs: 0b0000_0110, (C:0 H:0 N:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0b1000_0011;
+            outputs: 0b0000_0111, (C:1 H:0 N:0));
+    });
+
+    decl_scenario!(alu_rotate_right, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $ival:expr, $carry:expr; outputs: $oval:expr, ($($oflags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = flags_apply!(0, C:[$carry != 0]);
+                    let c = alu.rotate_right($ival, &mut flags);
+                    assert_result!(BIN8, "result", $oval, c);
+                    assert_result!(BIN8, "flags", flags_apply!(flags, $($oflags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(carry_flag_reset,
+            inputs: 0b0000_1100, 0;
+            outputs: 0b0000_0110, (C:0 H:0 N:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0b0000_1101, 0;
+            outputs: 0b0000_0110, (C:1 H:0 N:0));
+
+        decl_test_case!(prev_carry_shifted,
+            inputs: 0b0000_1100, 1;
+            outputs: 0b1000_0110, (C:0 H:0 N:0));
+    });
+
+    decl_scenario!(alu_rotate_right_with_carry, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $ival:expr; outputs: $oval:expr, ($($oflags:tt)+)) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = 0;
+                    let c = alu.rotate_right_with_carry($ival, &mut flags);
+                    assert_result!(BIN8, "result", $oval, c);
+                    assert_result!(BIN8, "flags", flags_apply!(flags, $($oflags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(carry_flag_reset,
+            inputs: 0b0000_1100;
+            outputs: 0b0000_0110, (C:0 H:0 N:0));
+
+        decl_test_case!(carry_flag_set,
+            inputs: 0b0000_1101;
+            outputs: 0b1000_0110, (C:1 H:0 N:0));
     });
 
     decl_scenario!(alu_bcd_adjust, {

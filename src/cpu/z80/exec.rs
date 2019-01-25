@@ -55,14 +55,10 @@ macro_rules! cpu_exec {
     ($cpu:expr, ADD16 $dst:tt, $src:tt) => ({
         let a = cpu_eval!($cpu, $dst);
         let b = cpu_eval!($cpu, $src);
-        let c = (a as u32) + (b as u32);
+        let mut flags = cpu_eval!($cpu, F);
+        let c = $cpu.alu().add16_with_flags(a, b, &mut flags);
         cpu_eval!($cpu, $dst <- c as u16);
         cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
-
-        let flags = flags_apply!(cpu_eval!($cpu, F),
-            C:[c>0xffff]
-            H:[((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0]
-            N:0);
         cpu_eval!($cpu, F <- flags);
     });
     ($cpu:expr, AND $src:tt) => ({
@@ -140,7 +136,7 @@ macro_rules! cpu_exec {
     });
     ($cpu:expr, INC16 $dst:tt) => ({
         let dest = cpu_eval!($cpu, $dst);
-        let (result, _) = $cpu.alu().add16(dest, 1);
+        let result = $cpu.alu().add16(dest, 1);
         cpu_eval!($cpu, $dst <- result);
         cpu_eval!($cpu, PC ++<- 1 + op_size!($dst));
     });
@@ -179,8 +175,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RLA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
-        let carry = flag!(cpu_eval!($cpu, F), C);
-        let dest = $cpu.alu().rotate_left(orig, carry, &mut flags);
+        let dest = $cpu.alu().rotate_left(orig, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
         cpu_eval!($cpu, F <- flags);
@@ -188,8 +183,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RLCA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
-        let carry = (orig & 0x80) >> 7;
-        let dest = $cpu.alu().rotate_left(orig, carry, &mut flags);
+        let dest = $cpu.alu().rotate_left_with_carry(orig, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
         cpu_eval!($cpu, F <- flags);
@@ -197,8 +191,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RRA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
-        let carry = cpu_eval!($cpu, F[C]);
-        let dest = $cpu.alu().rotate_right(orig, carry, &mut flags);
+        let dest = $cpu.alu().rotate_right(orig, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
         cpu_eval!($cpu, F <- flags);
@@ -207,8 +200,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RRCA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
-        let carry = orig & 0x01;
-        let dest = $cpu.alu().rotate_right(orig, carry, &mut flags);
+        let dest = $cpu.alu().rotate_right_with_carry(orig, &mut flags);
         cpu_eval!($cpu, A <- dest);
         cpu_eval!($cpu, PC++);
         cpu_eval!($cpu, F <- flags);
@@ -467,169 +459,174 @@ mod test {
     /* 8-Bit Load Group */
     /********************/
 
-    macro_rules! test_exec_ld8 {
-        ($fname:ident, $pcinc:expr, $dst:tt, n) => {
-            decl_test!($fname, {
-                let input = u8::sample();
-                let mut cpu = cpu!(LD $dst, input);
-                let f0 = exec_step!(&mut cpu);
-                assert_pc!(cpu, $pcinc);
-                assert_r8!(cpu, $dst, input);
-                assert_flags!(cpu, f0, unaffected);
-            });
-        };
-        ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            decl_test!($fname, {
-                let input = u8::sample();
-                let mut cpu = cpu!(LD $dst, $src);
-                cpu_eval!(cpu, $src <- input);
-                let f0 = exec_step!(&mut cpu);
-                assert_pc!(cpu, $pcinc);
-                assert_r8!(cpu, $dst, input);
-                assert_flags!(cpu, f0, unaffected);
-            });
-        };
-    }
+    decl_scenario!(exec_ld8, {
+        macro_rules! decl_test_case {
+            ($fname:ident, $pcinc:expr, $dst:tt, n) => {
+                decl_test!($fname, {
+                    let input = u8::sample();
+                    let mut cpu = cpu!(LD $dst, input);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pcinc);
+                    assert_r8!(cpu, $dst, input);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+            ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
+                decl_test!($fname, {
+                    let input = u8::sample();
+                    let mut cpu = cpu!(LD $dst, $src);
+                    cpu_eval!(cpu, $src <- input);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pcinc);
+                    assert_r8!(cpu, $dst, input);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
 
-    test_exec_ld8!(test_exec_ld8_a_a, 1, A, A);
-    test_exec_ld8!(test_exec_ld8_a_b, 1, A, B);
-    test_exec_ld8!(test_exec_ld8_a_c, 1, A, C);
-    test_exec_ld8!(test_exec_ld8_a_d, 1, A, D);
-    test_exec_ld8!(test_exec_ld8_a_e, 1, A, E);
-    test_exec_ld8!(test_exec_ld8_a_h, 1, A, H);
-    test_exec_ld8!(test_exec_ld8_a_l, 1, A, L);
-    test_exec_ld8!(test_exec_ld8_b_a, 1, B, A);
-    test_exec_ld8!(test_exec_ld8_b_b, 1, B, B);
-    test_exec_ld8!(test_exec_ld8_b_c, 1, B, C);
-    test_exec_ld8!(test_exec_ld8_b_d, 1, B, D);
-    test_exec_ld8!(test_exec_ld8_b_e, 1, B, E);
-    test_exec_ld8!(test_exec_ld8_b_h, 1, B, H);
-    test_exec_ld8!(test_exec_ld8_b_l, 1, B, L);
-    test_exec_ld8!(test_exec_ld8_c_a, 1, C, A);
-    test_exec_ld8!(test_exec_ld8_c_b, 1, C, B);
-    test_exec_ld8!(test_exec_ld8_c_c, 1, C, C);
-    test_exec_ld8!(test_exec_ld8_c_d, 1, C, D);
-    test_exec_ld8!(test_exec_ld8_c_e, 1, C, E);
-    test_exec_ld8!(test_exec_ld8_c_h, 1, C, H);
-    test_exec_ld8!(test_exec_ld8_c_l, 1, C, L);
-    test_exec_ld8!(test_exec_ld8_d_a, 1, D, A);
-    test_exec_ld8!(test_exec_ld8_d_b, 1, D, B);
-    test_exec_ld8!(test_exec_ld8_d_c, 1, D, C);
-    test_exec_ld8!(test_exec_ld8_d_d, 1, D, D);
-    test_exec_ld8!(test_exec_ld8_d_e, 1, D, E);
-    test_exec_ld8!(test_exec_ld8_d_h, 1, D, H);
-    test_exec_ld8!(test_exec_ld8_d_l, 1, D, L);
-    test_exec_ld8!(test_exec_ld8_e_a, 1, E, A);
-    test_exec_ld8!(test_exec_ld8_e_b, 1, E, B);
-    test_exec_ld8!(test_exec_ld8_e_c, 1, E, C);
-    test_exec_ld8!(test_exec_ld8_e_d, 1, E, D);
-    test_exec_ld8!(test_exec_ld8_e_e, 1, E, E);
-    test_exec_ld8!(test_exec_ld8_e_h, 1, E, H);
-    test_exec_ld8!(test_exec_ld8_e_l, 1, E, L);
-    test_exec_ld8!(test_exec_ld8_h_a, 1, H, A);
-    test_exec_ld8!(test_exec_ld8_h_b, 1, H, B);
-    test_exec_ld8!(test_exec_ld8_h_c, 1, H, C);
-    test_exec_ld8!(test_exec_ld8_h_d, 1, H, D);
-    test_exec_ld8!(test_exec_ld8_h_e, 1, H, E);
-    test_exec_ld8!(test_exec_ld8_h_h, 1, H, H);
-    test_exec_ld8!(test_exec_ld8_h_l, 1, H, L);
-    test_exec_ld8!(test_exec_ld8_l_a, 1, L, A);
-    test_exec_ld8!(test_exec_ld8_l_b, 1, L, B);
-    test_exec_ld8!(test_exec_ld8_l_c, 1, L, C);
-    test_exec_ld8!(test_exec_ld8_l_d, 1, L, D);
-    test_exec_ld8!(test_exec_ld8_l_e, 1, L, E);
-    test_exec_ld8!(test_exec_ld8_l_h, 1, L, H);
-    test_exec_ld8!(test_exec_ld8_l_l, 1, L, L);
+        decl_test_case!(a_a, 1, A, A);
+        decl_test_case!(a_b, 1, A, B);
+        decl_test_case!(a_c, 1, A, C);
+        decl_test_case!(a_d, 1, A, D);
+        decl_test_case!(a_e, 1, A, E);
+        decl_test_case!(a_h, 1, A, H);
+        decl_test_case!(a_l, 1, A, L);
+        decl_test_case!(b_a, 1, B, A);
+        decl_test_case!(b_b, 1, B, B);
+        decl_test_case!(b_c, 1, B, C);
+        decl_test_case!(b_d, 1, B, D);
+        decl_test_case!(b_e, 1, B, E);
+        decl_test_case!(b_h, 1, B, H);
+        decl_test_case!(b_l, 1, B, L);
+        decl_test_case!(c_a, 1, C, A);
+        decl_test_case!(c_b, 1, C, B);
+        decl_test_case!(c_c, 1, C, C);
+        decl_test_case!(c_d, 1, C, D);
+        decl_test_case!(c_e, 1, C, E);
+        decl_test_case!(c_h, 1, C, H);
+        decl_test_case!(c_l, 1, C, L);
+        decl_test_case!(d_a, 1, D, A);
+        decl_test_case!(d_b, 1, D, B);
+        decl_test_case!(d_c, 1, D, C);
+        decl_test_case!(d_d, 1, D, D);
+        decl_test_case!(d_e, 1, D, E);
+        decl_test_case!(d_h, 1, D, H);
+        decl_test_case!(d_l, 1, D, L);
+        decl_test_case!(e_a, 1, E, A);
+        decl_test_case!(e_b, 1, E, B);
+        decl_test_case!(e_c, 1, E, C);
+        decl_test_case!(e_d, 1, E, D);
+        decl_test_case!(e_e, 1, E, E);
+        decl_test_case!(e_h, 1, E, H);
+        decl_test_case!(e_l, 1, E, L);
+        decl_test_case!(h_a, 1, H, A);
+        decl_test_case!(h_b, 1, H, B);
+        decl_test_case!(h_c, 1, H, C);
+        decl_test_case!(h_d, 1, H, D);
+        decl_test_case!(h_e, 1, H, E);
+        decl_test_case!(h_h, 1, H, H);
+        decl_test_case!(h_l, 1, H, L);
+        decl_test_case!(l_a, 1, L, A);
+        decl_test_case!(l_b, 1, L, B);
+        decl_test_case!(l_c, 1, L, C);
+        decl_test_case!(l_d, 1, L, D);
+        decl_test_case!(l_e, 1, L, E);
+        decl_test_case!(l_h, 1, L, H);
+        decl_test_case!(l_l, 1, L, L);
 
-    test_exec_ld8!(test_exec_ld8_indbc_a, 1, (*BC), A);
-    test_exec_ld8!(test_exec_ld8_indde_a, 1, (*DE), A);
-    test_exec_ld8!(test_exec_ld8_indhl_a, 1, (*HL), A);
-    test_exec_ld8!(test_exec_ld8_indhl_b, 1, (*HL), B);
-    test_exec_ld8!(test_exec_ld8_indhl_c, 1, (*HL), C);
-    test_exec_ld8!(test_exec_ld8_indhl_d, 1, (*HL), D);
-    test_exec_ld8!(test_exec_ld8_indhl_e, 1, (*HL), E);
-    test_exec_ld8!(test_exec_ld8_indhl_h, 1, (*HL), H);
-    test_exec_ld8!(test_exec_ld8_indhl_l, 1, (*HL), L);
+        decl_test_case!(indbc_a, 1, (*BC), A);
+        decl_test_case!(indde_a, 1, (*DE), A);
+        decl_test_case!(indhl_a, 1, (*HL), A);
+        decl_test_case!(indhl_b, 1, (*HL), B);
+        decl_test_case!(indhl_c, 1, (*HL), C);
+        decl_test_case!(indhl_d, 1, (*HL), D);
+        decl_test_case!(indhl_e, 1, (*HL), E);
+        decl_test_case!(indhl_h, 1, (*HL), H);
+        decl_test_case!(indhl_l, 1, (*HL), L);
 
-    test_exec_ld8!(test_exec_ld8_a_indbc, 1, A, (*BC));
-    test_exec_ld8!(test_exec_ld8_a_indde, 1, A, (*DE));
-    test_exec_ld8!(test_exec_ld8_a_indhl, 1, A, (*HL));
-    test_exec_ld8!(test_exec_ld8_b_indhl, 1, B, (*HL));
-    test_exec_ld8!(test_exec_ld8_c_indhl, 1, C, (*HL));
-    test_exec_ld8!(test_exec_ld8_d_indhl, 1, D, (*HL));
-    test_exec_ld8!(test_exec_ld8_e_indhl, 1, E, (*HL));
-    test_exec_ld8!(test_exec_ld8_h_indhl, 1, H, (*HL));
-    test_exec_ld8!(test_exec_ld8_l_indhl, 1, L, (*HL));
+        decl_test_case!(a_indbc, 1, A, (*BC));
+        decl_test_case!(a_indde, 1, A, (*DE));
+        decl_test_case!(a_indhl, 1, A, (*HL));
+        decl_test_case!(b_indhl, 1, B, (*HL));
+        decl_test_case!(c_indhl, 1, C, (*HL));
+        decl_test_case!(d_indhl, 1, D, (*HL));
+        decl_test_case!(e_indhl, 1, E, (*HL));
+        decl_test_case!(h_indhl, 1, H, (*HL));
+        decl_test_case!(l_indhl, 1, L, (*HL));
 
-    test_exec_ld8!(test_exec_ld8_indl16_a, 3, (*0x1234), A);
+        decl_test_case!(indl16_a, 3, (*0x1234), A);
 
-    test_exec_ld8!(test_exec_ld8_a_l8, 2, A, n);
-    test_exec_ld8!(test_exec_ld8_b_l8, 2, B, n);
-    test_exec_ld8!(test_exec_ld8_c_l8, 2, C, n);
-    test_exec_ld8!(test_exec_ld8_d_l8, 2, D, n);
-    test_exec_ld8!(test_exec_ld8_e_l8, 2, E, n);
-    test_exec_ld8!(test_exec_ld8_h_l8, 2, H, n);
-    test_exec_ld8!(test_exec_ld8_l_l8, 2, L, n);
+        decl_test_case!(a_l8, 2, A, n);
+        decl_test_case!(b_l8, 2, B, n);
+        decl_test_case!(c_l8, 2, C, n);
+        decl_test_case!(d_l8, 2, D, n);
+        decl_test_case!(e_l8, 2, E, n);
+        decl_test_case!(h_l8, 2, H, n);
+        decl_test_case!(l_l8, 2, L, n);
 
-    test_exec_ld8!(test_exec_ld8_indhl_l8, 2, (*HL), n);
+        decl_test_case!(indhl_l8, 2, (*HL), n);
 
-    test_exec_ld8!(test_ld_a_indl16, 3, A, (*0x1234));
+        decl_test_case!(test_ld_a_indl16, 3, A, (*0x1234));
+    });
+
 
 
     /*********************/
     /* 16-Bit Load Group */
     /*********************/
 
-    macro_rules! test_exec_ld16 {
-        ($fname:ident, $pcinc:expr, (**nn), $src:tt) => {
-            decl_test!($fname, {
-                let input = u16::sample();
-                let mut cpu = cpu!(LD (**0x4000), $src);
-                cpu_eval!(cpu, $src <- input);
-                let f0 = exec_step!(&mut cpu);
-                assert_pc!(cpu, $pcinc);
-                assert_r8!(cpu, (**0x4000), input);
-                assert_flags!(cpu, f0, unaffected);
-            });
-        };
-        ($fname:ident, $pcinc:expr, $dst:tt, nn) => {
-            decl_test!($fname, {
-                let input = u16::sample();
-                let mut cpu = cpu!(LD $dst, input);
-                cpu_eval!(cpu, $dst <- input);
-                let f0 = exec_step!(&mut cpu);
-                assert_pc!(cpu, $pcinc);
-                assert_r8!(cpu, $dst, input);
-                assert_flags!(cpu, f0, unaffected);
-            });
-        };
-        ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            decl_test!($fname, {
-                let input = u16::sample();
-                let mut cpu = cpu!(LD $dst, $src);
-                cpu_eval!(cpu, $dst <- input);
-                let f0 = exec_step!(&mut cpu);
-                assert_pc!(cpu, $pcinc);
-                assert_r8!(cpu, $dst, input);
-                assert_flags!(cpu, f0, unaffected);
-            });
-        };
-    }
+    decl_scenario!(exec_ld16, {
+        macro_rules! decl_test_case {
+            ($fname:ident, $pcinc:expr, (**nn), $src:tt) => {
+                decl_test!($fname, {
+                    let input = u16::sample();
+                    let mut cpu = cpu!(LD (**0x4000), $src);
+                    cpu_eval!(cpu, $src <- input);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pcinc);
+                    assert_r8!(cpu, (**0x4000), input);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+            ($fname:ident, $pcinc:expr, $dst:tt, nn) => {
+                decl_test!($fname, {
+                    let input = u16::sample();
+                    let mut cpu = cpu!(LD $dst, input);
+                    cpu_eval!(cpu, $dst <- input);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pcinc);
+                    assert_r8!(cpu, $dst, input);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+            ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
+                decl_test!($fname, {
+                    let input = u16::sample();
+                    let mut cpu = cpu!(LD $dst, $src);
+                    cpu_eval!(cpu, $dst <- input);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pcinc);
+                    assert_r8!(cpu, $dst, input);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
 
-    test_exec_ld16!(test_exec_ld16_bc_l16, 3, BC, nn);
-    test_exec_ld16!(test_exec_ld16_de_l16, 3, DE, nn);
-    test_exec_ld16!(test_exec_ld16_hl_l16, 3, HL, nn);
-    test_exec_ld16!(test_exec_ld16_sp_l16, 3, SP, nn);
+        decl_test_case!(bc_l16, 3, BC, nn);
+        decl_test_case!(de_l16, 3, DE, nn);
+        decl_test_case!(hl_l16, 3, HL, nn);
+        decl_test_case!(sp_l16, 3, SP, nn);
 
-    test_exec_ld16!(test_exec_ld16_indl16_hl, 3, (**nn), HL);
+        decl_test_case!(indl16_hl, 3, (**nn), HL);
 
-    test_exec_ld16!(test_exec_ld16_hl_indl16, 3, HL, nn);
+        decl_test_case!(hl_indl16, 3, HL, nn);
+    });
 
     /**********************************************/
     /* Exchange, Block Transfer, and Search Group */
     /**********************************************/
 
-    decl_test!(test_exec_exaf, {
+    decl_test!(exec_exaf, {
         let mut cpu = cpu!(EX AF, AF_);
         let af = cpu_eval!(cpu, AF <- u16::sample());
         let af_ = cpu_eval!(cpu, AF_ <- u16::sample());
@@ -644,305 +641,216 @@ mod test {
     /* 8-Bit Arithmetic group */
     /**************************/
 
-    macro_rules! test_exec_add8 {
-        ($fname:ident, $dst:tt, $src:tt) => {
-            decl_test!($fname, {
-                let mut cpu = cpu!(ADD $dst, $src);
-                cpu_eval!(cpu, $dst <- 3);
-                cpu_eval!(cpu, $src <- 3);
-                let f0 = exec_step!(&mut cpu);
-                assert_pc!(cpu, 0x0001);
-                assert_r8!(cpu, $dst, 6);
-                assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:0 C:0));
-            });
-        };
-    }
+    decl_scenario!(exec_add8, {
+        macro_rules! decl_test_case {
+            ($fname:ident, $dst:tt, $src:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(ADD $dst, $src);
+                    cpu_eval!(cpu, $dst <- 3);
+                    cpu_eval!(cpu, $src <- 3);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, $dst, 6);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+                });
+            };
+        }
 
-    test_exec_add8!(test_exec_add_a_a, A, A);
-    test_exec_add8!(test_exec_add_a_b, A, B);
-    test_exec_add8!(test_exec_add_a_c, A, C);
-    test_exec_add8!(test_exec_add_a_d, A, D);
-    test_exec_add8!(test_exec_add_a_e, A, E);
-    test_exec_add8!(test_exec_add_a_h, A, H);
-    test_exec_add8!(test_exec_add_a_l, A, L);
-    test_exec_add8!(test_exec_add_a_indhl, A, (*HL));
+        decl_test_case!(a_a, A, A);
+        decl_test_case!(a_b, A, B);
+        decl_test_case!(a_c, A, C);
+        decl_test_case!(a_d, A, D);
+        decl_test_case!(a_e, A, E);
+        decl_test_case!(a_h, A, H);
+        decl_test_case!(a_indhl, A, (*HL));
+        decl_test_case!(a_l, A, L);
+    });
 
-    macro_rules! test_exec_adc8_case {
-        ($dst:tt, $src:tt, $input:expr, $carry:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(ADC $dst, $src);
-            cpu_eval!(cpu, $dst <- $input);
-            cpu_eval!(cpu, $src <- $input);
-            cpu_eval!(cpu, F +<- (C:[$carry]));
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
+    decl_scenario!(exec_adc8, {
+        macro_rules! decl_test_case {
+            ($fname:ident, $dst:tt, $src:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(ADC $dst, $src);
+                    cpu_eval!(cpu, $dst <- 3);
+                    cpu_eval!(cpu, $src <- 3);
+                    cpu_eval!(cpu, F +<- (C:1));
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, $dst, 7);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+                });
+            };
+        }
 
-    macro_rules! test_exec_adc8 {
-        ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_exec_adc8_case!($dst, $src, 0x21, false, 0x42, (S:0 Z:0 H:0 PV:0 N:0 C:0));
-                });
-                decl_test!(regular_case_with_carry, {
-                    test_exec_adc8_case!($dst, $src, 0x21, true, 0x43, (S:0 Z:0 H:0 PV:0 N:0 C:0));
-                });
-                decl_test!(overflow_plus_signed, {
-                    test_exec_adc8_case!($dst, $src, 0x51, false, 0xa2, (S:1 Z:0 H:0 PV:1 N:0 C:0));
-                });
-                decl_test!(half_carry, {
-                    test_exec_adc8_case!($dst, $src, 0x29, false, 0x52, (S:0 Z:0 H:1 PV:0 N:0 C:0));
-                });
-                decl_test!(zero, {
-                    test_exec_adc8_case!($dst, $src, 0, false, 0, (S:0 Z:1 H:0 PV:0 N:0 C:0));
-                });
-                decl_test!(carry, {
-                    test_exec_adc8_case!($dst, $src, 0x90, false, 0x20, (S:0 Z:0 H:0 PV:1 N:0 C:1));
-                });
-            });
-        };
-    }
+        decl_test_case!(a_a, A, A);
+        decl_test_case!(a_b, A, B);
+        decl_test_case!(a_c, A, C);
+        decl_test_case!(a_d, A, D);
+        decl_test_case!(a_e, A, E);
+        decl_test_case!(a_h, A, H);
+        decl_test_case!(a_indhl, A, (*HL));
+        decl_test_case!(a_l, A, L);
+    });
 
-    test_exec_adc8!(test_exec_adc_a_a, 1, A, A);
-    test_exec_adc8!(test_exec_adc_a_b, 1, A, B);
-    test_exec_adc8!(test_exec_adc_a_c, 1, A, C);
-    test_exec_adc8!(test_exec_adc_a_d, 1, A, D);
-    test_exec_adc8!(test_exec_adc_a_e, 1, A, E);
-    test_exec_adc8!(test_exec_adc_a_h, 1, A, H);
-    test_exec_adc8!(test_exec_adc_a_l, 1, A, L);
+    decl_scenario!(exec_sub, {
+        macro_rules! decl_test_case {
+            ($fname:ident, A) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(SUB A);
+                    cpu_eval!(cpu, A <- 7);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 0);
+                    assert_flags!(cpu, f0, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+                });
+            };
+            ($fname:ident, $src:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(SUB $src);
+                    cpu_eval!(cpu, A <- 7);
+                    cpu_eval!(cpu, $src <- 3);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 4);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+                });
+            };
+        }
 
-    test_exec_adc8!(test_exec_adc_a_indhl, 3, A, (*HL));
+        decl_test_case!(b, B);
+        decl_test_case!(c, C);
+        decl_test_case!(d, D);
+        decl_test_case!(e, E);
+        decl_test_case!(h, H);
+        decl_test_case!(l, L);
+        decl_test_case!(ind_hl, (*HL));
+        decl_test_case!(a, A);
+    });
 
-    macro_rules! test_exec_sub_case {
-        ($src:tt, $dstinput:expr, $srcinput:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(SUB $src);
-            cpu_eval!(cpu, A <- $dstinput);
-            cpu_eval!(cpu, $src <- $srcinput);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
+    decl_scenario!(exec_sbc8, {
+        macro_rules! decl_test_case {
+            ($fname:ident, A, A) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(SBC A, A);
+                    cpu_eval!(cpu, A <- 7);
+                    cpu_eval!(cpu, F +<- (C:1));
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 0xff);
+                    assert_flags!(cpu, f0, (S:1 Z:0 H:1 PV:0 N:1 C:1));
+                });
+            };
+            ($fname:ident, $dst:tt, $src:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(SBC $dst, $src);
+                    cpu_eval!(cpu, $dst <- 7);
+                    cpu_eval!(cpu, $src <- 3);
+                    cpu_eval!(cpu, F +<- (C:1));
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, $dst, 3);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+                });
+            };
+        }
 
-    macro_rules! test_exec_sub {
-        ($fname:ident, $pcinc:expr, A) => {
-            decl_suite!($fname, {
-                decl_test!(zero, {
-                    test_exec_sub_case!(A, 0x01, 0x01, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
-                });
-            });
-        };
-        ($fname:ident, $pcinc:expr, $src:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_exec_sub_case!($src, 0x44, 0x02, 0x42, (S:0 Z:0 H:0 PV:0 N:1 C:0));
-                });
-                decl_test!(overflow, {
-                    test_exec_sub_case!($src, 0x80, 0x01, 0x7f, (S:0 Z:0 H:1 PV:1 N:1 C:0));
-                });
-                decl_test!(half_carry, {
-                    test_exec_sub_case!($src, 0x40, 0x01, 0x3f, (S:0 Z:0 H:1 PV:0 N:1 C:0));
-                });
-                decl_test!(zero, {
-                    test_exec_sub_case!($src, 0x01, 0x01, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
-                });
-                decl_test!(carry, {
-                    test_exec_sub_case!($src, 0x00, 0x01, 0xff, (S:1 Z:0 H:1 PV:0 N:1 C:1));
-                });
-            });
-        };
-    }
+        decl_test_case!(a_b, A, B);
+        decl_test_case!(a_c, A, C);
+        decl_test_case!(a_d, A, D);
+        decl_test_case!(a_e, A, E);
+        decl_test_case!(a_h, A, H);
+        decl_test_case!(a_l, A, L);
+        decl_test_case!(a_hl, A, (*HL));
+        decl_test_case!(a_a, A, A);
+    });
 
-    test_exec_sub!(test_exec_sub_b, 1, B);
-    test_exec_sub!(test_exec_sub_c, 1, C);
-    test_exec_sub!(test_exec_sub_d, 1, D);
-    test_exec_sub!(test_exec_sub_e, 1, E);
-    test_exec_sub!(test_exec_sub_h, 1, H);
-    test_exec_sub!(test_exec_sub_l, 1, L);
-    test_exec_sub!(test_exec_sub_ind_hl, 1, (*HL));
-    test_exec_sub!(test_exec_sub_a, 1, A);
+    decl_scenario!(exec_and, {
+        macro_rules! decl_test_case {
+            ($fname:ident, A) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(AND A);
+                    cpu_eval!(cpu, A <- 0b0101_1010);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 0b0101_1010);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:1 PV:1 N:0 C:0));
+                });
+            };
+            ($fname:ident, $src:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(AND $src);
+                    cpu_eval!(cpu, A <- 0b0101_1010);
+                    cpu_eval!(cpu, $src <- 0b1010_1111);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 0b0000_1010);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:1 PV:1 N:0 C:0));
+                });
+            };
+        }
 
-    macro_rules! test_exec_sbc8_case {
-        ($dst:tt, $src:tt, $dstinput:expr, $srcinput:expr, $carry:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(SBC $dst, $src);
-            cpu_eval!(cpu, $dst <- $dstinput);
-            cpu_eval!(cpu, $src <- $srcinput);
-            cpu_eval!(cpu, F +<- (C:[$carry]));
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
+        decl_test_case!(b, B);
+        decl_test_case!(c, C);
+        decl_test_case!(d, D);
+        decl_test_case!(e, E);
+        decl_test_case!(h, H);
+        decl_test_case!(l, L);
+        decl_test_case!(ind_hl, (*HL));
+        decl_test_case!(a, A);
+    });
 
-    macro_rules! test_exec_sbc8 {
-        ($fname:ident, $pcinc:expr, A, A) => {
-            decl_suite!($fname, {
-                decl_test!(zero, {
-                    test_exec_sbc8_case!(A, A, 0x01, 0x01, false, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
+    decl_scenario!(exec_inc8, {
+        macro_rules! decl_test_case {
+            ($fname:ident, $dst:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(INC $dst);
+                    cpu_eval!(cpu, $dst <- 3);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, $dst, 4);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:0));
                 });
-                decl_test!(regular_case_with_carry, {
-                    test_exec_sbc8_case!(A, A, 0x01, 0x01, true, 0xff, (S:1 Z:0 H:1 PV:0 N:1 C:1));
-                });
-            });
-        };
-        ($fname:ident, $pcinc:expr, $dst:tt, $src:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_exec_sbc8_case!($dst, $src, 0x44, 0x02, false, 0x42, (S:0 Z:0 H:0 PV:0 N:1 C:0));
-                });
-                decl_test!(regular_case_with_carry, {
-                    test_exec_sbc8_case!($dst, $src, 0x44, 0x02, true, 0x41, (S:0 Z:0 H:0 PV:0 N:1 C:0));
-                });
-                decl_test!(overflow, {
-                    test_exec_sbc8_case!($dst, $src, 0x80, 0x01, false, 0x7f, (S:0 Z:0 H:1 PV:1 N:1 C:0));
-                });
-                decl_test!(half_carry, {
-                    test_exec_sbc8_case!($dst, $src, 0x40, 0x01, false, 0x3f, (S:0 Z:0 H:1 PV:0 N:1 C:0));
-                });
-                decl_test!(zero, {
-                    test_exec_sbc8_case!($dst, $src, 0x01, 0x01, false, 0x00, (S:0 Z:1 H:0 PV:0 N:1 C:0));
-                });
-                decl_test!(carry, {
-                    test_exec_sbc8_case!($dst, $src, 0x00, 0x01, false, 0xff, (S:1 Z:0 H:1 PV:0 N:1 C:1));
-                });
-            });
-        };
-    }
+            };
+        }
 
-    test_exec_sbc8!(test_exec_sbc_a_b, 1, A, B);
-    test_exec_sbc8!(test_exec_sbc_a_c, 1, A, C);
-    test_exec_sbc8!(test_exec_sbc_a_d, 1, A, D);
-    test_exec_sbc8!(test_exec_sbc_a_e, 1, A, E);
-    test_exec_sbc8!(test_exec_sbc_a_h, 1, A, H);
-    test_exec_sbc8!(test_exec_sbc_a_l, 1, A, L);
-    test_exec_sbc8!(test_exec_sbc_a_hl, 1, A, (*HL));
-    test_exec_sbc8!(test_exec_sbc_a_a, 1, A, A);
+        decl_test_case!(a, A);
+        decl_test_case!(c, C);
+        decl_test_case!(d, D);
+        decl_test_case!(e, E);
+        decl_test_case!(h, H);
+        decl_test_case!(l, L);
+        decl_test_case!(indhl, (*HL));
+    });
 
-    macro_rules! test_exec_and_case {
-        ($src:tt, $a:expr, $b:expr, $c:expr, $flags:tt) => ({
-            let mut cpu = cpu!(AND $src);
-            cpu_eval!(cpu, A <- $a);
-            cpu_eval!(cpu, $src <- $b);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $c);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    macro_rules! test_exec_and {
-        ($fname:ident, A) => {
-            decl_test!($fname, {
-                test_exec_and_case!(A, 0b0101_1010, 0b0101_1010, 0b0101_1010, (S:0 Z:0 H:1 PV:1 N:0 C:0));
-            });
-        };
-        ($fname:ident, $src:tt) => {
-            decl_test!($fname, {
-                test_exec_and_case!($src, 0b0101_1010, 0b1010_1111, 0b0000_1010, (S:0 Z:0 H:1 PV:1 N:0 C:0));
-            });
-        };
-    }
-
-    test_exec_and!(test_exec_and_b, B);
-    test_exec_and!(test_exec_and_c, C);
-    test_exec_and!(test_exec_and_d, D);
-    test_exec_and!(test_exec_and_e, E);
-    test_exec_and!(test_exec_and_h, H);
-    test_exec_and!(test_exec_and_l, L);
-    test_exec_and!(test_exec_and_ind_hl, (*HL));
-    test_exec_and!(test_exec_and_a, A);
-
-    macro_rules! test_exec_inc8_case {
-        ($dst:tt, $input:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(INC $dst);
-            cpu_eval!(cpu, $dst <- $input);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    macro_rules! test_exec_inc8 {
-        ($fname:ident, $pcinc:expr, $dst:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_exec_inc8_case!($dst, 0x01, 0x02, (S:0 Z:0 H:0 PV:0 N:0));
+    decl_scenario!(exec_dec8, {
+        macro_rules! decl_test_case {
+            ($fname:ident, $dst:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(DEC $dst);
+                    cpu_eval!(cpu, $dst <- 3);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, $dst, 2);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:1));
                 });
-                decl_test!(half_carry, {
-                    test_exec_inc8_case!($dst, 0x0f, 0x10, (S:0 Z:0 H:1 PV:0 N:0));
-                });
-                decl_test!(overflow, {
-                    test_exec_inc8_case!($dst, 0x7f, 0x80, (S:1 Z:0 H:1 PV:1 N:0));
-                });
-                decl_test!(carry, {
-                    test_exec_inc8_case!($dst, 0xff, 0x00, (S:0 Z:1 H:1 PV:0 N:0));
-                });
-            });
-        };
-    }
+            };
+        }
 
-    test_exec_inc8!(test_exec_inc_a, 1, A);
-    test_exec_inc8!(test_exec_inc_c, 1, C);
-    test_exec_inc8!(test_exec_inc_d, 1, D);
-    test_exec_inc8!(test_exec_inc_e, 1, E);
-    test_exec_inc8!(test_exec_inc_h, 1, H);
-    test_exec_inc8!(test_exec_inc_l, 1, L);
-
-    test_exec_inc8!(test_exec_inc_indhl, 1, (*HL));
-
-    macro_rules! test_exec_dec8_case {
-        ($dst:tt, $input:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(DEC $dst);
-            cpu_eval!(cpu, $dst <- $input);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    macro_rules! test_exec_dec8 {
-        ($fname:ident, $pcinc:expr, $dst:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_exec_dec8_case!($dst, 0x02, 0x01, (S:0 Z:0 H:0 PV:0 N:1));
-                });
-                decl_test!(half_carry, {
-                    test_exec_dec8_case!($dst, 0x10, 0x0f, (S:0 Z:0 H:1 PV:0 N:1));
-                });
-                decl_test!(overflow, {
-                    test_exec_dec8_case!($dst, 0x80, 0x7f, (S:0 Z:0 H:1 PV:1 N:1));
-                });
-                decl_test!(zero, {
-                    test_exec_dec8_case!($dst, 0x01, 0x00, (S:0 Z:1 H:0 PV:0 N:1));
-                });
-                decl_test!(no_carry, {
-                    test_exec_dec8_case!($dst, 0x00, 0xff, (S:1 Z:0 H:1 PV:0 N:1));
-                });
-            });
-        };
-    }
-
-    test_exec_dec8!(test_exec_dec_a, 1, A);
-    test_exec_dec8!(test_exec_dec_b, 1, B);
-    test_exec_dec8!(test_exec_dec_c, 1, C);
-    test_exec_dec8!(test_exec_dec_d, 1, D);
-    test_exec_dec8!(test_exec_dec_e, 1, E);
-    test_exec_dec8!(test_exec_dec_h, 1, H);
-    test_exec_dec8!(test_exec_dec_l, 1, L);
-
-    test_exec_dec8!(test_exec_dec_indhl, 1, (*HL));
+        decl_test_case!(a, A);
+        decl_test_case!(b, B);
+        decl_test_case!(c, C);
+        decl_test_case!(d, D);
+        decl_test_case!(e, E);
+        decl_test_case!(h, H);
+        decl_test_case!(l, L);
+        decl_test_case!(indhl, (*HL));
+    });
 
     /*****************************************************/
     /* General-Purpose Arithmetic and CPU Control Groups */
     /*****************************************************/
 
-    decl_test!(test_exec_cpl, {
+    decl_test!(exec_cpl, {
         let mut cpu = cpu!(CPL);
         cpu_eval!(cpu, A <- 0x42);
         let f0 = exec_step!(&mut cpu);
@@ -951,7 +859,7 @@ mod test {
         assert_flags!(cpu, f0, (H:1 N:1));
     });
 
-    decl_test!(test_exec_daa, {
+    decl_test!(exec_daa, {
         let mut cpu = cpu!(DAA);
         cpu_eval!(cpu, A <- 0xaa);
         cpu_eval!(cpu, F <- flags_apply!(0, N:0 H:0 C:0));
@@ -961,20 +869,20 @@ mod test {
         assert_flags!(cpu, f0, (N:0 H:1 C:1));
     });
 
-    decl_test!(test_exec_nop, {
+    decl_test!(exec_nop, {
         let mut cpu = cpu!(NOP);
         let f0 = exec_step!(&mut cpu);
         assert_pc!(cpu, 0x0001);
         assert_flags!(cpu, f0, unaffected);
     });
 
-    decl_test!(test_exec_scf, {
+    decl_test!(exec_scf, {
         let mut cpu = cpu!(SCF);
         let f0 = exec_step!(&mut cpu);
         assert_flags!(cpu, f0, (H:0 N:0 C:1));
     });
 
-    decl_suite!(test_exec_ccf, {
+    decl_scenario!(exec_ccf, {
         decl_test!(flag_c_is_reset, {
             let mut cpu = cpu!(CCF);
             cpu_eval!(cpu, F <- 0);
@@ -992,7 +900,7 @@ mod test {
         });
     });
 
-    decl_test!(test_exec_halt, {
+    decl_test!(exec_halt, {
         let mut cpu = cpu!(HALT);
         let f0 = exec_step!(&mut cpu);
         assert_pc!(cpu, 0x0000);
@@ -1003,280 +911,191 @@ mod test {
     /* 16-Bit Arithmetic group */
     /***************************/
 
-    macro_rules! test_inc16_case {
-        ($dst:tt, $input:expr, $output:expr) => ({
-            let mut cpu = cpu!(INC $dst);
-            cpu_eval!(cpu, $dst <- $input);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r16!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, unaffected);
-        });
-    }
-
-    macro_rules! test_inc_reg16 {
-        ($fname:ident, $dst:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, { test_inc16_case!($dst, 0x0001, 0x0002) });
-                decl_test!(carry, { test_inc16_case!($dst, 0xffff, 0x0000) });
-            });
+    decl_scenario!(exec_inc16, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:tt) => (
+                decl_test!($cname, {
+                    let mut cpu = cpu!(INC $dst);
+                    cpu_eval!(cpu, $dst <- 0x1234);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, $dst, 0x1235);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            );
         }
-    }
 
-    test_inc_reg16!(test_exec_inc_bc, BC);
-    test_inc_reg16!(test_exec_inc_de, DE);
-    test_inc_reg16!(test_exec_inc_hl, HL);
-    test_inc_reg16!(test_exec_inc_sp, SP);
+        decl_test_case!(bc, BC);
+        decl_test_case!(de, DE);
+        decl_test_case!(hl, HL);
+        decl_test_case!(sp, SP);
+    });
 
-    macro_rules! test_dec16_case {
-        ($dst:tt, $input:expr, $output:expr) => ({
-            let mut cpu = cpu!(DEC $dst);
-            cpu_eval!(cpu, $dst <- $input);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r16!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, unaffected);
-        });
-    }
-
-    macro_rules! test_dec_reg16 {
-        ($fname:ident, $dst:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, { test_dec16_case!($dst, 0x0002, 0x0001) });
-                decl_test!(carry, { test_dec16_case!($dst, 0x0000, 0xffff) });
-            });
+    decl_scenario!(exec_dec16, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:tt) => (
+                decl_test!($cname, {
+                    let mut cpu = cpu!(DEC $dst);
+                    cpu_eval!(cpu, $dst <- 0x1234);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, $dst, 0x1233);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            );
         }
-    }
 
-    test_dec_reg16!(test_exec_dec_bc, BC);
-    test_dec_reg16!(test_exec_dec_de, DE);
-    test_dec_reg16!(test_exec_dec_hl, HL);
-    test_dec_reg16!(test_exec_dec_sp, SP);
+        decl_test_case!(bc, BC);
+        decl_test_case!(de, DE);
+        decl_test_case!(hl, HL);
+        decl_test_case!(sp, SP);
+    });
 
-    macro_rules! test_add16_case {
-        ($dst:tt, $src:tt, $a:expr, $b:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(ADD $dst, $src);
-            cpu_eval!(cpu, $dst <- $a);
-            cpu_eval!(cpu, $src <- $b);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, 0x0001);
-            assert_r16!(cpu, $dst, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
+    decl_scenario!(exec_add16, {
+        macro_rules! decl_test_case {
+            ($cname:ident, HL, HL) => (
+                decl_test!($cname, {
+                    let mut cpu = cpu!(ADD HL, HL);
+                    cpu_eval!(cpu, HL <- 0x1050);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, HL, 0x20a0);
+                    assert_flags!(cpu, f0, (H:0 N:0 C:0));
+                });
+            );
+            ($cname:ident, $dst:tt, $src:tt) => (
+                decl_test!($cname, {
+                    let mut cpu = cpu!(ADD $dst, $src);
+                    cpu_eval!(cpu, $dst <- 0x1050);
+                    cpu_eval!(cpu, $src <- 0x2310);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, $dst, 0x3360);
+                    assert_flags!(cpu, f0, (H:0 N:0 C:0));
+                });
+            );
+        }
 
-    macro_rules! test_add16 {
-        ($fname:ident, $dst:tt, $src:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_add16_case!($dst, $src, 0x1245, 0x1921, 0x2b66, (H:0 N:0 C:0));
-                });
-                decl_test!(half_carry, {
-                    test_add16_case!($dst, $src, 0x1f45, 0x1921, 0x3866, (H:1 N:0 C:0));
-                });
-                decl_test!(carry, {
-                    test_add16_case!($dst, $src, 0xff45, 0x1921, 0x1866, (H:1 N:0 C:1));
-                });
-            });
-        };
-        ($fname:ident, $dst:tt) => {
-            decl_suite!($fname, {
-                decl_test!(regular_case, {
-                    test_add16_case!($dst, $dst, 0x1245, 0x1245, 0x248a, (H:0 N:0 C:0));
-                });
-                decl_test!(half_carry, {
-                    test_add16_case!($dst, $dst, 0x1f45, 0x1f45, 0x3e8a, (H:1 N:0 C:0));
-                });
-                decl_test!(carry, {
-                    test_add16_case!($dst, $dst, 0xff45, 0xff45, 0xfe8a, (H:1 N:0 C:1));
-                });
-            });
-        };
-    }
-
-    test_add16!(test_exec_add_hl_bc, HL, BC);
-    test_add16!(test_exec_add_hl_de, HL, DE);
-    test_add16!(test_exec_add_hl_sp, HL, SP);
-    test_add16!(test_exec_add_hl_hl, HL);
+        decl_test_case!(hl_bc, HL, BC);
+        decl_test_case!(hl_de, HL, DE);
+        decl_test_case!(hl_sp, HL, SP);
+        decl_test_case!(hl_hl, HL, HL);
+    });
 
     /**************************/
     /* Rotate and Shift Group */
     /**************************/
 
-    macro_rules! test_exec_rlca_case {
-        ($input:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(RLCA);
-            cpu_eval!(cpu, A <- $input);
-            let f0 = exec_step!(&mut cpu);
+    decl_test!(exec_rlca, {
+        let mut cpu = cpu!(RLCA);
+        cpu_eval!(cpu, A <- 0b0000_0010);
+        let f0 = exec_step!(&mut cpu);
 
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    decl_suite!(test_exec_rlca, {
-        decl_test!(no_carry, {
-            test_exec_rlca_case!(0x12, 0x24, (H:0 N:0 C:0));
-        });
-        decl_test!(carry, {
-            test_exec_rlca_case!(0xc8, 0x91, (H:0 N:0 C:1));
-        });
+        assert_pc!(cpu, 0x0001);
+        assert_r8!(cpu, A, 0b0000_0100);
+        assert_flags!(cpu, f0, (H:0 N:0 C:0));
     });
 
-    macro_rules! test_exec_rrca_case {
-        ($input:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(RRCA);
-            cpu_eval!(cpu, A <- $input);
-            let f0 = exec_step!(&mut cpu);
+    decl_test!(exec_rrca, {
+        let mut cpu = cpu!(RRCA);
+        cpu_eval!(cpu, A <- 0b0000_0010);
+        let f0 = exec_step!(&mut cpu);
 
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    decl_suite!(test_exec_rrca, {
-        decl_test!(no_carry, {
-            test_exec_rrca_case!(0x24, 0x12, (H:0 N:0 C:0));
-        });
-        decl_test!(carry, {
-            test_exec_rrca_case!(0x91, 0xc8, (H:0 N:0 C:1));
-        });
+        assert_pc!(cpu, 0x0001);
+        assert_r8!(cpu, A, 0b0000_0001);
+        assert_flags!(cpu, f0, (H:0 N:0 C:0));
     });
 
-    macro_rules! test_exec_rla_case {
-        ($input:expr, $carry:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(RLA);
-            cpu_eval!(cpu, A <- $input);
-            cpu_eval!(cpu, F +<- (C:[$carry]));
-            let f0 = exec_step!(&mut cpu);
+    decl_test!(exec_rla, {
+        let mut cpu = cpu!(RLA);
+        cpu_eval!(cpu, F +<- (C:1));
+        cpu_eval!(cpu, A <- 0b1000_1000);
+        let f0 = exec_step!(&mut cpu);
 
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    decl_suite!(test_exec_rla, {
-        decl_test!(no_carry, {
-            test_exec_rla_case!(0x12, false, 0x24, (H:0 N:0 C:0));
-        });
-        decl_test!(carry_in, {
-            test_exec_rla_case!(0x12, true, 0x25, (H:0 N:0 C:0));
-        });
-        decl_test!(carry_out, {
-            test_exec_rla_case!(0xc8, false, 0x90, (H:0 N:0 C:1));
-        });
-        decl_test!(carry_inout, {
-            test_exec_rla_case!(0xc8, true, 0x91, (H:0 N:0 C:1));
-        });
+        assert_pc!(cpu, 0x0001);
+        assert_r8!(cpu, A, 0b0001_0001);
+        assert_flags!(cpu, f0, (H:0 N:0 C:1));
     });
 
-    macro_rules! test_exec_rra_case {
-        ($input:expr, $carry:expr, $output:expr, $flags:tt) => ({
-            let mut cpu = cpu!(RRA);
-            cpu_eval!(cpu, A <- $input);
-            cpu_eval!(cpu, F +<- (C:[$carry]));
-            let f0 = exec_step!(&mut cpu);
+    decl_test!(exec_rra, {
+        let mut cpu = cpu!(RRA);
+        cpu_eval!(cpu, F +<- (C:1));
+        cpu_eval!(cpu, A <- 0b0001_0001);
+        let f0 = exec_step!(&mut cpu);
 
-            assert_pc!(cpu, 0x0001);
-            assert_r8!(cpu, A, $output);
-            assert_flags!(cpu, f0, $flags);
-        });
-    }
-
-    decl_suite!(test_exec_rra, {
-        decl_test!(no_carry, {
-            test_exec_rra_case!(0x24, false, 0x12, (H:0 N:0 C:0));
-        });
-        decl_test!(carry_in, {
-            test_exec_rra_case!(0x24, true, 0x92, (H:0 N:0 C:0));
-        });
-        decl_test!(carry_out, {
-            test_exec_rra_case!(0x91, false, 0x48, (H:0 N:0 C:1));
-        });
-        decl_test!(carry_inout, {
-            test_exec_rra_case!(0x91, true, 0xc8, (H:0 N:0 C:1));
-        });
+        assert_pc!(cpu, 0x0001);
+        assert_r8!(cpu, A, 0b1000_1000);
+        assert_flags!(cpu, f0, (H:0 N:0 C:1));
     });
 
     /**************/
     /* Jump Group */
     /**************/
 
-    macro_rules! test_exec_djnz_l8_case {
-        ($dst:expr, $input:expr, $output:expr, $pc:expr) => ({
-            let mut cpu = cpu!(DJNZ $dst as u8);
-            cpu_eval!(cpu, B <- $input);
-            let f0 = exec_step!(&mut cpu);
+    decl_scenario!(exec_djnz, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:expr, $input:expr, $output:expr, $pc:expr) => (
+                decl_test!($cname, {
+                    let mut cpu = cpu!(DJNZ $dst as u8);
+                    cpu_eval!(cpu, B <- $input);
+                    let f0 = exec_step!(&mut cpu);
 
-            assert_r8!(cpu, B, $output);
-            assert_pc!(cpu, $pc);
-            assert_flags!(cpu, f0, unaffected);
-        });
-    }
+                    assert_r8!(cpu, B, $output);
+                    assert_pc!(cpu, $pc);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            );
+        }
 
-    decl_suite!(test_exec_djnz_l8, {
-        decl_test!(branch_forwards, {
-            test_exec_djnz_l8_case!(0x55, 10, 9, 0x0055);
-        });
-        decl_test!(branch_backwards, {
-            test_exec_djnz_l8_case!(-0x10i8, 10, 9, 0xfff0);
-        });
-        decl_test!(no_branch, {
-            test_exec_djnz_l8_case!(0x55, 1, 0, 0x0002);
-        });
+        decl_test_case!(branch_forwards, 0x55, 10, 9, 0x0055);
+        decl_test_case!(branch_backwards, -0x10i8, 10, 9, 0xfff0);
+        decl_test_case!(no_branch, 0x55, 1, 0, 0x0002);
     });
 
-    macro_rules! test_exec_jr_l8_case {
-        ($dst:expr, $pc:expr) => ({
-            let mut cpu = cpu!(JR $dst as u8);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, $pc);
-            assert_flags!(cpu, f0, unaffected);
-        });
-    }
+    decl_scenario!(exec_jr_l8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:expr, $pc:expr) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(JR $dst as u8);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pc);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
 
-    decl_suite!(test_exec_jr_l8, {
-        decl_test!(branch_forwards, {
-            test_exec_jr_l8_case!(0x55, 0x0055);
-        });
-        decl_test!(branch_backwards, {
-            test_exec_jr_l8_case!(-0x10i8, 0xfff0);
-        });
+        decl_test_case!(branch_forwards, 0x55, 0x0055);
+        decl_test_case!(branch_backwards, -0x10i8, 0xfff0);
     });
 
-    macro_rules! test_exec_jr_cond_l8_case {
-        ($cond:ident, $dst:expr, $input_flags:tt, $pc:expr) => ({
-            let mut cpu = cpu!(JR $cond, $dst as u8);
-            cpu_eval!(cpu, F +<- $input_flags);
-            let f0 = exec_step!(&mut cpu);
-            assert_pc!(cpu, $pc);
-            assert_flags!(cpu, f0, unaffected);
-        });
-    }
+    decl_scenario!(exec_jr_cond_l8, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $cond:ident, $dst:expr, $input_flags:tt, $pc:expr) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(JR $cond, $dst as u8);
+                    cpu_eval!(cpu, F +<- $input_flags);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, $pc);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
 
-    macro_rules! test_jr_cond_l8 {
-        ($fname:ident, $cond:ident, $met_flags:tt, $unmet_flags:tt) => {
-            decl_suite!($fname, {
-                decl_test!(branch_forwards, {
-                    test_exec_jr_cond_l8_case!($cond, 0x55, $met_flags, 0x0055);
+        macro_rules! decl_test_suite {
+            ($fname:ident, $cond:ident, $met_flags:tt, $unmet_flags:tt) => {
+                decl_suite!($fname, {
+                    decl_test_case!(branch_forwards, $cond, 0x55, $met_flags, 0x0055);
+                    decl_test_case!(branch_backwards, $cond, -0x10i8, $met_flags, 0xfff0);
+                    decl_test_case!(no_branch, $cond, 0x55, $unmet_flags, 0x0002);
                 });
-                decl_test!(branch_backwards, {
-                    test_exec_jr_cond_l8_case!($cond, -0x10i8, $met_flags, 0xfff0);
-                });
-                decl_test!(no_branch, {
-                    test_exec_jr_cond_l8_case!($cond, 0x55, $unmet_flags, 0x0002);
-                });
-            });
-        };
-    }
+            };
+        }
 
-    test_jr_cond_l8!(test_exec_jr_c_l8, C, (C:1), (C:0));
-    test_jr_cond_l8!(test_exec_jr_nc_l8, NC, (C:0), (C:1));
-    test_jr_cond_l8!(test_exec_jr_nz_l8, NZ, (Z:0), (Z:1));
-    test_jr_cond_l8!(test_exec_jr_z_l8, Z, (Z:1), (Z:0));
+        decl_test_suite!(c, C, (C:1), (C:0));
+        decl_test_suite!(nc, NC, (C:0), (C:1));
+        decl_test_suite!(nz, NZ, (Z:0), (Z:1));
+        decl_test_suite!(z, Z, (Z:1), (Z:0));
+    });
 }
 
 #[cfg(all(feature = "nightly", test))]
