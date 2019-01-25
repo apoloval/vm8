@@ -172,6 +172,15 @@ macro_rules! cpu_exec {
     ($cpu:expr, NOP) => ({
         cpu_eval!($cpu, PC++);
     });
+    ($cpu:expr, OR $src:tt) => ({
+        let a = cpu_eval!($cpu, A);
+        let b = cpu_eval!($cpu, $src);
+        let mut flags = 0;
+        let c = $cpu.alu().bitwise_or(a, b, &mut flags);
+        cpu_eval!($cpu, A <- c);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
+        cpu_eval!($cpu, F <- flags);
+    });
     ($cpu:expr, RLA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
@@ -419,6 +428,14 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xad => { cpu_exec!(ctx, XOR L);            04 },
         0xae => { cpu_exec!(ctx, XOR (*HL));        07 },
         0xaf => { cpu_exec!(ctx, XOR A);            04 },
+        0xb0 => { cpu_exec!(ctx, OR B);             04 },
+        0xb1 => { cpu_exec!(ctx, OR C);             04 },
+        0xb2 => { cpu_exec!(ctx, OR D);             04 },
+        0xb3 => { cpu_exec!(ctx, OR E);             04 },
+        0xb4 => { cpu_exec!(ctx, OR H);             04 },
+        0xb5 => { cpu_exec!(ctx, OR L);             04 },
+        0xb6 => { cpu_exec!(ctx, OR (*HL));         07 },
+        0xb7 => { cpu_exec!(ctx, OR A);             04 },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -802,6 +819,41 @@ mod test {
                     assert_pc!(cpu, 0x0001);
                     assert_r8!(cpu, A, 0b0000_1010);
                     assert_flags!(cpu, f0, (S:0 Z:0 H:1 PV:1 N:0 C:0));
+                });
+            };
+        }
+
+        decl_test_case!(b, B);
+        decl_test_case!(c, C);
+        decl_test_case!(d, D);
+        decl_test_case!(e, E);
+        decl_test_case!(h, H);
+        decl_test_case!(l, L);
+        decl_test_case!(ind_hl, (*HL));
+        decl_test_case!(a, A);
+    });
+
+    decl_scenario!(exec_or, {
+        macro_rules! decl_test_case {
+            ($fname:ident, A) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(OR A);
+                    cpu_eval!(cpu, A <- 0b0101_1010);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 0b0101_1010);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:1 N:0 C:0));
+                });
+            };
+            ($fname:ident, $src:tt) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(OR $src);
+                    cpu_eval!(cpu, A <- 0b0101_1010);
+                    cpu_eval!(cpu, $src <- 0b1010_1111);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0001);
+                    assert_r8!(cpu, A, 0b1111_1111);
+                    assert_flags!(cpu, f0, (S:1 Z:0 H:0 PV:1 N:0 C:0));
                 });
             };
         }

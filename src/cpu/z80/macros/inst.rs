@@ -155,6 +155,14 @@ macro_rules! inst {
     (LD (*$x:expr), A)    => ([0x32, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (LD (**$x:expr), HL)  => ([0x22, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (NOP)                 => ([0x00]);
+    (OR B)                => ([0xb0]);
+    (OR C)                => ([0xb1]);
+    (OR D)                => ([0xb2]);
+    (OR E)                => ([0xb3]);
+    (OR H)                => ([0xb4]);
+    (OR L)                => ([0xb5]);
+    (OR (*HL))            => ([0xb6]);
+    (OR A)                => ([0xb7]);
     (RLA)                 => ([0x17]);
     (RLCA)                => ([0x07]);
     (RRA)                 => ([0x1f]);
