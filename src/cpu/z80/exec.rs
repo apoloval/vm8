@@ -189,6 +189,18 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
         cpu_eval!($cpu, F <- flags);
     });
+    ($cpu:expr, RET NZ) => ({
+        let cond = cpu_eval!($cpu, F[NZ]);
+        if cond > 0 {
+            let dest = cpu_eval!($cpu, (**SP));
+            cpu_eval!($cpu, PC <- dest);
+            cpu_eval!($cpu, SP ++<- 2);
+            11
+        } else {
+            cpu_eval!($cpu, PC++);
+            5
+        }
+    });
     ($cpu:expr, RLA) => ({
         let mut flags = cpu_eval!($cpu, F);
         let orig = cpu_eval!($cpu, A);
@@ -452,6 +464,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xbd => { cpu_exec!(ctx, CP L);             04 },
         0xbe => { cpu_exec!(ctx, CP (*HL));         07 },
         0xbf => { cpu_exec!(ctx, CP A);             04 },
+        0xc0 => { cpu_exec!(ctx, RET NZ) },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -1250,6 +1263,46 @@ mod test {
         decl_test_suite!(nc, NC, (C:0), (C:1));
         decl_test_suite!(nz, NZ, (Z:0), (Z:1));
         decl_test_suite!(z, Z, (Z:1), (Z:0));
+    });
+
+    /*************************/
+    /* Call and return Group */
+    /*************************/
+
+    decl_scenario!(exec_ret_cc, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $flag:ident, true) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(RET $flag);
+                    cpu_eval!(cpu, F +<- ($flag:1));
+                    cpu_eval!(cpu, (**0x8000) <- 0x4000);
+                    cpu_eval!(cpu, SP <- 0x8000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x4000);
+                    assert_r16!(cpu, SP, 0x8002);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+            ($cname:ident, $flag:ident, false) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(RET $flag);
+                    cpu_eval!(cpu, F +<- ($flag:0));
+                    cpu_eval!(cpu, (**0x8000) <- 0x4000);
+                    cpu_eval!(cpu, SP <- 0x8000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, SP, 0x8000);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
+
+        decl_test_case!(nz_cond_unmet, NZ, false);
+        decl_test_case!(nz_cond_met, NZ, true);
     });
 }
 

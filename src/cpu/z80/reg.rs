@@ -114,4 +114,6 @@ impl Registers {
 
     #[inline] pub fn inc_pc(&mut self, val: usize) -> u16 { *self.pc += val as u16; *self.pc }
     #[inline] pub fn inc_pc8(&mut self, val: u8) -> u16 { self.inc_pc(val as i8 as usize) }
+
+    #[inline] pub fn inc_sp(&mut self, val: usize) -> u16 { *self.sp += val as u16; *self.sp }
 }

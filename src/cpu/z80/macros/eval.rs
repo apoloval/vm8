@@ -121,6 +121,12 @@ macro_rules! cpu_eval {
         $cpu.regs_mut().inc_pc(val)
     });
 
+    // Assign and increment SP register using 16 bits
+    ($cpu:expr, SP ++<- $($rhs:tt)+) => ({
+        let val = cpu_eval!($cpu, $($rhs)+);
+        $cpu.regs_mut().inc_sp(val)
+    });
+
     // Assign to PC register
     ($cpu:expr, PC <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);

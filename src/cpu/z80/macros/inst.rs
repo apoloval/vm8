@@ -171,6 +171,7 @@ macro_rules! inst {
     (OR L)                => ([0xb5]);
     (OR (*HL))            => ([0xb6]);
     (OR A)                => ([0xb7]);
+    (RET NZ)              => ([0xc0]);
     (RLA)                 => ([0x17]);
     (RLCA)                => ([0x07]);
     (RRA)                 => ([0x1f]);

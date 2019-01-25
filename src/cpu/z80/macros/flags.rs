@@ -11,41 +11,40 @@ macro_rules! flag {
 }
 
 macro_rules! flags_bitmask_set {
-    (C)         => (0b00000001);
-    (N)         => (0b00000010);
-    (PV)        => (0b00000100);
-    (H)         => (0b00010000);
-    (Z)         => (0b01000000);
-    (S)         => (0b10000000);
-    ($($a:ident),+) => ($(flags_bitmask_reset!($a))|+);
+    ($a:expr, C)         => ($a | 0b00000001);
+    ($a:expr, N)         => ($a | 0b00000010);
+    ($a:expr, PV)        => ($a | 0b00000100);
+    ($a:expr, H)         => ($a | 0b00010000);
+    ($a:expr, Z)         => ($a | 0b01000000);
+    ($a:expr, S)         => ($a | 0b10000000);
+
+    ($a:expr, NC)        => (flags_bitmask_reset!($a, C));
+    ($a:expr, NZ)        => (flags_bitmask_reset!($a, Z));
 }
 
 macro_rules! flags_bitmask_reset {
-    (C)         => (0b11111110);
-    (N)         => (0b11111101);
-    (PV)        => (0b11111011);
-    (H)         => (0b11101111);
-    (Z)         => (0b10111111);
-    (S)         => (0b01111111);
-    ($($a:ident),+) => ($(flags_bitmask_reset!($a))&+);
+    ($a:expr, C)         => ($a & 0b11111110);
+    ($a:expr, N)         => ($a & 0b11111101);
+    ($a:expr, PV)        => ($a & 0b11111011);
+    ($a:expr, H)         => ($a & 0b11101111);
+    ($a:expr, Z)         => ($a & 0b10111111);
+    ($a:expr, S)         => ($a & 0b01111111);
+
+    ($a:expr, NC)        => (flags_bitmask_set!($a, C));
+    ($a:expr, NZ)        => (flags_bitmask_set!($a, Z));
 }
 
 macro_rules! flags_apply {
     ($a:expr, ) => ($a);
     ($a:expr, $f:ident:0 $($rest:tt)*) => (
-        flags_apply!($a & flags_bitmask_reset!($f), $($rest)*)
+        flags_apply!(flags_bitmask_reset!($a, $f), $($rest)*)
     );
     ($a:expr, $f:ident:1 $($rest:tt)*) => (
-        flags_apply!($a | flags_bitmask_set!($f), $($rest)*)
+        flags_apply!(flags_bitmask_set!($a, $f), $($rest)*)
     );
     ($a:expr, $f:ident:[$c:expr] $($rest:tt)*) => (
         flags_apply!(
-            (if $c { $a | flags_bitmask_set!($f) } else { $a & flags_bitmask_reset!($f) }) as u8,
-            $($rest)*)
-    );
-    ($a:expr, [$($f:ident),+]:[$c:expr] $($rest:tt)*) => (
-        flags_apply!(
-            if $c { $a | flags_bitmask_set!($($f),+) } else { $a & flags_bitmask_reset!($($f),+) },
+            (if $c { flags_bitmask_set!($a, $f) } else { flags_bitmask_reset!($a, $f) }) as u8,
             $($rest)*)
     );
 }
