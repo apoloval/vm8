@@ -36,6 +36,14 @@ macro_rules! inst {
     (AND (*HL))           => ([0xa6]);
     (AND A)               => ([0xa7]);
     (CCF)                 => ([0x3f]);
+    (CP B)                => ([0xb8]);
+    (CP C)                => ([0xb9]);
+    (CP D)                => ([0xba]);
+    (CP E)                => ([0xbb]);
+    (CP H)                => ([0xbc]);
+    (CP L)                => ([0xbd]);
+    (CP (*HL))            => ([0xbe]);
+    (CP A)                => ([0xbf]);
     (CPL)                 => ([0x2f]);
     (DAA)                 => ([0x27]);
     (DEC A)               => ([0x3d]);
