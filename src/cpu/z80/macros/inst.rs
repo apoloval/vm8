@@ -176,4 +176,12 @@ macro_rules! inst {
     (SUB L)               => ([0x95]);
     (SUB (*HL))           => ([0x96]);
     (SUB A)               => ([0x97]);
+    (XOR B)               => ([0xa8]);
+    (XOR C)               => ([0xa9]);
+    (XOR D)               => ([0xaa]);
+    (XOR E)               => ([0xab]);
+    (XOR H)               => ([0xac]);
+    (XOR L)               => ([0xad]);
+    (XOR (*HL))           => ([0xae]);
+    (XOR A)               => ([0xaf]);
 }

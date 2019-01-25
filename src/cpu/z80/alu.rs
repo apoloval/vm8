@@ -3,6 +3,7 @@ struct FlagsTable {
     add: Vec<u8>,
     sub: Vec<u8>,
     and: Vec<u8>,
+    xor: Vec<u8>,
     daa: Vec<u8>,
 }
 
@@ -12,9 +13,11 @@ impl FlagsTable {
         let mut add_flags = vec![0u8; 256*256];
         let mut sub_flags = vec![0u8; 256*256];
         let mut and_flags = vec![0u8; 256];
+        let mut xor_flags = vec![0u8; 256];
         let mut daa_flags = vec![0u8; 256];
         for c in 0u8..=255 {
             and_flags[c as usize] = Self::flags_for_bitwise(c, true);
+            xor_flags[c as usize] = Self::flags_for_bitwise(c, false);
             daa_flags[c as usize] = Self::flags_for_daa(c);
             for a in 0u8..=255 {
                 let index = Self::index_of_binops(a, c);
@@ -26,6 +29,7 @@ impl FlagsTable {
             add: add_flags,
             sub: sub_flags,
             and: and_flags,
+            xor: xor_flags,
             daa: daa_flags,
         }
     }
@@ -60,6 +64,12 @@ impl FlagsTable {
     #[inline]
     pub fn and_flags(&self, newval: u8) -> u8 {
         self.and[newval as usize]
+    }
+
+    /// Returns the precomputed flags for bitwise XOR
+    #[inline]
+    pub fn xor_flags(&self, newval: u8) -> u8 {
+        self.xor[newval as usize]
     }
 
     /// Returns the flags for BCD adjustment.
@@ -314,6 +324,13 @@ impl ALU {
     pub fn bitwise_and(&self, a: u8, b:u8, flags: &mut u8) -> u8 {
         let c = a & b;
         *flags = self.flags.and_flags(c);
+        c
+    }
+
+    #[inline]
+    pub fn bitwise_xor(&self, a: u8, b:u8, flags: &mut u8) -> u8 {
+        let c = a ^ b;
+        *flags = self.flags.xor_flags(c);
         c
     }
 
@@ -621,6 +638,40 @@ mod test {
             inputs: 0b0101_1010, 0b1111_1111;
             expected_output: 0b0101_1010;
             expected_flags: S:0 Z:0 H:1 PV:1 N:0 C:0);
+    });
+
+    decl_scenario!(alu_bitwise_xor, {
+        macro_rules! decl_test_case {
+            ($cname:ident, inputs: $a:expr, $b:expr; expected_output: $c:expr; expected_flags: $($flags:tt)+) => {
+                decl_test!($cname, {
+                    let alu = ALU::new();
+                    let mut flags = 0;
+                    let c = alu.bitwise_xor($a, $b, &mut flags);
+                    assert_result!(BIN8, "result", $c, c);
+                    assert_result!(BIN8, "flags", flags_apply!(0, $($flags)+), flags);
+                });
+            };
+        }
+
+        decl_test_case!(base_case,
+            inputs: 0b0010_1001, 0b0110_0110;
+            expected_output: 0b0100_1111;
+            expected_flags: S:0 Z:0 H:0 PV:0 N:0 C:0);
+
+        decl_test_case!(signed_flag_set,
+            inputs: 0b1010_1000, 0b0110_0110;
+            expected_output: 0b1100_1110;
+            expected_flags: S:1 Z:0 H:0 PV:0 N:0 C:0);
+
+        decl_test_case!(zero_flag_set,
+            inputs: 0b1111_1111, 0b1111_1111;
+            expected_output: 0b0000_0000;
+            expected_flags: S:0 Z:1 H:0 PV:1 N:0 C:0);
+
+        decl_test_case!(parity_flag_set,
+            inputs: 0b0010_1001, 0b0111_0110;
+            expected_output: 0b0101_1111;
+            expected_flags: S:0 Z:0 H:0 PV:1 N:0 C:0);
     });
 
     decl_scenario!(alu_rotate_left, {
