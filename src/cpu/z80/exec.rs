@@ -195,8 +195,8 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, SP ++<- 2);
         cpu_eval!($cpu, PC++);
     });
-    ($cpu:expr, RET NZ) => ({
-        let cond = cpu_eval!($cpu, F[NZ]);
+    ($cpu:expr, RET $cc:tt) => ({
+        let cond = cpu_eval!($cpu, F[$cc]);
         if cond > 0 {
             let dest = cpu_eval!($cpu, (**SP));
             cpu_eval!($cpu, PC <- dest);
@@ -472,6 +472,13 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xbf => { cpu_exec!(ctx, CP A);             04 },
         0xc0 => { cpu_exec!(ctx, RET NZ) },
         0xc1 => { cpu_exec!(ctx, POP BC);           10 },
+        0xd0 => { cpu_exec!(ctx, RET NC) },
+        0xe0 => { cpu_exec!(ctx, RET PO) },
+        0xf0 => { cpu_exec!(ctx, RET P) },
+        0xc8 => { cpu_exec!(ctx, RET Z) },
+        0xd8 => { cpu_exec!(ctx, RET C) },
+        0xe8 => { cpu_exec!(ctx, RET PE) },
+        0xf8 => { cpu_exec!(ctx, RET M) },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -1329,8 +1336,23 @@ mod test {
             };
         }
 
-        decl_test_case!(nz_cond_unmet, NZ, false);
-        decl_test_case!(nz_cond_met, NZ, true);
+        macro_rules! decl_test_suite {
+            ($cname:ident, $flag:ident) => {
+                decl_scenario!($cname, {
+                    decl_test_case!(cond_unmet, $flag, false);
+                    decl_test_case!(cond_met, $flag, true);
+                });
+            };
+        }
+
+        decl_test_suite!(nz, NZ);
+        decl_test_suite!(nc, NC);
+        decl_test_suite!(po, PO);
+        decl_test_suite!(p, P);
+        decl_test_suite!(z, Z);
+        decl_test_suite!(c, C);
+        decl_test_suite!(pe, PE);
+        decl_test_suite!(m, M);
     });
 }
 

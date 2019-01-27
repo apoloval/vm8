@@ -8,6 +8,11 @@ macro_rules! flag {
 
     ($flags:expr, NZ)   => (flag!($flags, Z) ^ 1);
     ($flags:expr, NC)   => (flag!($flags, C) ^ 1);
+
+    ($flags:expr, PO)   => (flag!($flags, PV) ^ 1);
+    ($flags:expr, PE)   => (flag!($flags, PV));
+    ($flags:expr, P)    => (flag!($flags, S) ^ 1);
+    ($flags:expr, M)    => (flag!($flags, S));
 }
 
 macro_rules! flags_bitmask_set {
@@ -18,8 +23,13 @@ macro_rules! flags_bitmask_set {
     ($a:expr, Z)         => ($a | 0b01000000);
     ($a:expr, S)         => ($a | 0b10000000);
 
-    ($a:expr, NC)        => (flags_bitmask_reset!($a, C));
     ($a:expr, NZ)        => (flags_bitmask_reset!($a, Z));
+    ($a:expr, NC)        => (flags_bitmask_reset!($a, C));
+
+    ($a:expr, PO)        => (flags_bitmask_reset!($a, PV));
+    ($a:expr, PE)        => (flags_bitmask_set!($a, PV));
+    ($a:expr, P)         => (flags_bitmask_reset!($a, S));
+    ($a:expr, M)         => (flags_bitmask_set!($a, S));
 }
 
 macro_rules! flags_bitmask_reset {
@@ -30,8 +40,13 @@ macro_rules! flags_bitmask_reset {
     ($a:expr, Z)         => ($a & 0b10111111);
     ($a:expr, S)         => ($a & 0b01111111);
 
-    ($a:expr, NC)        => (flags_bitmask_set!($a, C));
     ($a:expr, NZ)        => (flags_bitmask_set!($a, Z));
+    ($a:expr, NC)        => (flags_bitmask_set!($a, C));
+
+    ($a:expr, PO)        => (flags_bitmask_set!($a, PV));
+    ($a:expr, PE)        => (flags_bitmask_reset!($a, PV));
+    ($a:expr, P)         => (flags_bitmask_set!($a, S));
+    ($a:expr, M)         => (flags_bitmask_reset!($a, S));
 }
 
 macro_rules! flags_apply {

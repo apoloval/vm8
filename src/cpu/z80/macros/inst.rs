@@ -172,7 +172,14 @@ macro_rules! inst {
     (OR (*HL))            => ([0xb6]);
     (OR A)                => ([0xb7]);
     (POP BC)              => ([0xc1]);
+    (RET C)               => ([0xd8]);
+    (RET NC)              => ([0xd0]);
     (RET NZ)              => ([0xc0]);
+    (RET M)               => ([0xf8]);
+    (RET P)               => ([0xf0]);
+    (RET PE)              => ([0xe8]);
+    (RET PO)              => ([0xe0]);
+    (RET Z)               => ([0xc8]);
     (RLA)                 => ([0x17]);
     (RLCA)                => ([0x07]);
     (RRA)                 => ([0x1f]);
