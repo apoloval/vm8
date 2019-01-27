@@ -189,9 +189,9 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
         cpu_eval!($cpu, F <- flags);
     });
-    ($cpu:expr, POP BC) => ({
+    ($cpu:expr, POP $dst:tt) => ({
         let dest = cpu_eval!($cpu, (**SP));
-        cpu_eval!($cpu, BC <- dest);
+        cpu_eval!($cpu, $dst <- dest);
         cpu_eval!($cpu, SP ++<- 2);
         cpu_eval!($cpu, PC++);
     });
@@ -472,12 +472,15 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xbf => { cpu_exec!(ctx, CP A);             04 },
         0xc0 => { cpu_exec!(ctx, RET NZ) },
         0xc1 => { cpu_exec!(ctx, POP BC);           10 },
-        0xd0 => { cpu_exec!(ctx, RET NC) },
-        0xe0 => { cpu_exec!(ctx, RET PO) },
-        0xf0 => { cpu_exec!(ctx, RET P) },
         0xc8 => { cpu_exec!(ctx, RET Z) },
+        0xd0 => { cpu_exec!(ctx, RET NC) },
+        0xd1 => { cpu_exec!(ctx, POP DE);           10 },
         0xd8 => { cpu_exec!(ctx, RET C) },
+        0xe0 => { cpu_exec!(ctx, RET PO) },
+        0xe1 => { cpu_exec!(ctx, POP HL);           10 },
         0xe8 => { cpu_exec!(ctx, RET PE) },
+        0xf0 => { cpu_exec!(ctx, RET P) },
+        0xf1 => { cpu_exec!(ctx, POP AF);           10 },
         0xf8 => { cpu_exec!(ctx, RET M) },
 
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
@@ -701,6 +704,19 @@ mod test {
 
     decl_scenario!(exec_pop, {
         macro_rules! decl_test_case {
+            ($cname:ident, AF) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(POP AF);
+                    cpu_eval!(cpu, SP <- 0x5000);
+                    cpu_eval!(cpu, (**0x5000) <- 0x1234);
+
+                    exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, AF, 0x1234);
+                    assert_r16!(cpu, SP, 0x5002);
+                });
+            };
             ($cname:ident, $dst:tt) => {
                 decl_test!($cname, {
                     let mut cpu = cpu!(POP $dst);
@@ -718,6 +734,9 @@ mod test {
         }
 
         decl_test_case!(bc, BC);
+        decl_test_case!(de, DE);
+        decl_test_case!(hl, HL);
+        decl_test_case!(af, AF);
     });
 
     /**********************************************/

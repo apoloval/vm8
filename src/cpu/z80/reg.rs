@@ -73,7 +73,7 @@ impl Registers {
     #[inline] pub fn de(&self) -> u16 { *self.de }
     #[inline] pub fn hl(&self) -> u16 { *self.hl }
 
-    #[inline] #[cfg(test)] pub fn set_af(&mut self, val: u16) { *self.af = val }
+    #[inline] pub fn set_af(&mut self, val: u16) { *self.af = val }
     #[inline] pub fn set_bc(&mut self, val: u16) { *self.bc = val  }
     #[inline] pub fn set_de(&mut self, val: u16) { *self.de = val  }
     #[inline] pub fn set_hl(&mut self, val: u16) { *self.hl = val  }
