@@ -70,6 +70,21 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
         cpu_eval!($cpu, F <- flags);
     });
+    ($cpu:expr, CALL $cc:tt, $dst:tt) => ({
+        let cond = cpu_eval!($cpu, F[$cc]);
+        if cond > 0 {
+            let dest = cpu_eval!($cpu, $dst);
+            let pc = cpu_eval!($cpu, PC);
+            let ret = pc + 1 + op_size!($dst);
+            cpu_eval!($cpu, (**SP) <- ret);
+            cpu_eval!($cpu, SP ++<- 2);
+            cpu_eval!($cpu, PC <- dest);
+            17
+        } else {
+            cpu_eval!($cpu, PC +<- 1 + op_size!($dst));
+            10
+        }
+    });
     ($cpu:expr, CCF) => ({
         let mut flags = cpu_eval!($cpu, F);
         if flag!(flags, C) == 0 {
@@ -483,23 +498,31 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xc1 => { cpu_exec!(ctx, POP BC);           10 },
         0xc2 => { cpu_exec!(ctx, JP NZ, nn);        10 },
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
+        0xc4 => { cpu_exec!(ctx, CALL NZ, nn) },
         0xc8 => { cpu_exec!(ctx, RET Z) },
         0xca => { cpu_exec!(ctx, JP Z, nn);         10 },
+        0xcc => { cpu_exec!(ctx, CALL Z, nn) },
         0xd0 => { cpu_exec!(ctx, RET NC) },
         0xd1 => { cpu_exec!(ctx, POP DE);           10 },
         0xd2 => { cpu_exec!(ctx, JP NC, nn);        10 },
+        0xd4 => { cpu_exec!(ctx, CALL NC, nn) },
         0xd8 => { cpu_exec!(ctx, RET C) },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
+        0xdc => { cpu_exec!(ctx, CALL C, nn) },
         0xe0 => { cpu_exec!(ctx, RET PO) },
         0xe1 => { cpu_exec!(ctx, POP HL);           10 },
         0xe2 => { cpu_exec!(ctx, JP PO, nn);        10 },
+        0xe4 => { cpu_exec!(ctx, CALL PO, nn) },
         0xe8 => { cpu_exec!(ctx, RET PE) },
         0xea => { cpu_exec!(ctx, JP PE, nn);        10 },
+        0xec => { cpu_exec!(ctx, CALL PE, nn) },
         0xf0 => { cpu_exec!(ctx, RET P) },
         0xf1 => { cpu_exec!(ctx, POP AF);           10 },
         0xf2 => { cpu_exec!(ctx, JP P, nn);         10 },
+        0xf4 => { cpu_exec!(ctx, CALL P, nn) },
         0xf8 => { cpu_exec!(ctx, RET M) },
         0xfa => { cpu_exec!(ctx, JP M, nn);         10 },
+        0xfc => { cpu_exec!(ctx, CALL M, nn) },
 
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -1393,6 +1416,56 @@ mod test {
     /*************************/
     /* Call and return Group */
     /*************************/
+
+    decl_scenario!(exec_call_cc_nn, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $flag:ident, true) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(CALL $flag, 0x4000);
+                    cpu_eval!(cpu, F +<- ($flag:1));
+                    cpu_eval!(cpu, SP <- 0x8000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x4000);
+                    assert_r16!(cpu, SP, 0x8002);
+                    assert_cpu!(HEX16, cpu, (**0x8000), 0x0003);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+            ($cname:ident, $flag:ident, false) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(CALL $flag, 0x4000);
+                    cpu_eval!(cpu, F +<- ($flag:0));
+                    cpu_eval!(cpu, SP <- 0x8000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x0003);
+                    assert_r16!(cpu, SP, 0x8000);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
+
+        macro_rules! decl_test_suite {
+            ($cname:ident, $flag:ident) => {
+                decl_scenario!($cname, {
+                    decl_test_case!(cond_unmet, $flag, false);
+                    decl_test_case!(cond_met, $flag, true);
+                });
+            };
+        }
+
+        decl_test_suite!(nz, NZ);
+        decl_test_suite!(nc, NC);
+        decl_test_suite!(po, PO);
+        decl_test_suite!(p, P);
+        decl_test_suite!(z, Z);
+        decl_test_suite!(c, C);
+        decl_test_suite!(pe, PE);
+        decl_test_suite!(m, M);
+    });
 
     decl_scenario!(exec_ret_cc, {
         macro_rules! decl_test_case {

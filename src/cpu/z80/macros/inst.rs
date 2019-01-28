@@ -35,6 +35,14 @@ macro_rules! inst {
     (AND L)               => ([0xa5]);
     (AND (*HL))           => ([0xa6]);
     (AND A)               => ([0xa7]);
+    (CALL C, $x:expr)     => ([0xdc, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL NC, $x:expr)    => ([0xd4, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL NZ, $x:expr)    => ([0xc4, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL M, $x:expr)     => ([0xfc, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL P, $x:expr)     => ([0xf4, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL PE, $x:expr)    => ([0xec, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL PO, $x:expr)    => ([0xe4, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (CALL Z, $x:expr)     => ([0xcc, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (CCF)                 => ([0x3f]);
     (CP B)                => ([0xb8]);
     (CP C)                => ([0xb9]);
