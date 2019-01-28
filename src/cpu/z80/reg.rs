@@ -50,9 +50,9 @@ pub struct Registers {
 
     // Alternative 16-bits registers
     af_: Register,
-    _bc_: Register,
-    _de_: Register,
-    _hl_: Register,
+    bc_: Register,
+    de_: Register,
+    hl_: Register,
 
     // Index registers
     _ix: Register,
@@ -95,8 +95,14 @@ impl Registers {
     #[inline] pub fn set_l(&mut self, val: u8) { self.hl.set_low(val) }
 
     #[inline] #[cfg(test)] pub fn af_(&self) -> u16 { *self.af_ }
+    #[inline] #[cfg(test)] pub fn bc_(&self) -> u16 { *self.bc_ }
+    #[inline] #[cfg(test)] pub fn de_(&self) -> u16 { *self.de_ }
+    #[inline] #[cfg(test)] pub fn hl_(&self) -> u16 { *self.hl_ }
 
     #[inline] #[cfg(test)] pub fn set_af_(&mut self, val: u16) { *self.af_ = val }
+    #[inline] #[cfg(test)] pub fn set_bc_(&mut self, val: u16) { *self.bc_ = val }
+    #[inline] #[cfg(test)] pub fn set_de_(&mut self, val: u16) { *self.de_ = val }
+    #[inline] #[cfg(test)] pub fn set_hl_(&mut self, val: u16) { *self.hl_ = val }
 
     #[inline] pub fn flags(&self) -> u8 { self.af.low() }
     #[inline] pub fn pc(&self) -> u16 { *self.pc }
@@ -106,11 +112,10 @@ impl Registers {
     #[inline] pub fn set_pc(&mut self, val: u16) { *self.pc = val }
     #[inline] pub fn set_sp(&mut self, val: u16) { *self.sp = val }
 
-    // Swap the primary and alternative registers AF/AF'
-    #[inline]
-    pub fn swap_af(&mut self) {
-        mem::swap(&mut self.af, &mut self.af_);
-    }
+    #[inline] pub fn swap_af(&mut self) { mem::swap(&mut self.af, &mut self.af_); }
+    #[inline] pub fn swap_bc(&mut self) { mem::swap(&mut self.bc, &mut self.bc_); }
+    #[inline] pub fn swap_de(&mut self) { mem::swap(&mut self.de, &mut self.de_); }
+    #[inline] pub fn swap_hl(&mut self) { mem::swap(&mut self.hl, &mut self.hl_); }
 
     #[inline] pub fn inc_pc(&mut self, val: usize) -> u16 { *self.pc += val as u16; *self.pc }
     #[inline] pub fn inc_pc8(&mut self, val: u8) -> u16 { self.inc_pc(val as i8 as usize) }

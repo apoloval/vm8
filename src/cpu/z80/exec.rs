@@ -147,6 +147,12 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, AF <-> AF_);
         cpu_eval!($cpu, PC++);
     });
+    ($cpu:expr, EXX) => ({
+        cpu_eval!($cpu, BC <-> BC_);
+        cpu_eval!($cpu, DE <-> DE_);
+        cpu_eval!($cpu, HL <-> HL_);
+        cpu_eval!($cpu, PC++);
+    });
     ($cpu:expr, HALT) => ({
     });
     ($cpu:expr, INC8 $dst:tt) => ({
@@ -533,6 +539,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xd6 => { cpu_exec!(ctx, SUB n);            07 },
         0xd7 => { cpu_exec!(ctx, RST 0x10);         11 },
         0xd8 => { cpu_exec!(ctx, RET C) },
+        0xd9 => { cpu_exec!(ctx, EXX);              04 },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
         0xdc => { cpu_exec!(ctx, CALL C, nn) },
         0xdf => { cpu_exec!(ctx, RST 0x18);         11 },
@@ -851,6 +858,27 @@ mod test {
         assert_pc!(cpu, 0x0001);
         assert_r16!(cpu, AF, af_);
         assert_r16!(cpu, AF_, af);
+    });
+
+    decl_test!(exec_exx, {
+        let mut cpu = cpu!(EXX);
+        cpu_eval!(cpu, BC <- 0x1000);
+        cpu_eval!(cpu, DE <- 0x2000);
+        cpu_eval!(cpu, HL <- 0x3000);
+        cpu_eval!(cpu, BC_ <- 0x0010);
+        cpu_eval!(cpu, DE_ <- 0x0020);
+        cpu_eval!(cpu, HL_ <- 0x0030);
+
+        let f0 = exec_step!(&mut cpu);
+
+        assert_pc!(cpu, 0x0001);
+        assert_r16!(cpu, BC, 0x0010);
+        assert_r16!(cpu, DE, 0x0020);
+        assert_r16!(cpu, HL, 0x0030);
+        assert_r16!(cpu, BC_, 0x1000);
+        assert_r16!(cpu, DE_, 0x2000);
+        assert_r16!(cpu, HL_, 0x3000);
+        assert_flags!(cpu, f0, unaffected);
     });
 
     /**************************/

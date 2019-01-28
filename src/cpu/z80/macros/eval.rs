@@ -67,6 +67,15 @@ macro_rules! cpu_eval {
     // Swap AF and AF'
     ($cpu:expr, AF <-> AF_) => { $cpu.regs_mut().swap_af() };
 
+    // Swap BC and BC'
+    ($cpu:expr, BC <-> BC_) => { $cpu.regs_mut().swap_bc() };
+
+    // Swap DE and DE'
+    ($cpu:expr, DE <-> DE_) => { $cpu.regs_mut().swap_de() };
+
+    // Swap HL and HL'
+    ($cpu:expr, HL <-> HL_) => { $cpu.regs_mut().swap_hl() };
+
     // Assign to AF register
     ($cpu:expr, AF <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
@@ -88,6 +97,13 @@ macro_rules! cpu_eval {
         val
     });
 
+    // Assign to BC_ register
+    ($cpu:expr, BC_ <- $($rhs:tt)+) => ({
+        let val = cpu_eval!($cpu, $($rhs)+);
+        $cpu.regs_mut().set_bc_(val);
+        val
+    });
+
     // Assign to DE register
     ($cpu:expr, DE <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
@@ -95,10 +111,24 @@ macro_rules! cpu_eval {
         val
     });
 
+    // Assign to DE_ register
+    ($cpu:expr, DE_ <- $($rhs:tt)+) => ({
+        let val = cpu_eval!($cpu, $($rhs)+);
+        $cpu.regs_mut().set_de_(val);
+        val
+    });
+
     // Assign to HL register
     ($cpu:expr, HL <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.regs_mut().set_hl(val);
+        val
+    });
+
+    // Assign to HL_ register
+    ($cpu:expr, HL_ <- $($rhs:tt)+) => ({
+        let val = cpu_eval!($cpu, $($rhs)+);
+        $cpu.regs_mut().set_hl_(val);
         val
     });
 
@@ -174,8 +204,11 @@ macro_rules! cpu_eval {
     ($cpu:expr, AF) => { $cpu.regs().af() };
     ($cpu:expr, AF_) => { $cpu.regs().af_() };
     ($cpu:expr, BC) => { $cpu.regs().bc() };
+    ($cpu:expr, BC_) => { $cpu.regs().bc_() };
     ($cpu:expr, DE) => { $cpu.regs().de() };
+    ($cpu:expr, DE_) => { $cpu.regs().de_() };
     ($cpu:expr, HL) => { $cpu.regs().hl() };
+    ($cpu:expr, HL_) => { $cpu.regs().hl_() };
     ($cpu:expr, SP) => { $cpu.regs().sp() };
     ($cpu:expr, PC) => { $cpu.regs().pc() };
     ($cpu:expr, n) => { cpu_eval!($cpu, (*(PC+1))) };
