@@ -15,6 +15,7 @@ macro_rules! inst {
     (ADC A, H)            => ([0x8c]);
     (ADC A, L)            => ([0x8d]);
     (ADC A, (*HL))        => ([0x8e]);
+    (ADC A, $x:expr)      => ([0xce, $x]);
     (ADD A, A)            => ([0x87]);
     (ADD A, B)            => ([0x80]);
     (ADD A, C)            => ([0x81]);
@@ -55,6 +56,7 @@ macro_rules! inst {
     (CP L)                => ([0xbd]);
     (CP (*HL))            => ([0xbe]);
     (CP A)                => ([0xbf]);
+    (CP $x:expr)          => ([0xfe, $x]);
     (CPL)                 => ([0x2f]);
     (DAA)                 => ([0x27]);
     (DEC A)               => ([0x3d]);
@@ -230,6 +232,7 @@ macro_rules! inst {
     (SBC A, L)            => ([0x9d]);
     (SBC A, (*HL))        => ([0x9e]);
     (SBC A, A)            => ([0x9f]);
+    (SBC A, $x:expr)      => ([0xde, $x]);
     (SUB B)               => ([0x90]);
     (SUB C)               => ([0x91]);
     (SUB D)               => ([0x92]);
@@ -247,4 +250,5 @@ macro_rules! inst {
     (XOR L)               => ([0xad]);
     (XOR (*HL))           => ([0xae]);
     (XOR A)               => ([0xaf]);
+    (XOR $x:expr)         => ([0xee, $x]);
 }

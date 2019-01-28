@@ -530,6 +530,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xca => { cpu_exec!(ctx, JP Z, nn);         10 },
         0xcc => { cpu_exec!(ctx, CALL Z, nn) },
         0xcd => { cpu_exec!(ctx, CALL nn);          17 },
+        0xce => { cpu_exec!(ctx, ADC8 A, n);        07 },
         0xcf => { cpu_exec!(ctx, RST 0x08);         11 },
         0xd0 => { cpu_exec!(ctx, RET NC) },
         0xd1 => { cpu_exec!(ctx, POP DE);           10 },
@@ -541,6 +542,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xd8 => { cpu_exec!(ctx, RET C) },
         0xd9 => { cpu_exec!(ctx, EXX);              04 },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
+        0xde => { cpu_exec!(ctx, SBC A, n);         07 },
         0xdc => { cpu_exec!(ctx, CALL C, nn) },
         0xdf => { cpu_exec!(ctx, RST 0x18);         11 },
         0xe0 => { cpu_exec!(ctx, RET PO) },
@@ -553,6 +555,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xe8 => { cpu_exec!(ctx, RET PE) },
         0xea => { cpu_exec!(ctx, JP PE, nn);        10 },
         0xec => { cpu_exec!(ctx, CALL PE, nn) },
+        0xee => { cpu_exec!(ctx, XOR n);            07 },
         0xef => { cpu_exec!(ctx, RST 0x28);         11 },
         0xf0 => { cpu_exec!(ctx, RET P) },
         0xf1 => { cpu_exec!(ctx, POP AF);           10 },
@@ -564,6 +567,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xf8 => { cpu_exec!(ctx, RET M) },
         0xfa => { cpu_exec!(ctx, JP M, nn);         10 },
         0xfc => { cpu_exec!(ctx, CALL M, nn) },
+        0xfe => { cpu_exec!(ctx, CP n);             07 },
         0xff => { cpu_exec!(ctx, RST 0x38);         11 },
 
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
@@ -923,6 +927,17 @@ mod test {
 
     decl_scenario!(exec_adc8, {
         macro_rules! decl_test_case {
+            ($fname:ident, $dst:tt, n) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(ADC $dst, 3);
+                    cpu_eval!(cpu, $dst <- 3);
+                    cpu_eval!(cpu, F +<- (C:1));
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0002);
+                    assert_r8!(cpu, $dst, 7);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:0 C:0));
+                });
+            };
             ($fname:ident, $dst:tt, $src:tt) => {
                 decl_test!($fname, {
                     let mut cpu = cpu!(ADC $dst, $src);
@@ -945,6 +960,7 @@ mod test {
         decl_test_case!(a_h, A, H);
         decl_test_case!(a_indhl, A, (*HL));
         decl_test_case!(a_l, A, L);
+        decl_test_case!(a_n, A, n);
     });
 
     decl_scenario!(exec_sub, {
@@ -995,6 +1011,17 @@ mod test {
 
     decl_scenario!(exec_sbc8, {
         macro_rules! decl_test_case {
+            ($fname:ident, $dst:tt, n) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(SBC $dst, 3);
+                    cpu_eval!(cpu, $dst <- 7);
+                    cpu_eval!(cpu, F +<- (C:1));
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0002);
+                    assert_r8!(cpu, $dst, 3);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:0 PV:0 N:1 C:0));
+                });
+            };
             ($fname:ident, A, A) => {
                 decl_test!($fname, {
                     let mut cpu = cpu!(SBC A, A);
@@ -1028,6 +1055,7 @@ mod test {
         decl_test_case!(a_l, A, L);
         decl_test_case!(a_hl, A, (*HL));
         decl_test_case!(a_a, A, A);
+        decl_test_case!(a_n, A, n);
     });
 
     decl_scenario!(exec_and, {
@@ -1122,6 +1150,16 @@ mod test {
 
     decl_scenario!(exec_xor, {
         macro_rules! decl_test_case {
+            ($fname:ident, n) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(XOR 0b1010_1111);
+                    cpu_eval!(cpu, A <- 0b0101_1010);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0002);
+                    assert_r8!(cpu, A, 0b1111_0101);
+                    assert_flags!(cpu, f0, (S:1 Z:0 H:0 PV:1 N:0 C:0));
+                });
+            };
             ($fname:ident, A) => {
                 decl_test!($fname, {
                     let mut cpu = cpu!(XOR A);
@@ -1153,10 +1191,21 @@ mod test {
         decl_test_case!(l, L);
         decl_test_case!(ind_hl, (*HL));
         decl_test_case!(a, A);
+        decl_test_case!(n, n);
     });
 
     decl_scenario!(exec_cp, {
         macro_rules! decl_test_case {
+            ($fname:ident, n) => {
+                decl_test!($fname, {
+                    let mut cpu = cpu!(CP 13);
+                    cpu_eval!(cpu, A <- 42);
+                    let f0 = exec_step!(&mut cpu);
+                    assert_pc!(cpu, 0x0002);
+                    assert_r8!(cpu, A, 42);
+                    assert_flags!(cpu, f0, (S:0 Z:0 H:1 PV:0 N:1 C:0));
+                });
+            };
             ($fname:ident, A) => {
                 decl_test!($fname, {
                     let mut cpu = cpu!(CP A);
