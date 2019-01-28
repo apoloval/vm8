@@ -219,6 +219,12 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, SP ++<- 2);
         cpu_eval!($cpu, PC++);
     });
+    ($cpu:expr, PUSH $src:tt) => ({
+        let src = cpu_eval!($cpu, $src);
+        cpu_eval!($cpu, (**SP) <- src);
+        cpu_eval!($cpu, SP --<- 2);
+        cpu_eval!($cpu, PC++);
+    });
     ($cpu:expr, RET $cc:tt) => ({
         let cond = cpu_eval!($cpu, F[$cc]);
         if cond > 0 {
@@ -499,6 +505,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xc2 => { cpu_exec!(ctx, JP NZ, nn);        10 },
         0xc3 => { cpu_exec!(ctx, JP nn);            10 },
         0xc4 => { cpu_exec!(ctx, CALL NZ, nn) },
+        0xc5 => { cpu_exec!(ctx, PUSH BC);          11 },
         0xc8 => { cpu_exec!(ctx, RET Z) },
         0xca => { cpu_exec!(ctx, JP Z, nn);         10 },
         0xcc => { cpu_exec!(ctx, CALL Z, nn) },
@@ -506,6 +513,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xd1 => { cpu_exec!(ctx, POP DE);           10 },
         0xd2 => { cpu_exec!(ctx, JP NC, nn);        10 },
         0xd4 => { cpu_exec!(ctx, CALL NC, nn) },
+        0xd5 => { cpu_exec!(ctx, PUSH DE);          11 },
         0xd8 => { cpu_exec!(ctx, RET C) },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
         0xdc => { cpu_exec!(ctx, CALL C, nn) },
@@ -513,6 +521,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xe1 => { cpu_exec!(ctx, POP HL);           10 },
         0xe2 => { cpu_exec!(ctx, JP PO, nn);        10 },
         0xe4 => { cpu_exec!(ctx, CALL PO, nn) },
+        0xe5 => { cpu_exec!(ctx, PUSH HL);          11 },
         0xe8 => { cpu_exec!(ctx, RET PE) },
         0xea => { cpu_exec!(ctx, JP PE, nn);        10 },
         0xec => { cpu_exec!(ctx, CALL PE, nn) },
@@ -520,6 +529,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xf1 => { cpu_exec!(ctx, POP AF);           10 },
         0xf2 => { cpu_exec!(ctx, JP P, nn);         10 },
         0xf4 => { cpu_exec!(ctx, CALL P, nn) },
+        0xf5 => { cpu_exec!(ctx, PUSH AF);          11 },
         0xf8 => { cpu_exec!(ctx, RET M) },
         0xfa => { cpu_exec!(ctx, JP M, nn);         10 },
         0xfc => { cpu_exec!(ctx, CALL M, nn) },
@@ -768,6 +778,30 @@ mod test {
                     assert_pc!(cpu, 0x0001);
                     assert_r16!(cpu, $dst, 0x1234);
                     assert_r16!(cpu, SP, 0x5002);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
+
+        decl_test_case!(bc, BC);
+        decl_test_case!(de, DE);
+        decl_test_case!(hl, HL);
+        decl_test_case!(af, AF);
+    });
+
+    decl_scenario!(exec_push, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:tt) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(PUSH $dst);
+                    cpu_eval!(cpu, $dst <- 0x1234);
+                    cpu_eval!(cpu, SP <- 0x5000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x0001);
+                    assert_r16!(cpu, (**0x5000), 0x1234);
+                    assert_r16!(cpu, SP, 0x4ffe);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };

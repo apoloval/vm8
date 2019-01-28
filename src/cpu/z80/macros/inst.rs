@@ -191,6 +191,10 @@ macro_rules! inst {
     (POP DE)              => ([0xd1]);
     (POP HL)              => ([0xe1]);
     (POP AF)              => ([0xf1]);
+    (PUSH BC)             => ([0xc5]);
+    (PUSH DE)             => ([0xd5]);
+    (PUSH HL)             => ([0xe5]);
+    (PUSH AF)             => ([0xf5]);
     (RET C)               => ([0xd8]);
     (RET NC)              => ([0xd0]);
     (RET NZ)              => ([0xc0]);

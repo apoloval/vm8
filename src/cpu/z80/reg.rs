@@ -68,7 +68,7 @@ impl Registers {
         Self::default()
     }
 
-    #[inline] #[cfg(test)] pub fn af(&self) -> u16 { *self.af }
+    #[inline] pub fn af(&self) -> u16 { *self.af }
     #[inline] pub fn bc(&self) -> u16 { *self.bc }
     #[inline] pub fn de(&self) -> u16 { *self.de }
     #[inline] pub fn hl(&self) -> u16 { *self.hl }
@@ -116,4 +116,5 @@ impl Registers {
     #[inline] pub fn inc_pc8(&mut self, val: u8) -> u16 { self.inc_pc(val as i8 as usize) }
 
     #[inline] pub fn inc_sp(&mut self, val: usize) -> u16 { *self.sp += val as u16; *self.sp }
+    #[inline] pub fn dec_sp(&mut self, val: usize) -> u16 { *self.sp -= val as u16; *self.sp }
 }
