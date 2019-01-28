@@ -37,6 +37,7 @@ macro_rules! inst {
     (AND (*HL))           => ([0xa6]);
     (AND A)               => ([0xa7]);
     (AND $x:expr)         => ([0xe6, $x]);
+    (CALL $x:expr)        => ([0xcd, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (CALL C, $x:expr)     => ([0xdc, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (CALL NC, $x:expr)    => ([0xd4, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (CALL NZ, $x:expr)    => ([0xc4, encode_literal!($x => 0), encode_literal!($x => 1)]);
