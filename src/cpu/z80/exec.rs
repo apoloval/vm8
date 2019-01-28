@@ -175,8 +175,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, JP $cc:tt, $dst:tt) => ({
         let cond = cpu_eval!($cpu, F[$cc]);
         if cond > 0 {
-            let dest = cpu_eval!($cpu, $dst);
-            cpu_eval!($cpu, PC <- dest);
+            cpu_exec!($cpu, JP $dst);
         } else {
             cpu_eval!($cpu, PC +<- 1 + op_size!($dst));
         }
@@ -192,8 +191,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, JR $f:tt, $dst:tt) => ({
         let flag = cpu_eval!($cpu, F[$f]);
         if flag == 1 {
-            let dst = cpu_eval!($cpu, $dst);
-            cpu_eval!($cpu, PC +<- dst);
+            cpu_exec!($cpu, JR $dst);
             12
         } else {
             cpu_eval!($cpu, PC +<- 2);
@@ -242,9 +240,7 @@ macro_rules! cpu_exec {
     ($cpu:expr, RET $cc:tt) => ({
         let cond = cpu_eval!($cpu, F[$cc]);
         if cond > 0 {
-            let dest = cpu_eval!($cpu, (**SP));
-            cpu_eval!($cpu, PC <- dest);
-            cpu_eval!($cpu, SP ++<- 2);
+            cpu_exec!($cpu, RET);
             11
         } else {
             cpu_eval!($cpu, PC++);
