@@ -74,6 +74,14 @@ macro_rules! inst {
     (INC SP)              => ([0x33]);
     (INC (*HL))           => ([0x34]);
     (JP $x:expr)          => ([0xc3, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP C, $x:expr)       => ([0xda, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP NC, $x:expr)      => ([0xd2, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP NZ, $x:expr)      => ([0xc2, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP M, $x:expr)       => ([0xfa, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP P, $x:expr)       => ([0xf2, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP PE, $x:expr)      => ([0xea, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP PO, $x:expr)      => ([0xe2, encode_literal!($x => 0), encode_literal!($x => 1)]);
+    (JP Z, $x:expr)       => ([0xca, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (JR $x:expr)          => ([0x18, $x]);
     (JR C, $x:expr)       => ([0x38, $x]);
     (JR NC, $x:expr)      => ([0x30, $x]);
