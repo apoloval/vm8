@@ -210,6 +210,14 @@ macro_rules! inst {
     (RLCA)                => ([0x07]);
     (RRA)                 => ([0x1f]);
     (RRCA)                => ([0x0f]);
+    (RST 0x00)            => ([0xc7]);
+    (RST 0x08)            => ([0xcf]);
+    (RST 0x10)            => ([0xd7]);
+    (RST 0x18)            => ([0xdf]);
+    (RST 0x20)            => ([0xe7]);
+    (RST 0x28)            => ([0xef]);
+    (RST 0x30)            => ([0xf7]);
+    (RST 0x38)            => ([0xff]);
     (SCF)                 => ([0x37]);
     (SBC A, B)            => ([0x98]);
     (SBC A, C)            => ([0x99]);

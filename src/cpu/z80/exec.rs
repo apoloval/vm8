@@ -270,6 +270,13 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, PC++);
         cpu_eval!($cpu, F <- flags);
     });
+    ($cpu:expr, RST $dst:tt) => ({
+        let pc = cpu_eval!($cpu, PC);
+        let ret = pc + 1 + op_size!($dst);
+        cpu_eval!($cpu, SP --<- 2);
+        cpu_eval!($cpu, (**SP) <- ret);
+        cpu_eval!($cpu, PC <- $dst);
+    });
     ($cpu:expr, SBC $dst:tt, $src:tt) => ({
         let a = cpu_eval!($cpu, $dst);
         let b = cpu_eval!($cpu, $src);
@@ -507,36 +514,44 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xc4 => { cpu_exec!(ctx, CALL NZ, nn) },
         0xc5 => { cpu_exec!(ctx, PUSH BC);          11 },
         0xc6 => { cpu_exec!(ctx, ADD8 A, n);        07 },
+        0xc7 => { cpu_exec!(ctx, RST 0x00);         11 },
         0xc8 => { cpu_exec!(ctx, RET Z) },
         0xca => { cpu_exec!(ctx, JP Z, nn);         10 },
         0xcc => { cpu_exec!(ctx, CALL Z, nn) },
+        0xcf => { cpu_exec!(ctx, RST 0x08);         11 },
         0xd0 => { cpu_exec!(ctx, RET NC) },
         0xd1 => { cpu_exec!(ctx, POP DE);           10 },
         0xd2 => { cpu_exec!(ctx, JP NC, nn);        10 },
         0xd4 => { cpu_exec!(ctx, CALL NC, nn) },
         0xd5 => { cpu_exec!(ctx, PUSH DE);          11 },
         0xd6 => { cpu_exec!(ctx, SUB n);            07 },
+        0xd7 => { cpu_exec!(ctx, RST 0x10);         11 },
         0xd8 => { cpu_exec!(ctx, RET C) },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
         0xdc => { cpu_exec!(ctx, CALL C, nn) },
+        0xdf => { cpu_exec!(ctx, RST 0x18);         11 },
         0xe0 => { cpu_exec!(ctx, RET PO) },
         0xe1 => { cpu_exec!(ctx, POP HL);           10 },
         0xe2 => { cpu_exec!(ctx, JP PO, nn);        10 },
         0xe4 => { cpu_exec!(ctx, CALL PO, nn) },
         0xe5 => { cpu_exec!(ctx, PUSH HL);          11 },
         0xe6 => { cpu_exec!(ctx, AND n);            07 },
+        0xe7 => { cpu_exec!(ctx, RST 0x20);         11 },
         0xe8 => { cpu_exec!(ctx, RET PE) },
         0xea => { cpu_exec!(ctx, JP PE, nn);        10 },
         0xec => { cpu_exec!(ctx, CALL PE, nn) },
+        0xef => { cpu_exec!(ctx, RST 0x28);         11 },
         0xf0 => { cpu_exec!(ctx, RET P) },
         0xf1 => { cpu_exec!(ctx, POP AF);           10 },
         0xf2 => { cpu_exec!(ctx, JP P, nn);         10 },
         0xf4 => { cpu_exec!(ctx, CALL P, nn) },
         0xf5 => { cpu_exec!(ctx, PUSH AF);          11 },
         0xf6 => { cpu_exec!(ctx, OR n);             07 },
+        0xf7 => { cpu_exec!(ctx, RST 0x30);         11 },
         0xf8 => { cpu_exec!(ctx, RET M) },
         0xfa => { cpu_exec!(ctx, JP M, nn);         10 },
         0xfc => { cpu_exec!(ctx, CALL M, nn) },
+        0xff => { cpu_exec!(ctx, RST 0x38);         11 },
 
         _ => unimplemented!("cannot execute illegal instruction with opcode 0x{:x}", opcode),
     }
@@ -1596,6 +1611,33 @@ mod test {
         decl_test_suite!(c, C);
         decl_test_suite!(pe, PE);
         decl_test_suite!(m, M);
+    });
+
+    decl_scenario!(exec_rst_n, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:tt) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(RST $dst);
+                    cpu_eval!(cpu, SP <- 0x8000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, $dst);
+                    assert_r16!(cpu, SP, 0x7ffe);
+                    assert_cpu!(HEX16, cpu, (**0x7ffe), 0x0001);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+            };
+        }
+
+        decl_test_case!(_00h, 0x00);
+        decl_test_case!(_08h, 0x08);
+        decl_test_case!(_10h, 0x10);
+        decl_test_case!(_18h, 0x18);
+        decl_test_case!(_20h, 0x20);
+        decl_test_case!(_28h, 0x28);
+        decl_test_case!(_30h, 0x30);
+        decl_test_case!(_38h, 0x38);
     });
 }
 
