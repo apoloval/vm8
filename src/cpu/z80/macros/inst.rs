@@ -23,6 +23,7 @@ macro_rules! inst {
     (ADD A, H)            => ([0x84]);
     (ADD A, L)            => ([0x85]);
     (ADD A, (*HL))        => ([0x86]);
+    (ADD A, $x:expr)      => ([0xc6, $x]);
     (ADD HL, BC)          => ([0x09]);
     (ADD HL, HL)          => ([0x29]);
     (ADD HL, DE)          => ([0x19]);
@@ -35,6 +36,7 @@ macro_rules! inst {
     (AND L)               => ([0xa5]);
     (AND (*HL))           => ([0xa6]);
     (AND A)               => ([0xa7]);
+    (AND $x:expr)         => ([0xe6, $x]);
     (CALL C, $x:expr)     => ([0xdc, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (CALL NC, $x:expr)    => ([0xd4, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (CALL NZ, $x:expr)    => ([0xc4, encode_literal!($x => 0), encode_literal!($x => 1)]);
@@ -187,6 +189,7 @@ macro_rules! inst {
     (OR L)                => ([0xb5]);
     (OR (*HL))            => ([0xb6]);
     (OR A)                => ([0xb7]);
+    (OR $x:expr)          => ([0xf6, $x]);
     (POP BC)              => ([0xc1]);
     (POP DE)              => ([0xd1]);
     (POP HL)              => ([0xe1]);
@@ -224,6 +227,7 @@ macro_rules! inst {
     (SUB L)               => ([0x95]);
     (SUB (*HL))           => ([0x96]);
     (SUB A)               => ([0x97]);
+    (SUB $x:expr)         => ([0xd6, $x]);
     (XOR B)               => ([0xa8]);
     (XOR C)               => ([0xa9]);
     (XOR D)               => ([0xaa]);
