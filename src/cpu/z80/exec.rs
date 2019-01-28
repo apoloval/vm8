@@ -221,8 +221,8 @@ macro_rules! cpu_exec {
     });
     ($cpu:expr, PUSH $src:tt) => ({
         let src = cpu_eval!($cpu, $src);
-        cpu_eval!($cpu, (**SP) <- src);
         cpu_eval!($cpu, SP --<- 2);
+        cpu_eval!($cpu, (**SP) <- src);
         cpu_eval!($cpu, PC++);
     });
     ($cpu:expr, RET $cc:tt) => ({
@@ -804,7 +804,7 @@ mod test {
                     let f0 = exec_step!(&mut cpu);
 
                     assert_pc!(cpu, 0x0001);
-                    assert_r16!(cpu, (**0x5000), 0x1234);
+                    assert_r16!(cpu, (**0x4ffe), 0x1234);
                     assert_r16!(cpu, SP, 0x4ffe);
                     assert_flags!(cpu, f0, unaffected);
                 });
