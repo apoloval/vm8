@@ -225,6 +225,11 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, (**SP) <- src);
         cpu_eval!($cpu, PC++);
     });
+    ($cpu:expr, RET) => ({
+        let dest = cpu_eval!($cpu, (**SP));
+        cpu_eval!($cpu, PC <- dest);
+        cpu_eval!($cpu, SP ++<- 2);
+    });
     ($cpu:expr, RET $cc:tt) => ({
         let cond = cpu_eval!($cpu, F[$cc]);
         if cond > 0 {
@@ -516,6 +521,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xc6 => { cpu_exec!(ctx, ADD8 A, n);        07 },
         0xc7 => { cpu_exec!(ctx, RST 0x00);         11 },
         0xc8 => { cpu_exec!(ctx, RET Z) },
+        0xc9 => { cpu_exec!(ctx, RET);              10 },
         0xca => { cpu_exec!(ctx, JP Z, nn);         10 },
         0xcc => { cpu_exec!(ctx, CALL Z, nn) },
         0xcf => { cpu_exec!(ctx, RST 0x08);         11 },
@@ -1611,6 +1617,18 @@ mod test {
         decl_test_suite!(c, C);
         decl_test_suite!(pe, PE);
         decl_test_suite!(m, M);
+    });
+
+    decl_test!(exec_ret, {
+        let mut cpu = cpu!(RET);
+        cpu_eval!(cpu, (**0x8000) <- 0x4000);
+        cpu_eval!(cpu, SP <- 0x8000);
+
+        let f0 = exec_step!(&mut cpu);
+
+        assert_pc!(cpu, 0x4000);
+        assert_r16!(cpu, SP, 0x8002);
+        assert_flags!(cpu, f0, unaffected);
     });
 
     decl_scenario!(exec_rst_n, {
