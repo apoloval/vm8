@@ -76,8 +76,8 @@ macro_rules! cpu_exec {
             let dest = cpu_eval!($cpu, $dst);
             let pc = cpu_eval!($cpu, PC);
             let ret = pc + 1 + op_size!($dst);
+            cpu_eval!($cpu, SP --<- 2);
             cpu_eval!($cpu, (**SP) <- ret);
-            cpu_eval!($cpu, SP ++<- 2);
             cpu_eval!($cpu, PC <- dest);
             17
         } else {
@@ -1523,8 +1523,8 @@ mod test {
                     let f0 = exec_step!(&mut cpu);
 
                     assert_pc!(cpu, 0x4000);
-                    assert_r16!(cpu, SP, 0x8002);
-                    assert_cpu!(HEX16, cpu, (**0x8000), 0x0003);
+                    assert_r16!(cpu, SP, 0x7ffe);
+                    assert_cpu!(HEX16, cpu, (**0x7ffe), 0x0003);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };
