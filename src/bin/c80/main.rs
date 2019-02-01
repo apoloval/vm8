@@ -1,9 +1,13 @@
 extern crate vm8;
 
+use std::boxed::Box;
+
 use vm8::clock::{Clock, Frequency};
 use vm8::cpu;
+use vm8::bus;
 use vm8::cpu::{Processor};
 use vm8::cpu::z80;
+use vm8::mem;
 
 const MAX_CYCLES: usize = 10_000_000;
 
@@ -14,8 +18,9 @@ fn main() {
         0xc3, 0x00, 0x00,   // JP 0000h
     ];
     let mut input: &[u8] = program;
-    let mem = z80::MemoryBank::from_data(&mut input).unwrap();
-    let mut cpu = z80::CPU::new(z80::Options::default(), mem);
+    let mem = Box::new(mem::MemoryBank::from_data(&mut input).unwrap());
+    let io = Box::new(bus::Dead::new());
+    let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
 
     let plan = cpu::ExecutionPlan::with_max_cycles(MAX_CYCLES);
     let mut clock = Clock::new(Frequency::from_mhz(3.54));

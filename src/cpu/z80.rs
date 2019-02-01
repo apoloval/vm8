@@ -1,13 +1,12 @@
 #[macro_use] mod macros;
 
 mod alu;
+mod bus;
 mod device;
 mod exec;
-mod mem;
 mod reg;
 
 pub use self::device::{CPU, Options};
-pub use self::mem::MemoryBank;
 
 #[cfg(all(feature = "nightly", test))]
 mod bench {
@@ -15,6 +14,7 @@ mod bench {
     use test;
     use test::Bencher;
 
+    use crate::bus;
     use crate::cpu;
     use crate::cpu::Processor;
     use crate::cpu::z80;
@@ -35,8 +35,9 @@ mod bench {
         program.write(&inst!(DEC C)).unwrap();
         program.write(&inst!(JP 0x0000)).unwrap();
 
-        let mem = z80::MemoryBank::from_data(&mut &program[..]).unwrap();
-        let mut cpu = z80::CPU::new(z80::Options::default(), mem);
+        let mem = Box::new(z80::MemoryBank::from_data(&mut &program[..]).unwrap());
+        let io = Box::new(bus::Dead::new());
+        let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
         let plan = cpu::ExecutionPlan::with_max_cycles(cycles);
 
         b.iter(|| {

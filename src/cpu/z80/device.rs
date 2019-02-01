@@ -1,7 +1,9 @@
+use std::boxed::Box;
+
 use crate::cpu::{ExecutionPlan, ExecutionResult, Processor};
 use crate::cpu::z80::alu::ALU;
+use crate::cpu::z80::bus;
 use crate::cpu::z80::exec::{Context, exec_step};
-use crate::cpu::z80::mem::MemoryBus;
 use crate::cpu::z80::reg::Registers;
 
 pub struct Options {
@@ -16,23 +18,28 @@ impl Default for Options {
     }
 }
 
-pub struct CPU<M: MemoryBus> {
+pub struct CPU {
     opts: Options,
-    mem: M,
+    mem: Box<dyn bus::Memory>,
+    io: Box<dyn bus::IO>,
     regs: Registers,
     alu: ALU,
 }
 
-impl<M: MemoryBus> Context for CPU<M> {
-    type Mem = M;
+impl Context for CPU {
+    type Mem = Box<dyn bus::Memory>;
+    type IO = Box<dyn bus::IO>;
+
     fn alu(&self) -> &ALU { &self.alu }
     fn regs(&self) -> &Registers { &self.regs }
     fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
-    fn mem(&self) -> &M { &self.mem }
-    fn mem_mut(&mut self) -> &mut M { &mut self.mem }
+    fn mem(&self) -> &Box<dyn bus::Memory> { &self.mem }
+    fn mem_mut(&mut self) -> &mut Box<dyn bus::Memory> { &mut self.mem }
+    fn io(&self) -> &Box<dyn bus::IO> { &self.io }
+    fn io_mut(&mut self) -> &mut Box<dyn bus::IO> { &mut self.io }
 }
 
-impl<M: MemoryBus> Processor for CPU<M> {
+impl Processor for CPU {
     fn execute(&mut self, plan: &ExecutionPlan) -> ExecutionResult {
         let mut result = ExecutionResult::default();
         while !plan.is_completed(&result) {
@@ -43,11 +50,12 @@ impl<M: MemoryBus> Processor for CPU<M> {
     }
 }
 
-impl<M: MemoryBus> CPU<M> {
-    pub fn new(opts: Options, mem: M) -> Self {
+impl CPU {
+    pub fn new(opts: Options, mem: Box<dyn bus::Memory>, io: Box<dyn bus::IO>) -> Self {
         Self {
             opts: opts,
             mem: mem,
+            io: io,
             regs: Registers::new(),
             alu: ALU::new(),
         }

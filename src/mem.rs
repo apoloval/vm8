@@ -1,7 +1,34 @@
 use std::io;
 use std::marker::PhantomData;
 
+use byteorder::ByteOrder;
+use num_traits::One;
+
 use crate::bus;
+use crate::bus::{Bus};
+
+/// Read operations for 8-bits memory buses
+pub trait ReadFromBytes : Bus<Data=u8> {
+    /// Read a word from the bus by fetching two subsequent bytes
+    fn read_word_from_mem<O: ByteOrder>(&self, addr: Self::Addr) -> u16 {
+        let data = [self.read_from(addr), self.read_from(addr + Self::Addr::one())];
+        O::read_u16(&data)
+    }
+}
+impl<T> ReadFromBytes for T where T: Bus<Data=u8> {}
+
+/// Write operations for 8-bits memory buses
+pub trait WriteFromBytes : Bus<Data=u8> {
+    /// Write a word to the bus by sending two subsequent bytes
+    fn write_word_to_mem<O: ByteOrder>(&mut self, addr: Self::Addr, val: u16) {
+        let mut data = [0; 2];
+        O::write_u16(&mut data, val);
+        self.write_to(addr, data[0]);
+        self.write_to(addr + Self::Addr::one(), data[1]);
+    }
+}
+
+impl<T> WriteFromBytes for T where T: Bus<Data=u8> {}
 
 pub struct MemoryBank<A: bus::Address> {
     address: PhantomData<A>,

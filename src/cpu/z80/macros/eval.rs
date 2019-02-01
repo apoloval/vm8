@@ -185,7 +185,7 @@ macro_rules! cpu_eval {
     ($cpu:expr, (**$lhs:tt) <- $($rhs:tt)+) => ({
         let addr = cpu_eval!($cpu, $lhs);
         let val = cpu_eval!($cpu, $($rhs)+);
-        $cpu.mem_mut().write_word_to::<LittleEndian>(addr, val) ;
+        $cpu.mem_mut().write_word_to_mem::<LittleEndian>(addr, val) ;
         val
     });
 
@@ -229,7 +229,7 @@ macro_rules! cpu_eval {
     // Indirect read access of words
     ($cpu:expr, (**$val:tt)) => ({
         let addr = cpu_eval!($cpu, $val);
-        $cpu.mem().read_word_from::<LittleEndian>(addr)
+        $cpu.mem().read_word_from_mem::<LittleEndian>(addr)
     });
 
     ($cpu:expr, L8) => ({

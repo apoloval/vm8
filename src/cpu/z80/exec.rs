@@ -1,18 +1,23 @@
 use byteorder::LittleEndian;
 
-use crate::bus::{Bus, ReadFromBytes, WriteFromBytes};
+use crate::bus::Bus;
 use crate::cpu::z80::alu::ALU;
-use crate::cpu::z80::mem::MemoryBus;
+use crate::cpu::z80::bus;
 use crate::cpu::z80::reg::Registers;
+use crate::mem::{ReadFromBytes, WriteFromBytes};
 
 // Context trait defines a context where instructions are executed
 pub trait Context {
-    type Mem: MemoryBus;
+    type Mem: bus::Memory;
+    type IO: bus::IO;
+
     fn alu(&self) -> &ALU;
     fn regs(&self) -> &Registers;
     fn regs_mut(&mut self) -> &mut Registers;
     fn mem(&self) -> &Self::Mem;
     fn mem_mut(&mut self) -> &mut Self::Mem;
+    fn io(&self) -> &Self::IO;
+    fn io_mut(&mut self) -> &mut Self::IO;
 
     fn read_from_pc(&self, offset: usize) -> u8 {
         let pc = cpu_eval!(self, PC);
@@ -578,16 +583,21 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
 mod test {
     use std::io::Write;
 
+    use crate::bus;
     use crate::cpu::z80;
+    use crate::mem;
     use crate::testutil::Sample;
 
     use super::*;
 
     macro_rules! cpu {
-        () => {
+        ($( $inst:tt )+) => {
             {
-                let mem = z80::MemoryBank::new();
-                let mut cpu = z80::CPU::new(z80::Options::default(), mem);
+                let mut mem = Box::new(mem::MemoryBank::new());
+                Write::write(&mut mem, &inst!($( $inst )+)).unwrap();
+
+                let io = Box::new(bus::Dead::new());
+                let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
 
                 // Random flags, but do not set F5 and F3
                 cpu_eval!(cpu, F <- u8::sample() & 0b11010111);
@@ -598,13 +608,6 @@ mod test {
                 cpu_eval!(cpu, DE <- 0x8010);
                 cpu_eval!(cpu, HL <- 0x8020);
 
-                cpu
-            }
-        };
-        ($( $inst:tt )+) => {
-            {
-                let mut cpu = cpu!();
-                Write::write(cpu.mem_mut(), &inst!($( $inst )+)).unwrap();
                 cpu
             }
         };
@@ -1753,6 +1756,7 @@ mod bench {
     use test;
     use test::Bencher;
 
+    use crate::bus;
     use crate::cpu::z80;
     use super::*;
 
@@ -1802,9 +1806,10 @@ mod bench {
     }
 
     fn exec_inst(b: &mut Bencher, inst: &[u8], cycles: usize) {
-        let mut mem = z80::MemoryBank::new();
+        let mut mem = Box::new(z80::MemoryBank::new());
         fill_instruction(&mut mem, inst, cycles);
-        let mut cpu = z80::CPU::new(z80::Options::default(), mem);
+        let io = Box::new(bus::Dead::new());
+        let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
         b.iter(|| {
             cpu_eval!(cpu, PC <- 0);
             let mut total_cycles = 0;
