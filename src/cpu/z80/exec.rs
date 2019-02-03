@@ -149,6 +149,13 @@ macro_rules! cpu_exec {
             false
         }
     });
+    ($cpu:expr, EX $dst:tt, $src:tt) => ({
+        let src = cpu_eval!($cpu, $src);
+        let dst = cpu_eval!($cpu, $dst);
+        cpu_eval!($cpu, $dst <- src);
+        cpu_eval!($cpu, $src <- dst);
+        cpu_eval!($cpu, PC++);
+    });
     ($cpu:expr, EXAF) => ({
         cpu_eval!($cpu, AF <-> AF_);
         cpu_eval!($cpu, PC++);
@@ -542,6 +549,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xc8 => { cpu_exec!(ctx, RET Z) },
         0xc9 => { cpu_exec!(ctx, RET);              10 },
         0xca => { cpu_exec!(ctx, JP Z, nn);         10 },
+        0xcb => { unimplemented!("BITS table not yet implemented") },
         0xcc => { cpu_exec!(ctx, CALL Z, nn) },
         0xcd => { cpu_exec!(ctx, CALL nn);          17 },
         0xce => { cpu_exec!(ctx, ADC8 A, n);        07 },
@@ -558,12 +566,14 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xd9 => { cpu_exec!(ctx, EXX);              04 },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
         0xdb => { cpu_exec!(ctx, IN A, n);         10 },
-        0xde => { cpu_exec!(ctx, SBC A, n);         07 },
         0xdc => { cpu_exec!(ctx, CALL C, nn) },
+        0xdd => { unimplemented!("IX table not yet implemented") },
+        0xde => { cpu_exec!(ctx, SBC A, n);         07 },
         0xdf => { cpu_exec!(ctx, RST 0x18);         11 },
         0xe0 => { cpu_exec!(ctx, RET PO) },
         0xe1 => { cpu_exec!(ctx, POP HL);           10 },
         0xe2 => { cpu_exec!(ctx, JP PO, nn);        10 },
+        0xe3 => { cpu_exec!(ctx, EX (**SP), HL);    19 },
         0xe4 => { cpu_exec!(ctx, CALL PO, nn) },
         0xe5 => { cpu_exec!(ctx, PUSH HL);          11 },
         0xe6 => { cpu_exec!(ctx, AND n);            07 },
@@ -899,6 +909,19 @@ mod test {
         assert_r16!(cpu, DE_, 0x2000);
         assert_r16!(cpu, HL_, 0x3000);
         assert_flags!(cpu, f0, unaffected);
+    });
+
+    decl_test!(exec_ex_ind_sp_hl, {
+        let mut cpu = cpu!(EX (SP), HL);
+        cpu_eval!(cpu, HL <- 0x1234);
+        cpu_eval!(cpu, SP <- 0x8000);
+        cpu_eval!(cpu, (**SP) <- 0xabcd);
+
+        exec_step!(&mut cpu);
+
+        assert_pc!(cpu, 0x0001);
+        assert_r16!(cpu, HL, 0xabcd);
+        assert_mem16!(cpu, SP, 0x1234);
     });
 
     /**************************/
@@ -1623,7 +1646,7 @@ mod test {
 
                     assert_pc!(cpu, 0x4000);
                     assert_r16!(cpu, SP, 0x7ffe);
-                    assert_cpu!(HEX16, cpu, (**0x7ffe), 0x0003);
+                    assert_mem16!(cpu, 0x7ffe, 0x0003);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };
@@ -1669,7 +1692,7 @@ mod test {
 
         assert_pc!(cpu, 0x4000);
         assert_r16!(cpu, SP, 0x7ffe);
-        assert_cpu!(HEX16, cpu, (**0x7ffe), 0x0003);
+        assert_mem16!(cpu, 0x7ffe, 0x0003);
         assert_flags!(cpu, f0, unaffected);
     });
 
@@ -1747,7 +1770,7 @@ mod test {
 
                     assert_pc!(cpu, $dst);
                     assert_r16!(cpu, SP, 0x7ffe);
-                    assert_cpu!(HEX16, cpu, (**0x7ffe), 0x0001);
+                    assert_mem16!(cpu, 0x7ffe, 0x0001);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };
@@ -1785,7 +1808,7 @@ mod test {
         let f0 = exec_step!(&mut cpu);
 
         assert_pc!(cpu, 0x0002);
-        assert_cpu!(HEX8, cpu, (!0x20), 0x12);
+        assert_io!(cpu, 0x20, 0x12);
         assert_flags!(cpu, f0, unaffected);
     });
 }

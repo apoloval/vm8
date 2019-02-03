@@ -17,6 +17,18 @@ macro_rules! assert_r16 {
     })
 }
 
+macro_rules! assert_mem16 {
+    ($cpu:expr, $addr:tt, $expected:expr) => ({
+        assert_cpu!(HEX16, $cpu, (**$addr), $expected);
+    })
+}
+
+macro_rules! assert_io {
+    ($cpu:expr, $addr:tt, $expected:expr) => ({
+        assert_cpu!(HEX8, $cpu, (!$addr), $expected);
+    })
+}
+
 macro_rules! assert_flags {
     ($cpu:expr, $f0:expr, unaffected) => ({
         assert_cpu!(BIN8, $cpu, F, $f0);
@@ -28,7 +40,7 @@ macro_rules! assert_flags {
 }
 
 macro_rules! assert_pc {
-    ($cpu:expr, $expected:expr) => { 
+    ($cpu:expr, $expected:expr) => {
         assert_cpu!(HEX16, $cpu, PC, $expected)
     };
 }
