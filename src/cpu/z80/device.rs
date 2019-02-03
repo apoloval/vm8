@@ -33,10 +33,8 @@ impl Context for CPU {
     fn alu(&self) -> &ALU { &self.alu }
     fn regs(&self) -> &Registers { &self.regs }
     fn regs_mut(&mut self) -> &mut Registers { &mut self.regs }
-    fn mem(&self) -> &Box<dyn bus::Memory> { &self.mem }
-    fn mem_mut(&mut self) -> &mut Box<dyn bus::Memory> { &mut self.mem }
-    fn io(&self) -> &Box<dyn bus::IO> { &self.io }
-    fn io_mut(&mut self) -> &mut Box<dyn bus::IO> { &mut self.io }
+    fn mem(&mut self) -> &mut Box<dyn bus::Memory> { &mut self.mem }
+    fn io(&mut self) -> &mut Box<dyn bus::IO> { &mut self.io }
 }
 
 impl Processor for CPU {

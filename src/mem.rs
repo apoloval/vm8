@@ -2,47 +2,50 @@ use std::io;
 use std::marker::PhantomData;
 
 use byteorder::ByteOrder;
-use num_traits::One;
 
 use crate::bus;
-use crate::bus::{Bus};
+use crate::bus::{Address, Data, Bus};
 
 /// Read operations for 8-bits memory buses
-pub trait ReadFromBytes : Bus<Data=u8> {
+pub trait ReadFromBytes<A: Address> : Bus<A, u8> {
     /// Read a word from the bus by fetching two subsequent bytes
-    fn read_word_from_mem<O: ByteOrder>(&self, addr: Self::Addr) -> u16 {
-        let data = [self.read_from(addr), self.read_from(addr + Self::Addr::one())];
+    fn read_word_from_mem<O: ByteOrder>(&mut self, addr: A) -> u16 {
+        let data = [self.read_from(addr), self.read_from(addr + A::one())];
         O::read_u16(&data)
     }
 }
-impl<T> ReadFromBytes for T where T: Bus<Data=u8> {}
+impl<T, A> ReadFromBytes<A> for T where T: Bus<A, u8>, A: Address {}
 
 /// Write operations for 8-bits memory buses
-pub trait WriteFromBytes : Bus<Data=u8> {
+pub trait WriteFromBytes<A: Address> : Bus<A, u8> {
     /// Write a word to the bus by sending two subsequent bytes
-    fn write_word_to_mem<O: ByteOrder>(&mut self, addr: Self::Addr, val: u16) {
+    fn write_word_to_mem<O: ByteOrder>(&mut self, addr: A, val: u16) {
         let mut data = [0; 2];
         O::write_u16(&mut data, val);
         self.write_to(addr, data[0]);
-        self.write_to(addr + Self::Addr::one(), data[1]);
+        self.write_to(addr + A::one(), data[1]);
     }
 }
 
-impl<T> WriteFromBytes for T where T: Bus<Data=u8> {}
+impl<T, A> WriteFromBytes<A> for T where T: Bus<A, u8>, A: Address {}
 
-pub struct MemoryBank<A: bus::Address> {
+pub struct MemoryBank<A: Address, D: Data> {
     address: PhantomData<A>,
-    data: Vec<u8>,
+    data: Vec<D>,
 }
 
-impl<A: bus::Address> MemoryBank<A> {
+impl<A: bus::Address, D: Data> MemoryBank<A, D> {
     pub fn new() -> Self {
         let address = PhantomData;
-        let size: usize = A::max_value().into() + 1;
-        let data = vec![0; size];
+        let size: usize = A::max_value().into() - A::min_value().into() + 1;
+        let data = vec![D::default(); size];
         Self { address, data }
     }
 
+    pub fn data(&self) -> &[D] { self.data.as_slice() }
+}
+
+impl<A: bus::Address> MemoryBank<A, u8> {
     pub fn from_data<R: io::Read>(reader: &mut R) -> io::Result<Self> {
         let mut bank = Self::new();
         reader.read(&mut bank.data).map(|_| bank)
@@ -52,26 +55,21 @@ impl<A: bus::Address> MemoryBank<A> {
         let dest = &mut self.data[A::into(addr)..];
         reader.read(dest)
     }
-
-    pub fn data(&self) -> &[u8] { self.data.as_slice() }
 }
 
-impl<A: bus::Address> bus::Bus for MemoryBank<A> {
-    type Addr = A;
-    type Data = u8;
-
-    fn read_from(&self, addr: A) -> u8 {
+impl<A: Address, D: Data> bus::Bus<A, D> for MemoryBank<A, D> {
+    fn read_from(&mut self, addr: A) -> D {
         let offset: usize = addr.into();
         self.data[offset]
     }
 
-    fn write_to(&mut self, addr: A, val: u8) {
+    fn write_to(&mut self, addr: A, val: D) {
         let offset: usize = addr.into();
         self.data[offset] = val;
     }
 }
 
-impl<A: bus::Address> io::Write for MemoryBank<A> {
+impl<A: bus::Address> io::Write for MemoryBank<A, u8> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         let mut buff: &mut [u8] = &mut self.data;
         buff.write(buf)
@@ -89,7 +87,7 @@ mod test {
     use crate::bus::Bus;
 
     decl_test!(test_memory_bank_copy, {
-        let mut bank = MemoryBank::<u16>::new();
+        let mut bank = MemoryBank::<u16, u8>::new();
         let mut data: &[u8] = &[1u8, 2, 3, 4];
         let result = bank.copy_to(0x4000, &mut data);
         assert_eq!(result.unwrap(), 4);

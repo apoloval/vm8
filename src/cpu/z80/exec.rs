@@ -14,12 +14,10 @@ pub trait Context {
     fn alu(&self) -> &ALU;
     fn regs(&self) -> &Registers;
     fn regs_mut(&mut self) -> &mut Registers;
-    fn mem(&self) -> &Self::Mem;
-    fn mem_mut(&mut self) -> &mut Self::Mem;
-    fn io(&self) -> &Self::IO;
-    fn io_mut(&mut self) -> &mut Self::IO;
+    fn mem(&mut self) -> &mut Self::Mem;
+    fn io(&mut self) -> &mut Self::IO;
 
-    fn read_from_pc(&self, offset: usize) -> u8 {
+    fn read_from_pc(&mut self, offset: usize) -> u8 {
         let pc = cpu_eval!(self, PC);
         let pos = ((pc as usize) + offset) as u16;
         self.mem().read_from(pos)
@@ -583,8 +581,8 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
 mod test {
     use std::io::Write;
 
-    use crate::bus;
     use crate::cpu::z80;
+    use crate::io;
     use crate::mem;
     use crate::testutil::Sample;
 
@@ -596,7 +594,9 @@ mod test {
                 let mut mem = Box::new(mem::MemoryBank::new());
                 Write::write(&mut mem, &inst!($( $inst )+)).unwrap();
 
-                let io = Box::new(bus::Dead::new());
+                let mut io = Box::new(io::Linear::new());
+                io.bind(0x20, Box::new(io::Register::new()));
+
                 let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
 
                 // Random flags, but do not set F5 and F3
@@ -1758,6 +1758,8 @@ mod bench {
 
     use crate::bus;
     use crate::cpu::z80;
+    use crate::mem;
+
     use super::*;
 
     #[bench]
@@ -1806,9 +1808,9 @@ mod bench {
     }
 
     fn exec_inst(b: &mut Bencher, inst: &[u8], cycles: usize) {
-        let mut mem = Box::new(z80::MemoryBank::new());
+        let mut mem = Box::new(mem::MemoryBank::new());
         fill_instruction(&mut mem, inst, cycles);
-        let io = Box::new(bus::Dead::new());
+        let io = Box::new(bus::Dead);
         let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
         b.iter(|| {
             cpu_eval!(cpu, PC <- 0);
@@ -1819,7 +1821,7 @@ mod bench {
         })
     }
 
-    fn fill_instruction(mem: &mut z80::MemoryBank, inst: &[u8], count: usize) {
+    fn fill_instruction(mem: &mut mem::MemoryBank<u16, u8>, inst: &[u8], count: usize) {
         let mut addr = 0;
         for _ in 1..count {
             let mut src = inst;

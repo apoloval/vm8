@@ -18,6 +18,7 @@ pub mod testutil;
 pub mod bus;
 pub mod clock;
 pub mod cpu;
+pub mod io;
 pub mod mem;
 
 #[cfg(test)]

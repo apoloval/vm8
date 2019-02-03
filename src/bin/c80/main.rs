@@ -19,7 +19,7 @@ fn main() {
     ];
     let mut input: &[u8] = program;
     let mem = Box::new(mem::MemoryBank::from_data(&mut input).unwrap());
-    let io = Box::new(bus::Dead::new());
+    let io = Box::new(bus::Dead);
     let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);
 
     let plan = cpu::ExecutionPlan::with_max_cycles(MAX_CYCLES);

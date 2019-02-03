@@ -177,7 +177,7 @@ macro_rules! cpu_eval {
     ($cpu:expr, (*$lhs:tt) <- $($rhs:tt)+) => ({
         let addr = cpu_eval!($cpu, $lhs);
         let val = cpu_eval!($cpu, $($rhs)+);
-        $cpu.mem_mut().write_to(addr, val);
+        $cpu.mem().write_to(addr, val);
         val
     });
 
@@ -185,7 +185,14 @@ macro_rules! cpu_eval {
     ($cpu:expr, (**$lhs:tt) <- $($rhs:tt)+) => ({
         let addr = cpu_eval!($cpu, $lhs);
         let val = cpu_eval!($cpu, $($rhs)+);
-        $cpu.mem_mut().write_word_to_mem::<LittleEndian>(addr, val) ;
+        $cpu.mem().write_word_to_mem::<LittleEndian>(addr, val) ;
+        val
+    });
+
+    // IO port write
+    ($cpu:expr, IO($addr:expr) <- $($rhs:tt)+) => ({
+        let val = cpu_eval!($cpu, $($rhs)+);
+        $cpu.io().write_to($addr, val);
         val
     });
 
@@ -230,6 +237,11 @@ macro_rules! cpu_eval {
     ($cpu:expr, (**$val:tt)) => ({
         let addr = cpu_eval!($cpu, $val);
         $cpu.mem().read_word_from_mem::<LittleEndian>(addr)
+    });
+
+    // Read IO port
+    ($cpu:expr, IO($addr:expr)) => ({
+        $cpu.io().read_from($addr)
     });
 
     ($cpu:expr, L8) => ({
