@@ -75,6 +75,7 @@ macro_rules! inst {
     (EX AF, AF_)          => ([0x08]);
     (EXX)                 => ([0xd9]);
     (HALT)                => ([0x76]);
+    (IN A, ($x:expr))     => ([0xdb, $x]);
     (INC A)               => ([0x3c]);
     (INC B)               => ([0x04]);
     (INC C)               => ([0x0c]);

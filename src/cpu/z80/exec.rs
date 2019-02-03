@@ -161,6 +161,11 @@ macro_rules! cpu_exec {
     });
     ($cpu:expr, HALT) => ({
     });
+    ($cpu:expr, IN $dst:tt, $src:tt) => ({
+        let src = cpu_eval!($cpu, $src);
+        cpu_eval!($cpu, $dst <- (!src));
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
+    });
     ($cpu:expr, INC8 $dst:tt) => ({
         let dest = cpu_eval!($cpu, $dst);
         let mut flags = cpu_eval!($cpu, F);
@@ -225,9 +230,8 @@ macro_rules! cpu_exec {
     });
     ($cpu:expr, OUT $dst:tt, $src:tt) => ({
         let dst = cpu_eval!($cpu, $dst);
-        let src = cpu_eval!($cpu, $src);
 
-        cpu_eval!($cpu, (!dst) <- src);
+        cpu_eval!($cpu, (!dst) <- $src);
         cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
     });
     ($cpu:expr, POP $dst:tt) => ({
@@ -553,6 +557,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xd8 => { cpu_exec!(ctx, RET C) },
         0xd9 => { cpu_exec!(ctx, EXX);              04 },
         0xda => { cpu_exec!(ctx, JP C, nn);         10 },
+        0xdb => { cpu_exec!(ctx, IN A, n);         10 },
         0xde => { cpu_exec!(ctx, SBC A, n);         07 },
         0xdc => { cpu_exec!(ctx, CALL C, nn) },
         0xdf => { cpu_exec!(ctx, RST 0x18);         11 },
@@ -1761,6 +1766,17 @@ mod test {
     /**************************/
     /* Input and output Group */
     /**************************/
+
+    decl_test!(exec_in_n_a, {
+        let mut cpu = cpu!(IN A, (0x20));
+        cpu_eval!(cpu, (!0x20) <- 0x12);
+
+        let f0 = exec_step!(&mut cpu);
+
+        assert_pc!(cpu, 0x0002);
+        assert_r8!(cpu, A, 0x12);
+        assert_flags!(cpu, f0, unaffected);
+    });
 
     decl_test!(exec_out_n_a, {
         let mut cpu = cpu!(OUT (0x20), A);
