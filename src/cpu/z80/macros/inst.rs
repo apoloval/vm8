@@ -89,6 +89,7 @@ macro_rules! inst {
     (INC HL)              => ([0x23]);
     (INC SP)              => ([0x33]);
     (INC (*HL))           => ([0x34]);
+    (JP (HL))             => ([0xe9]);
     (JP $x:expr)          => ([0xc3, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (JP C, $x:expr)       => ([0xda, encode_literal!($x => 0), encode_literal!($x => 1)]);
     (JP NC, $x:expr)      => ([0xd2, encode_literal!($x => 0), encode_literal!($x => 1)]);

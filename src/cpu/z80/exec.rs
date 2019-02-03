@@ -579,6 +579,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xe6 => { cpu_exec!(ctx, AND n);            07 },
         0xe7 => { cpu_exec!(ctx, RST 0x20);         11 },
         0xe8 => { cpu_exec!(ctx, RET PE) },
+        0xe9 => { cpu_exec!(ctx, JP HL);            04 },
         0xea => { cpu_exec!(ctx, JP PE, nn);        10 },
         0xec => { cpu_exec!(ctx, CALL PE, nn) },
         0xee => { cpu_exec!(ctx, XOR n);            07 },
@@ -1628,6 +1629,25 @@ mod test {
         decl_test_suite!(c, C);
         decl_test_suite!(pe, PE);
         decl_test_suite!(m, M);
+    });
+
+    decl_scenario!(exec_jp_r16, {
+        macro_rules! decl_test_case {
+            ($cname:ident, $dst:tt) => {
+                decl_test!($cname, {
+                    let mut cpu = cpu!(JP ($dst));
+                    cpu_eval!(cpu, $dst <- 0x4000);
+
+                    let f0 = exec_step!(&mut cpu);
+
+                    assert_pc!(cpu, 0x4000);
+                    assert_flags!(cpu, f0, unaffected);
+                });
+
+            };
+        }
+
+        decl_test_case!(hl, HL);
     });
 
     /*************************/
