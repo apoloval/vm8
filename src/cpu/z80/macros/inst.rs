@@ -194,6 +194,7 @@ macro_rules! inst {
     (OR (*HL))            => ([0xb6]);
     (OR A)                => ([0xb7]);
     (OR $x:expr)          => ([0xf6, $x]);
+    (OUT ($x:expr), A)    => ([0xd3, $x]);
     (POP BC)              => ([0xc1]);
     (POP DE)              => ([0xd1]);
     (POP HL)              => ([0xe1]);

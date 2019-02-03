@@ -223,6 +223,13 @@ macro_rules! cpu_exec {
         cpu_eval!($cpu, PC ++<- 1 + op_size!($src));
         cpu_eval!($cpu, F <- flags);
     });
+    ($cpu:expr, OUT $dst:tt, $src:tt) => ({
+        let dst = cpu_eval!($cpu, $dst);
+        let src = cpu_eval!($cpu, $src);
+
+        cpu_eval!($cpu, (!dst) <- src);
+        cpu_eval!($cpu, PC ++<- 1 + op_size!($dst) + op_size!($src));
+    });
     ($cpu:expr, POP $dst:tt) => ({
         let dest = cpu_eval!($cpu, (**SP));
         cpu_eval!($cpu, $dst <- dest);
@@ -538,6 +545,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xd0 => { cpu_exec!(ctx, RET NC) },
         0xd1 => { cpu_exec!(ctx, POP DE);           10 },
         0xd2 => { cpu_exec!(ctx, JP NC, nn);        10 },
+        0xd3 => { cpu_exec!(ctx, OUT n, A);         11 },
         0xd4 => { cpu_exec!(ctx, CALL NC, nn) },
         0xd5 => { cpu_exec!(ctx, PUSH DE);          11 },
         0xd6 => { cpu_exec!(ctx, SUB n);            07 },
@@ -1748,6 +1756,21 @@ mod test {
         decl_test_case!(_28h, 0x28);
         decl_test_case!(_30h, 0x30);
         decl_test_case!(_38h, 0x38);
+    });
+
+    /**************************/
+    /* Input and output Group */
+    /**************************/
+
+    decl_test!(exec_out_n_a, {
+        let mut cpu = cpu!(OUT (0x20), A);
+        cpu_eval!(cpu, A <- 0x12);
+
+        let f0 = exec_step!(&mut cpu);
+
+        assert_pc!(cpu, 0x0002);
+        assert_cpu!(HEX8, cpu, (!0x20), 0x12);
+        assert_flags!(cpu, f0, unaffected);
     });
 }
 

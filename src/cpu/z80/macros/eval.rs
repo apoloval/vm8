@@ -190,7 +190,7 @@ macro_rules! cpu_eval {
     });
 
     // IO port write
-    ($cpu:expr, IO($addr:expr) <- $($rhs:tt)+) => ({
+    ($cpu:expr, (!$addr:expr) <- $($rhs:tt)+) => ({
         let val = cpu_eval!($cpu, $($rhs)+);
         $cpu.io().write_to($addr, val);
         val
@@ -240,7 +240,7 @@ macro_rules! cpu_eval {
     });
 
     // Read IO port
-    ($cpu:expr, IO($addr:expr)) => ({
+    ($cpu:expr, (!$addr:expr)) => ({
         $cpu.io().read_from($addr)
     });
 
