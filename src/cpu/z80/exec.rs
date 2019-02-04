@@ -628,9 +628,12 @@ mod test {
 
                 // Pointer regs should reference valid memory addresses to be used as indirect
                 // access arguments.
-                cpu_eval!(cpu, BC <- 0x8000);
-                cpu_eval!(cpu, DE <- 0x8010);
-                cpu_eval!(cpu, HL <- 0x8020);
+                cpu_eval!(cpu, BC <- 0x4000);
+                cpu_eval!(cpu, DE <- 0x4010);
+                cpu_eval!(cpu, HL <- 0x4020);
+
+                // Configure the stack
+                cpu_eval!(cpu, SP <- 0x8000);
 
                 cpu
             }
@@ -915,7 +918,6 @@ mod test {
     decl_test!(exec_ex_ind_sp_hl, {
         let mut cpu = cpu!(EX (SP), HL);
         cpu_eval!(cpu, HL <- 0x1234);
-        cpu_eval!(cpu, SP <- 0x8000);
         cpu_eval!(cpu, (**SP) <- 0xabcd);
 
         exec_step!(&mut cpu);
@@ -1660,7 +1662,6 @@ mod test {
                 decl_test!($cname, {
                     let mut cpu = cpu!(CALL $flag, 0x4000);
                     cpu_eval!(cpu, F +<- ($flag:1));
-                    cpu_eval!(cpu, SP <- 0x8000);
 
                     let f0 = exec_step!(&mut cpu);
 
@@ -1673,13 +1674,13 @@ mod test {
             ($cname:ident, $flag:ident, false) => {
                 decl_test!($cname, {
                     let mut cpu = cpu!(CALL $flag, 0x4000);
+                    let sp = cpu_eval!(cpu, SP);
                     cpu_eval!(cpu, F +<- ($flag:0));
-                    cpu_eval!(cpu, SP <- 0x8000);
 
                     let f0 = exec_step!(&mut cpu);
 
                     assert_pc!(cpu, 0x0003);
-                    assert_r16!(cpu, SP, 0x8000);
+                    assert_r16!(cpu, SP, sp);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };
@@ -1706,7 +1707,6 @@ mod test {
 
     decl_test!(exec_call, {
         let mut cpu = cpu!(CALL 0x4000);
-        cpu_eval!(cpu, SP <- 0x8000);
 
         let f0 = exec_step!(&mut cpu);
 
@@ -1721,28 +1721,28 @@ mod test {
             ($cname:ident, $flag:ident, true) => {
                 decl_test!($cname, {
                     let mut cpu = cpu!(RET $flag);
+                    let sp = cpu_eval!(cpu, SP);
                     cpu_eval!(cpu, F +<- ($flag:1));
-                    cpu_eval!(cpu, (**0x8000) <- 0x4000);
-                    cpu_eval!(cpu, SP <- 0x8000);
+                    cpu_eval!(cpu, (**SP) <- 0x4000);
 
                     let f0 = exec_step!(&mut cpu);
 
                     assert_pc!(cpu, 0x4000);
-                    assert_r16!(cpu, SP, 0x8002);
+                    assert_r16!(cpu, SP, sp + 2);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };
             ($cname:ident, $flag:ident, false) => {
                 decl_test!($cname, {
                     let mut cpu = cpu!(RET $flag);
+                    let sp = cpu_eval!(cpu, SP);
                     cpu_eval!(cpu, F +<- ($flag:0));
-                    cpu_eval!(cpu, (**0x8000) <- 0x4000);
-                    cpu_eval!(cpu, SP <- 0x8000);
+                    cpu_eval!(cpu, (**SP) <- 0x4000);
 
                     let f0 = exec_step!(&mut cpu);
 
                     assert_pc!(cpu, 0x0001);
-                    assert_r16!(cpu, SP, 0x8000);
+                    assert_r16!(cpu, SP, sp);
                     assert_flags!(cpu, f0, unaffected);
                 });
             };
@@ -1769,8 +1769,7 @@ mod test {
 
     decl_test!(exec_ret, {
         let mut cpu = cpu!(RET);
-        cpu_eval!(cpu, (**0x8000) <- 0x4000);
-        cpu_eval!(cpu, SP <- 0x8000);
+        cpu_eval!(cpu, (**SP) <- 0x4000);
 
         let f0 = exec_step!(&mut cpu);
 
@@ -1784,7 +1783,6 @@ mod test {
             ($cname:ident, $dst:tt) => {
                 decl_test!($cname, {
                     let mut cpu = cpu!(RST $dst);
-                    cpu_eval!(cpu, SP <- 0x8000);
 
                     let f0 = exec_step!(&mut cpu);
 
