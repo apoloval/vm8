@@ -73,6 +73,7 @@ macro_rules! inst {
     (DEC (*HL))           => ([0x35]);
     (DJNZ $x:expr)        => ([0x10, $x]);
     (EX AF, AF_)          => ([0x08]);
+    (EX DE, HL)           => ([0xeb]);
     (EX (SP), HL)         => ([0xe3]);
     (EXX)                 => ([0xd9]);
     (HALT)                => ([0x76]);

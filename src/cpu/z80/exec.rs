@@ -581,6 +581,7 @@ pub fn exec_step<CTX: Context>(ctx: &mut CTX) -> usize {
         0xe8 => { cpu_exec!(ctx, RET PE) },
         0xe9 => { cpu_exec!(ctx, JP HL);            04 },
         0xea => { cpu_exec!(ctx, JP PE, nn);        10 },
+        0xeb => { cpu_exec!(ctx, EX DE, HL);        04 },
         0xec => { cpu_exec!(ctx, CALL PE, nn) },
         0xee => { cpu_exec!(ctx, XOR n);            07 },
         0xef => { cpu_exec!(ctx, RST 0x28);         11 },
@@ -925,6 +926,18 @@ mod test {
         assert_pc!(cpu, 0x0001);
         assert_r16!(cpu, HL, 0xabcd);
         assert_mem16!(cpu, SP, 0x1234);
+    });
+
+    decl_test!(exec_ex_de_hl, {
+        let mut cpu = cpu!(EX DE, HL);
+        cpu_eval!(cpu, HL <- 0x1234);
+        cpu_eval!(cpu, DE <- 0xabcd);
+
+        exec_step!(&mut cpu);
+
+        assert_pc!(cpu, 0x0001);
+        assert_r16!(cpu, HL, 0xabcd);
+        assert_r16!(cpu, DE, 0x1234);
     });
 
     /**************************/
