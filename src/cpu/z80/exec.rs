@@ -1914,7 +1914,7 @@ mod bench {
         })
     }
 
-    fn fill_instruction(mem: &mut mem::MemoryBank<u16, u8>, inst: &[u8], count: usize) {
+    fn fill_instruction(mem: &mut mem::MemoryBank<u16>, inst: &[u8], count: usize) {
         let mut addr = 0;
         for _ in 1..count {
             let mut src = inst;
