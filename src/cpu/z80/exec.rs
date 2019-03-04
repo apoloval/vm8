@@ -616,10 +616,10 @@ mod test {
     macro_rules! cpu {
         ($( $inst:tt )+) => {
             {
-                let mut mem = Box::new(mem::MemoryBank::new());
+                let mut mem = mem::MemoryBank::new();
                 Write::write(&mut mem, &inst!($( $inst )+)).unwrap();
 
-                let mut io = Box::new(io::Linear::new());
+                let mut io = io::Linear::new();
                 io.bind(0x20, Box::new(io::Register::new()));
 
                 let mut cpu = z80::CPU::new(z80::Options::default(), mem, io);

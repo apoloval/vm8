@@ -1,4 +1,6 @@
 use std::boxed::Box;
+use std::cell::RefCell;
+use std::rc::Rc;
 use num_traits::{Bounded, Num};
 
 /// An address is any type that can be used to identify a bus target
@@ -19,12 +21,17 @@ impl Data for u16 {}
 /// Both the data exchanged and the addresses are defined by the implementation. Please note
 /// a memory system is a special case of a bus. In such case, each memory location can be seen
 /// as a independent device.
-pub trait Bus<A: Address, D: Data> {
+pub trait Bus<A: Address, D: Data>: Sized {
     /// Read data from the given address.
     fn read_from(&mut self, addr: A) -> D;
 
     /// Write data to the given address.
     fn write_to(&mut self, addr: A, val: D);
+
+    /// Share this bus instance by wrapping it with `Rc`, `RefCell` and `Box`.
+    fn share(self) -> Rc<RefCell<Box<Self>>> {
+        Rc::new(RefCell::new(Box::new(self)))
+    }
 }
 
 impl<T, A, D> Bus<A, D> for Box<T> where T: Bus<A, D> + ?Sized, A: Address, D: Data {
@@ -34,6 +41,16 @@ impl<T, A, D> Bus<A, D> for Box<T> where T: Bus<A, D> + ?Sized, A: Address, D: D
 
     fn write_to(&mut self, addr: A, val: D) {
         (**self).write_to(addr, val)
+    }
+}
+
+impl<T, A, D> Bus<A, D> for Rc<RefCell<T>> where T: Bus<A, D> + ?Sized, A: Address, D: Data {
+    fn read_from(&mut self, addr: A) -> D {
+        self.borrow_mut().read_from(addr)
+    }
+
+    fn write_to(&mut self, addr: A, val: D) {
+        self.borrow_mut().write_to(addr, val)
     }
 }
 
