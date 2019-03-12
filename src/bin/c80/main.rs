@@ -1,6 +1,6 @@
 extern crate vm8;
 
-use vm8::clock::{Clock, Frequency};
+use vm8::clock::{Clock, Frequency, FrequencyStats};
 use vm8::cpu;
 use vm8::bus::{self, Bus};
 use vm8::cpu::{Processor};
@@ -8,6 +8,7 @@ use vm8::cpu::z80;
 use vm8::mem;
 
 const MAX_CYCLES: usize = 10_000_000;
+const ITERATIONS: usize = 500;
 
 fn main() {
     let program = &[
@@ -22,11 +23,19 @@ fn main() {
 
     let plan = cpu::ExecutionPlan::with_max_cycles(MAX_CYCLES);
     let mut clock = Clock::new(Frequency::from_mhz(3.54));
-    for _ in 0..10 {
+    let mut reports = Vec::with_capacity(ITERATIONS);
+    for _ in 0..ITERATIONS {
         let exec_res = cpu.execute(&plan);
         let report = clock.sync(exec_res.total_cycles, false);
-        println!(
-            "Program executed {} cycles in {:?} at native freq of {})",
-            exec_res.total_cycles, report.real_duration, report.native_freq);
+        reports.push(report.native_freq);
     }
+
+    let stats = FrequencyStats::evaluate(reports);
+
+    println!("Program executed {} iterations of {} cycles)", ITERATIONS, MAX_CYCLES);
+    println!("   AVG frequency: {}", stats.avg);
+    println!("   P95 frequency: {}", stats.p95);
+    println!("   P99 frequency: {}", stats.p99);
+    println!("   Max frequency: {}", stats.max);
+    println!("   Min frequency: {}", stats.min);
 }
