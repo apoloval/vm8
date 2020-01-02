@@ -157,6 +157,21 @@ impl Dst16 for Reg16 {
 }
 
 
+// A 8-bit literal operand
+pub struct Liter8;
+
+impl Operand for Liter8 {
+  fn cycles() -> Cycles { 3 }
+  fn size() -> u16 { 1 }
+}
+
+impl Src8 for Liter8 {
+  fn load<C: Context>(&self, ctx: &C) -> u8 {
+    ctx.read_op8()
+  }
+}
+
+
 // A 16-bit literal operand
 pub struct Liter16;
 
@@ -317,11 +332,19 @@ mod test {
   }
 
   #[test]
+  fn liter8_load() {
+      let mut cpu = CPU::testbench();
+      cpu.regs_mut().pc = 0x4000;
+      cpu.mem_mut().mem_write(0x4001, 101);
+      assert_eq!(101, Liter8.load(&cpu));
+  }
+
+  #[test]
   fn liter16_load() {
       let mut cpu = CPU::testbench();
       cpu.regs_mut().pc = 0x4000;
       cpu.mem_mut().mem_write16(0x4001, 0x1234);
-      assert_eq!(0x1234, Liter16.load(& cpu));
+      assert_eq!(0x1234, Liter16.load(&cpu));
   }
 
   #[test]

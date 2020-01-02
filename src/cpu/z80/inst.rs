@@ -9,7 +9,7 @@ pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
   match opcode {
     0x00 => nop(ctx),
     0x01 => ld16(ctx, Reg16::BC, Liter16),
-    0x02 => unimplemented!(),
+    0x02 => ld8(ctx, IndReg8::BC, Reg8::A),
     0x03 => unimplemented!(),
     0x04 => unimplemented!(),
     0x05 => unimplemented!(),
@@ -25,7 +25,7 @@ pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
     0x0f => unimplemented!(),
     0x10 => unimplemented!(),
     0x11 => ld16(ctx, Reg16::DE, Liter16),
-    0x12 => unimplemented!(),
+    0x12 => ld8(ctx, IndReg8::DE, Reg8::A),
     0x13 => unimplemented!(),
     0x14 => unimplemented!(),
     0x15 => unimplemented!(),
@@ -41,7 +41,7 @@ pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
     0x1f => unimplemented!(),
     0x20 => unimplemented!(),
     0x21 => ld16(ctx, Reg16::HL, Liter16),
-    0x22 => unimplemented!(),
+    0x22 => ld16(ctx, Addr16, Reg16::HL),
     0x23 => unimplemented!(),
     0x24 => unimplemented!(),
     0x25 => unimplemented!(),
@@ -57,7 +57,7 @@ pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
     0x2f => unimplemented!(),
     0x30 => unimplemented!(),
     0x31 => ld16(ctx, Reg16::SP, Liter16),
-    0x32 => unimplemented!(),
+    0x32 => ld8(ctx, Addr8, Reg8::A),
     0x33 => unimplemented!(),
     0x34 => unimplemented!(),
     0x35 => unimplemented!(),
@@ -283,6 +283,7 @@ pub fn add8<C: Context, S: Src8>(ctx: &mut C, src: S) -> Cycles {
 pub fn ld8<C: Context, S: Src8, D: Dst8>(ctx: &mut C, dst: D, src: S) -> Cycles {
   let v = src.load(ctx);
   dst.store(ctx, v);
+  ctx.regs_mut().inc_pc(1 + S::size() + D::size());
   4 + S::cycles() + D::cycles()
 }
 
@@ -316,6 +317,16 @@ mod test {
       assert_eq!(0x5b, cpu.regs.af.r8().h);
       assert_eq!(0x0001, cpu.regs.pc);
       assert_eq!(7, cycles);
+  }
+
+  #[test]
+  fn inst_ld8() {
+      let mut cpu = CPU::testbench();
+      cpu.regs.bc.r8_mut().h = 0x42;
+      let cycles = ld8(&mut cpu, Reg8::A, Reg8::B);
+      assert_eq!(0x42, cpu.regs.af.r8().h);
+      assert_eq!(0x0001, cpu.regs.pc);
+      assert_eq!(4, cycles);
   }
 
   #[test]
