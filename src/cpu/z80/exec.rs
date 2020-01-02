@@ -172,6 +172,52 @@ impl Src16 for Liter16 {
 }
 
 
+// A 8-bit direct address operand
+pub struct Addr8;
+
+impl Operand for Addr8 {
+  fn cycles() -> Cycles { 7 }
+  fn size() -> u16 { 2 }
+}
+
+impl Src8 for Addr8 {
+  fn load<C: Context>(&self, ctx: &C) -> u8 {
+    let addr = ctx.read_op16();
+    ctx.mem().mem_read(addr)
+  }
+}
+
+impl Dst8 for Addr8 {
+  fn store<C: Context>(&self, ctx: &mut C, val: u8) {
+    let addr = ctx.read_op16();
+    ctx.mem_mut().mem_write(addr, val);
+  }
+}
+
+
+// A 16-bit direct address operand
+pub struct Addr16;
+
+impl Operand for Addr16 {
+  fn cycles() -> Cycles { 10 }
+  fn size() -> u16 { 2 }
+}
+
+impl Src16 for Addr16 {
+  fn load<C: Context>(&self, ctx: &C) -> u16 {
+    let addr = ctx.read_op16();
+    ctx.mem().mem_read16(addr)
+  }
+}
+
+impl Dst16 for Addr16 {
+  fn store<C: Context>(&self, ctx: &mut C, val: u16) {
+    let addr = ctx.read_op16();
+    ctx.mem_mut().mem_write16(addr, val);
+  }
+}
+
+
 
 #[cfg(test)]
 mod test {
@@ -274,8 +320,48 @@ mod test {
   fn liter16_load() {
       let mut cpu = CPU::testbench();
       cpu.regs_mut().pc = 0x4000;
+      cpu.mem_mut().mem_write16(0x4001, 0x1234);
+      assert_eq!(0x1234, Liter16.load(& cpu));
+  }
+
+  #[test]
+  fn addr8_load() {
+      let mut cpu = CPU::testbench();
+      cpu.regs_mut().pc = 0x4000;
+      cpu.mem_mut().mem_write16(0x4001, 0x1234);
+      cpu.mem_mut().mem_write(0x1234, 101);
+      assert_eq!(101, Addr8.load(& cpu));
+  }
+
+  #[test]
+  fn addr8_store() {
+      let mut cpu = CPU::testbench();
+      cpu.regs_mut().pc = 0x4000;
+      cpu.mem_mut().mem_write16(0x4001, 0x1234);
+
+      Addr8.store(&mut cpu, 101);
+
+      assert_eq!(101, cpu.mem().mem_read(0x1234));
+  }
+
+  #[test]
+  fn addr16_load() {
+      let mut cpu = CPU::testbench();
+      cpu.regs_mut().pc = 0x4000;
+      cpu.mem_mut().mem_write16(0x4001, 0x1234);
+      cpu.mem_mut().mem_write16(0x1234, 0x4567);
+      assert_eq!(0x4567, Addr16.load(&cpu));
+  }
+
+  #[test]
+  fn addr16_store() {
+      let mut cpu = CPU::testbench();
+      cpu.regs_mut().pc = 0x4000;
       cpu.mem_mut().mem_write(0x4001, 0x34);
       cpu.mem_mut().mem_write(0x4002, 0x12);
-      assert_eq!(0x1234, Liter16.load(& cpu));
+
+      Addr16.store(&mut cpu, 0x4567);
+
+      assert_eq!(0x4567, cpu.mem().mem_read16(0x1234));
   }
 }

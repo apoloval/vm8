@@ -24,6 +24,14 @@ pub trait MemBus {
     let bytes = [ self.mem_read(addr), self.mem_read(addr2) ];
     LittleEndian::read_u16(&bytes)
   }
+
+  fn mem_write16(&mut self, addr: MemAddr, val: u16) {
+    let Wrapping(addr2) = Wrapping(addr) + Wrapping(1);
+    let mut data = [0; 2];
+    LittleEndian::write_u16(&mut data, val);
+    self.mem_write(addr, data[0]);
+    self.mem_write(addr2, data[1]);
+  }
 }
 
 // An implementation of a memory bus for vectors for testing purposes
