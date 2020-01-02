@@ -8,6 +8,7 @@ pub struct RegBank {
   pub hl: PairedReg,
 
   pub pc: Reg16,
+  pub sp: Reg16,
 }
 
 impl RegBank {

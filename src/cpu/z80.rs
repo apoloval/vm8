@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::num::Wrapping;
+
+use byteorder::{ByteOrder, LittleEndian};
 
 mod exec;
 mod inst;
@@ -17,7 +20,9 @@ pub trait MemBus {
   fn mem_write(&mut self, addr: MemAddr, val: u8);
 
   fn mem_read16(&self, addr: MemAddr) -> u16 {
-    unimplemented!()
+    let Wrapping(addr2) = Wrapping(addr) + Wrapping(1);
+    let bytes = [ self.mem_read(addr), self.mem_read(addr2) ];
+    LittleEndian::read_u16(&bytes)
   }
 }
 
