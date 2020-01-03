@@ -35,7 +35,7 @@ impl From<MemAddr> for usize {
 
 // A IO port for the Z80.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub struct IOAddr(pub u8);
+pub struct IOPort(pub u8);
 
 
 // A memory bus
@@ -75,14 +75,14 @@ impl MemBus for Vec<u8> {
 
 // An IO bus
 pub trait IOBus {
-  fn io_read(&self, addr: IOAddr) -> u8;
-  fn io_write(&mut self, addr: IOAddr, val: u8);
+  fn io_read(&self, addr: IOPort) -> u8;
+  fn io_write(&mut self, addr: IOPort, val: u8);
 }
 
 // An implementation of IO bus for hashmaps for testing purposes
-impl IOBus for HashMap<IOAddr, u8> {
-  fn io_read(&self, addr: IOAddr) -> u8 { self[&addr] }
-  fn io_write(&mut self, addr: IOAddr, val: u8) { self.insert(addr, val); }
+impl IOBus for HashMap<IOPort, u8> {
+  fn io_read(&self, addr: IOPort) -> u8 { self[&addr] }
+  fn io_write(&mut self, addr: IOPort, val: u8) { self.insert(addr, val); }
 }
 
 
@@ -140,7 +140,7 @@ impl<'a, B: 'a + Bus> exec::Context for CPUContext<'a, B> {
 pub struct TestBench {
   pub regs: RegBank,
   pub mem: Vec<u8>,
-  pub io: HashMap<IOAddr, u8>,
+  pub io: HashMap<IOPort, u8>,
 }
 
 impl TestBench {
@@ -155,7 +155,7 @@ impl TestBench {
 
 impl exec::Context for TestBench {
   type Mem = Vec<u8>;
-  type IO = HashMap<IOAddr, u8>;
+  type IO = HashMap<IOPort, u8>;
 
   fn regs(&self) -> &RegBank { &self.regs }
   fn regs_mut(&mut self) -> &mut RegBank { &mut self.regs }

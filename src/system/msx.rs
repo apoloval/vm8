@@ -1,15 +1,15 @@
 use std::{io as stdio};
 use std::time::Duration;
 
-use crate::cpu::z80::{MemAddr, IOAddr, MemBus, IOBus, CPU};
+use crate::cpu::z80::{MemAddr, IOPort, MemBus, IOBus, CPU};
 use crate::emu::{Freq, Scheduler};
 use crate::io;
 
 pub mod slot;
 
-const IOPORT_PPI_A: IOAddr = IOAddr(0xa8);
-const IOPORT_PPI_B: IOAddr = IOAddr(0xa9);
-const IOPORT_PPI_C: IOAddr = IOAddr(0xaa);
+const IOPORT_PPI_A: IOPort = IOPort(0xa8);
+const IOPORT_PPI_B: IOPort = IOPort(0xa9);
+const IOPORT_PPI_C: IOPort = IOPort(0xaa);
 
 const CPU_FREQ: Freq = Freq::from_khz(35_800);
 
@@ -97,7 +97,7 @@ impl<'a, S: 'a + slot::Config> MemBus for Bus<'a, S> {
 }
 
 impl<'a, S: 'a + slot::Config> IOBus for Bus<'a, S> {
-  fn io_read(&self, addr: IOAddr) -> u8 {
+  fn io_read(&self, addr: IOPort) -> u8 {
     match addr {
       IOPORT_PPI_A => self.ppi.port_a(),
       IOPORT_PPI_B => self.ppi.port_b(),
@@ -106,7 +106,7 @@ impl<'a, S: 'a + slot::Config> IOBus for Bus<'a, S> {
     }
   }
 
-  fn io_write(&mut self, addr: IOAddr, val: u8) {
+  fn io_write(&mut self, addr: IOPort, val: u8) {
     match addr {
       IOPORT_PPI_A => self.ppi.set_port_a(val),
       IOPORT_PPI_B => self.ppi.set_port_b(val),
