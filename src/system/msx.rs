@@ -1,4 +1,8 @@
+use std::{io as stdio};
+use std::time::Duration;
+
 use crate::cpu::z80;
+use crate::emu::{Freq, Scheduler};
 use crate::io;
 
 pub mod slot;
@@ -6,6 +10,8 @@ pub mod slot;
 const IOPORT_PPI_A: z80::IOAddr = 0xa8;
 const IOPORT_PPI_B: z80::IOAddr = 0xa9;
 const IOPORT_PPI_C: z80::IOAddr = 0xaa;
+
+const CPU_FREQ: Freq = Freq::from_khz(35_800);
 
 pub struct MSX<S: slot::Config> {
   cpu: z80::CPU,
@@ -20,13 +26,34 @@ impl<S: slot::Config> MSX<S> {
     MSX { cpu, slots, ppi }
   }
 
-  pub fn exec(&mut self) {
-    let ppi = &mut self.ppi;
-    let slots = &mut self.slots;
-    let mut bus = Bus { ppi, slots };
-    self.cpu.exec(&mut bus);
+  pub fn run(&mut self, scheduler: &mut Scheduler<Self>) {
+    scheduler.add_task(|msx: &mut MSX<S>, dur: Duration| {
+      let ppi = &mut msx.ppi;
+      let slots = &mut msx.slots;
+      let mut bus = Bus { ppi, slots };
+      msx.cpu.exec(&mut bus, CPU_FREQ.cycles_in(dur));
+    });
+    scheduler.run(self);
   }
 }
+
+// Spectravideo 728 MSX system
+pub type SVI728 = MSX<(
+  slot::ROM32,
+  slot::RAM64,
+  slot::NotConnected,
+  slot::NotConnected,
+)>;
+
+pub fn svi_728<R: stdio::Read>(rom_img: &mut R) -> stdio::Result<SVI728> {
+  slot::ROM32::new(rom_img).map(|rom| MSX::new((
+    rom,
+    slot::RAM64::new(),
+    slot::NotConnected,
+    slot::NotConnected
+  )))
+}
+
 
 pub struct Bus<'a, S: 'a + slot::Config> {
   ppi: &'a mut io::I8255,

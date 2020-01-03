@@ -1,4 +1,5 @@
 pub mod cpu;
+pub mod emu;
 pub mod io;
 pub mod system;
 

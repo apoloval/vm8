@@ -3,13 +3,13 @@ use std::num::Wrapping;
 
 use byteorder::{ByteOrder, LittleEndian};
 
+use crate::emu::Cycles;
+
 mod exec;
 mod inst;
 mod regs;
 
 use regs::RegBank;
-
-pub type Cycles = usize;
 
 pub type MemAddr = u16;
 pub type IOAddr = u8;
@@ -80,15 +80,17 @@ impl CPU {
     }
   }
 
-  pub fn exec<B: Bus>(&mut self, bus: &mut B) {
+  pub fn exec<B: Bus>(&mut self, bus: &mut B, max_cycles: Cycles) {
     let mut ctx = CPUContext {
       regs: &mut self.regs,
       bus: bus,
     };
-    inst::exec_inst(&mut ctx);
+    let mut total_cycles = Cycles(0);
+    while total_cycles < max_cycles {
+      total_cycles = total_cycles + inst::exec_inst(&mut ctx);
+    }
   }
 }
-
 
 // A value that contains the context of the CPU for its execution.
 struct CPUContext<'a, B: 'a + Bus> {

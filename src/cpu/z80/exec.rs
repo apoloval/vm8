@@ -1,6 +1,7 @@
 use std::num::Wrapping;
 
-use crate::cpu::z80::{Cycles, MemBus, IOBus};
+use crate::emu::Cycles;
+use crate::cpu::z80::{MemBus, IOBus};
 use crate::cpu::z80::regs::RegBank;
 
 // The context in which the CPU will execute instructions.
@@ -62,7 +63,7 @@ pub trait Dst16 : Operand  {
 pub enum Reg8 { A, B, C, D, E, H, L }
 
 impl Operand for Reg8 {
-  fn cycles() -> Cycles { 0 }
+  fn cycles() -> Cycles { Cycles(0) }
   fn size() -> u16 { 0 }
 }
 
@@ -99,7 +100,7 @@ impl Dst8 for Reg8 {
 pub enum IndReg8 { BC, DE, HL }
 
 impl Operand for IndReg8 {
-  fn cycles() -> Cycles { 3 }
+  fn cycles() -> Cycles { Cycles(3) }
   fn size() -> u16 { 0 }
 }
 
@@ -130,7 +131,7 @@ impl Dst8 for IndReg8 {
 pub enum Reg16 { BC, DE, HL, SP }
 
 impl Operand for Reg16 {
-  fn cycles() -> Cycles { 0 }
+  fn cycles() -> Cycles { Cycles(0) }
   fn size() -> u16 { 0 }
 }
 
@@ -161,7 +162,7 @@ impl Dst16 for Reg16 {
 pub struct Liter8;
 
 impl Operand for Liter8 {
-  fn cycles() -> Cycles { 3 }
+  fn cycles() -> Cycles { Cycles(3) }
   fn size() -> u16 { 1 }
 }
 
@@ -176,7 +177,7 @@ impl Src8 for Liter8 {
 pub struct Liter16;
 
 impl Operand for Liter16 {
-  fn cycles() -> Cycles { 4 }
+  fn cycles() -> Cycles { Cycles(4) }
   fn size() -> u16 { 2 }
 }
 
@@ -191,7 +192,7 @@ impl Src16 for Liter16 {
 pub struct Addr8;
 
 impl Operand for Addr8 {
-  fn cycles() -> Cycles { 7 }
+  fn cycles() -> Cycles { Cycles(7) }
   fn size() -> u16 { 2 }
 }
 
@@ -214,7 +215,7 @@ impl Dst8 for Addr8 {
 pub struct Addr16;
 
 impl Operand for Addr16 {
-  fn cycles() -> Cycles { 10 }
+  fn cycles() -> Cycles { Cycles(10) }
   fn size() -> u16 { 2 }
 }
 

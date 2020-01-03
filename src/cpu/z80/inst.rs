@@ -1,6 +1,7 @@
 use std::num::Wrapping;
 
-use crate::cpu::z80::{Cycles, MemBus};
+use crate::emu::Cycles;
+use crate::cpu::z80::MemBus;
 use crate::cpu::z80::exec::*;
 
 pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
@@ -283,7 +284,7 @@ pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
 
 pub fn nop<C: Context>(ctx: &mut C) -> Cycles {
   ctx.regs_mut().inc_pc(1);
-  4
+  Cycles(4)
 }
 
 pub fn add8<C: Context, S: Src8>(ctx: &mut C, src: S) -> Cycles {
@@ -292,21 +293,21 @@ pub fn add8<C: Context, S: Src8>(ctx: &mut C, src: S) -> Cycles {
   let c = (Wrapping(a) + Wrapping(b)).0;
   ctx.regs_mut().af.r8_mut().h = c;
   ctx.regs_mut().inc_pc(1 + S::size());
-  4 + S::cycles()
+  Cycles(4) + S::cycles()
 }
 
 pub fn ld8<C: Context, S: Src8, D: Dst8>(ctx: &mut C, dst: D, src: S) -> Cycles {
   let v = src.load(ctx);
   dst.store(ctx, v);
   ctx.regs_mut().inc_pc(1 + S::size() + D::size());
-  4 + S::cycles() + D::cycles()
+  Cycles(4) + S::cycles() + D::cycles()
 }
 
 pub fn ld16<C: Context, S: Src16, D: Dst16>(ctx: &mut C, dst: D, src: S) -> Cycles {
   let v = src.load(ctx);
   dst.store(ctx, v);
   ctx.regs_mut().inc_pc(1 + S::size() + D::size());
-  6 + S::cycles() + D::cycles()
+  Cycles(6) + S::cycles() + D::cycles()
 }
 
 #[cfg(test)]
@@ -319,7 +320,7 @@ mod test {
     let mut ctx = TestBench::new();
     let cycles = nop(&mut ctx);
     assert_eq!(0x0001, ctx.regs.pc);
-    assert_eq!(4, cycles);
+    assert_eq!(Cycles(4), cycles);
   }
 
   #[test]
@@ -331,7 +332,7 @@ mod test {
     let cycles = add8(&mut ctx, IndReg8::HL);
     assert_eq!(0x5b, ctx.regs.af.r8().h);
     assert_eq!(0x0001, ctx.regs.pc);
-    assert_eq!(7, cycles);
+    assert_eq!(Cycles(7), cycles);
   }
 
   #[test]
@@ -341,7 +342,7 @@ mod test {
     let cycles = ld8(&mut ctx, Reg8::A, Reg8::B);
     assert_eq!(0x42, ctx.regs.af.r8().h);
     assert_eq!(0x0001, ctx.regs.pc);
-    assert_eq!(4, cycles);
+    assert_eq!(Cycles(4), cycles);
   }
 
   #[test]
@@ -351,6 +352,6 @@ mod test {
     let cycles = ld16(&mut ctx, Reg16::SP, Reg16::HL);
     assert_eq!(1001, ctx.regs.sp);
     assert_eq!(0x0001, ctx.regs.pc);
-    assert_eq!(6, cycles);
+    assert_eq!(Cycles(6), cycles);
   }
 }
