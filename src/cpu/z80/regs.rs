@@ -1,4 +1,4 @@
-use std::num::Wrapping;
+use crate::cpu::z80::MemAddr;
 
 #[derive(Default)]
 pub struct RegBank {
@@ -12,8 +12,12 @@ pub struct RegBank {
 }
 
 impl RegBank {
+  pub fn pc_addr(&self) -> MemAddr {
+    MemAddr(self.pc)
+  }
+
   pub fn inc_pc(&mut self, n: u16) {
-    self.pc = (Wrapping(self.pc) + Wrapping(n)).0;
+    self.pc = u16::from(self.pc_addr() + n);
   }
 }
 

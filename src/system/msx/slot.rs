@@ -64,11 +64,11 @@ impl RAM64 {
 
 impl z80::MemBus for RAM64 {
   fn mem_read(&self, addr: z80::MemAddr) -> u8 {
-    self.bytes[addr as usize]
+    self.bytes[usize::from(addr)]
   }
 
   fn mem_write(&mut self, addr: z80::MemAddr, val: u8) {
-    self.bytes[addr as usize] = val;
+    self.bytes[usize::from(addr)] = val;
   }
 }
 
@@ -91,7 +91,7 @@ impl ROM32 {
 
 impl z80::MemBus for ROM32 {
   fn mem_read(&self, addr: z80::MemAddr) -> u8 {
-    self.bytes[(addr & 0x7fff) as usize]
+    self.bytes[usize::from(addr) & 0x7fff]
   }
 
   fn mem_write(&mut self, _addr: z80::MemAddr, _val: u8) {}
@@ -110,8 +110,8 @@ impl<C: Config> Expanded<C> {
   }
 
   fn slot(&self, addr: z80::MemAddr) -> Option<u8> {
-    if addr != 0xffff {
-      let page = (addr & 0xc000) >> 14;
+    if addr != z80::MemAddr(0xffff) {
+      let page = (u16::from(addr) & 0xc000) >> 14;
       Some(match page {
         0 => self.pagecfg & 0x03,
         1 => (self.pagecfg >> 2) & 0x03,
@@ -149,20 +149,20 @@ impl<C: Config> z80::MemBus for Expanded<C> {
 
 #[cfg(test)]
 mod test {
-  use crate::cpu::z80::MemBus;
+  use crate::cpu::z80::{MemAddr, MemBus};
   use super::*;
 
   #[test]
   fn ram64_read_write() {
     let mut ram = RAM64::new();
     for i in 0..64*1024 {
-      ram.mem_write(i as u16, (i & 0xff) as u8);
+      ram.mem_write(MemAddr(i as u16), (i & 0xff) as u8);
     }
 
-    assert_eq!(0x20, ram.mem_read(0x0020));
-    assert_eq!(0x21, ram.mem_read(0x0121));
-    assert_eq!(0x22, ram.mem_read(0x2022));
-    assert_eq!(0x23, ram.mem_read(0xf023));
+    assert_eq!(0x20, ram.mem_read(MemAddr(0x0020)));
+    assert_eq!(0x21, ram.mem_read(MemAddr(0x0121)));
+    assert_eq!(0x22, ram.mem_read(MemAddr(0x2022)));
+    assert_eq!(0x23, ram.mem_read(MemAddr(0xf023)));
   }
 
   #[test]
@@ -174,10 +174,10 @@ mod test {
     let mut bytes: &[u8] = &mut contents[..];
     let rom = ROM32::new(&mut bytes).unwrap();
 
-    assert_eq!(0x20, rom.mem_read(0x0020));
-    assert_eq!(0x21, rom.mem_read(0x0121));
-    assert_eq!(0x22, rom.mem_read(0x2022));
-    assert_eq!(0x23, rom.mem_read(0xf023));
+    assert_eq!(0x20, rom.mem_read(MemAddr(0x0020)));
+    assert_eq!(0x21, rom.mem_read(MemAddr(0x0121)));
+    assert_eq!(0x22, rom.mem_read(MemAddr(0x2022)));
+    assert_eq!(0x23, rom.mem_read(MemAddr(0xf023)));
   }
 
   #[test]
@@ -191,18 +191,18 @@ mod test {
     let mut slot = Expanded::new(roms);
 
     // Initial config: all pages pointing to subslot 0
-    assert_eq!(0xff, slot.mem_read(0xffff));
-    assert_eq!(0, slot.mem_read(0x1001));
-    assert_eq!(0, slot.mem_read(0x5001));
-    assert_eq!(0, slot.mem_read(0x9001));
-    assert_eq!(0, slot.mem_read(0xd001));
+    assert_eq!(0xff, slot.mem_read(MemAddr(0xffff)));
+    assert_eq!(0, slot.mem_read(MemAddr(0x1001)));
+    assert_eq!(0, slot.mem_read(MemAddr(0x5001)));
+    assert_eq!(0, slot.mem_read(MemAddr(0x9001)));
+    assert_eq!(0, slot.mem_read(MemAddr(0xd001)));
 
     // Let's configure page i in subslot i
-    slot.mem_write(0xffff, 0b11100100);
-    assert_eq!(0b00011011, slot.mem_read(0xffff));
-    assert_eq!(0, slot.mem_read(0x1001));
-    assert_eq!(1, slot.mem_read(0x5001));
-    assert_eq!(2, slot.mem_read(0x9001));
-    assert_eq!(3, slot.mem_read(0xd001));
+    slot.mem_write(MemAddr(0xffff), 0b11100100);
+    assert_eq!(0b00011011, slot.mem_read(MemAddr(0xffff)));
+    assert_eq!(0, slot.mem_read(MemAddr(0x1001)));
+    assert_eq!(1, slot.mem_read(MemAddr(0x5001)));
+    assert_eq!(2, slot.mem_read(MemAddr(0x9001)));
+    assert_eq!(3, slot.mem_read(MemAddr(0xd001)));
   }
 }

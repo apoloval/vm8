@@ -62,7 +62,7 @@ pub struct Bus<'a, S: 'a + slot::Config> {
 
 impl<'a, S: 'a + slot::Config> Bus<'a, S> {
   fn slot(&self, addr: z80::MemAddr) -> u8 {
-    let page = (addr & 0xc000) >> 14;
+    let page = (addr.0 & 0xc000) >> 14;
     let cfg = self.ppi.port_a();
     match page {
       0 => cfg & 0x03,

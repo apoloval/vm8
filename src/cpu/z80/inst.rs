@@ -5,7 +5,7 @@ use crate::cpu::z80::MemBus;
 use crate::cpu::z80::exec::*;
 
 pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
-  let pc = ctx.regs().pc;
+  let pc = ctx.regs().pc_addr();
   let opcode = ctx.mem().mem_read(pc);
   match opcode {
     0x00 => nop(ctx),
@@ -313,7 +313,7 @@ pub fn ld16<C: Context, S: Src16, D: Dst16>(ctx: &mut C, dst: D, src: S) -> Cycl
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::cpu::z80::TestBench;
+  use crate::cpu::z80::{MemAddr, TestBench};
 
   #[test]
   fn inst_nop() {
@@ -328,7 +328,7 @@ mod test {
     let mut ctx = TestBench::new();
     ctx.regs.af.r8_mut().h = 0x42;
     *ctx.regs.hl.r16_mut() = 0x4001;
-    ctx.mem_mut().mem_write(0x4001, 0x19);
+    ctx.mem_mut().mem_write(MemAddr(0x4001), 0x19);
     let cycles = add8(&mut ctx, IndReg8::HL);
     assert_eq!(0x5b, ctx.regs.af.r8().h);
     assert_eq!(0x0001, ctx.regs.pc);

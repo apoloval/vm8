@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::num::Wrapping;
+use std::ops::Add;
 
 use byteorder::{ByteOrder, LittleEndian};
 
@@ -11,7 +12,27 @@ mod regs;
 
 use regs::RegBank;
 
-pub type MemAddr = u16;
+// A memory address for the Z80.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct MemAddr(pub u16);
+
+impl Add<u16> for MemAddr {
+  type Output = MemAddr;
+  fn add(self, other: u16) -> MemAddr {
+    let Wrapping(result) = Wrapping(self.0) + Wrapping(other);
+    MemAddr(result)
+  }
+}
+
+impl From<MemAddr> for u16 {
+  fn from(addr: MemAddr) -> u16 { addr.0 }
+}
+
+impl From<MemAddr> for usize {
+  fn from(addr: MemAddr) -> usize { addr.0 as usize }
+}
+
+
 pub type IOAddr = u8;
 
 
@@ -21,29 +42,30 @@ pub trait MemBus {
   fn mem_write(&mut self, addr: MemAddr, val: u8);
 
   fn mem_read16(&self, addr: MemAddr) -> u16 {
-    let Wrapping(addr2) = Wrapping(addr) + Wrapping(1);
-    let bytes = [ self.mem_read(addr), self.mem_read(addr2) ];
+    let bytes = [
+      self.mem_read(addr),
+      self.mem_read(addr + 1),
+    ];
     LittleEndian::read_u16(&bytes)
   }
 
   fn mem_write16(&mut self, addr: MemAddr, val: u16) {
-    let Wrapping(addr2) = Wrapping(addr) + Wrapping(1);
     let mut data = [0; 2];
     LittleEndian::write_u16(&mut data, val);
     self.mem_write(addr, data[0]);
-    self.mem_write(addr2, data[1]);
+    self.mem_write(addr + 1, data[1]);
   }
 }
 
 // An implementation of a memory bus for vectors for testing purposes
 impl MemBus for Vec<u8> {
   fn mem_read(&self, addr: MemAddr) -> u8 {
-    let offset = (addr as usize) % self.len();
+    let offset = (addr.0 as usize) % self.len();
     self[offset]
   }
 
   fn mem_write(&mut self, addr: MemAddr, val: u8) {
-    let offset = (addr as usize) % self.len();
+    let offset = (addr.0 as usize) % self.len();
     self[offset] = val;
   }
 }
