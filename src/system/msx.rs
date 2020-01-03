@@ -1,27 +1,27 @@
 use std::{io as stdio};
 use std::time::Duration;
 
-use crate::cpu::z80;
+use crate::cpu::z80::{MemAddr, IOAddr, MemBus, IOBus, CPU};
 use crate::emu::{Freq, Scheduler};
 use crate::io;
 
 pub mod slot;
 
-const IOPORT_PPI_A: z80::IOAddr = 0xa8;
-const IOPORT_PPI_B: z80::IOAddr = 0xa9;
-const IOPORT_PPI_C: z80::IOAddr = 0xaa;
+const IOPORT_PPI_A: IOAddr = IOAddr(0xa8);
+const IOPORT_PPI_B: IOAddr = IOAddr(0xa9);
+const IOPORT_PPI_C: IOAddr = IOAddr(0xaa);
 
 const CPU_FREQ: Freq = Freq::from_khz(35_800);
 
 pub struct MSX<S: slot::Config> {
-  cpu: z80::CPU,
+  cpu: CPU,
   slots: S,
   ppi: io::I8255,
 }
 
 impl<S: slot::Config> MSX<S> {
   pub fn new(slots: S) -> MSX<S> {
-    let cpu = z80::CPU::new();
+    let cpu = CPU::new();
     let ppi = io::I8255::new();
     MSX { cpu, slots, ppi }
   }
@@ -61,7 +61,7 @@ pub struct Bus<'a, S: 'a + slot::Config> {
 }
 
 impl<'a, S: 'a + slot::Config> Bus<'a, S> {
-  fn slot(&self, addr: z80::MemAddr) -> u8 {
+  fn slot(&self, addr: MemAddr) -> u8 {
     let page = (addr.0 & 0xc000) >> 14;
     let cfg = self.ppi.port_a();
     match page {
@@ -74,8 +74,8 @@ impl<'a, S: 'a + slot::Config> Bus<'a, S> {
   }
 }
 
-impl<'a, S: 'a + slot::Config> z80::MemBus for Bus<'a, S> {
-  fn mem_read(&self, addr: z80::MemAddr) -> u8 {
+impl<'a, S: 'a + slot::Config> MemBus for Bus<'a, S> {
+  fn mem_read(&self, addr: MemAddr) -> u8 {
     match self.slot(addr) {
       0 => self.slots.slot0().mem_read(addr),
       1 => self.slots.slot1().mem_read(addr),
@@ -85,7 +85,7 @@ impl<'a, S: 'a + slot::Config> z80::MemBus for Bus<'a, S> {
     }
   }
 
-  fn mem_write(&mut self, addr: z80::MemAddr, val: u8) {
+  fn mem_write(&mut self, addr: MemAddr, val: u8) {
     match self.slot(addr) {
       0 => self.slots.slot0_mut().mem_write(addr, val),
       1 => self.slots.slot1_mut().mem_write(addr, val),
@@ -96,8 +96,8 @@ impl<'a, S: 'a + slot::Config> z80::MemBus for Bus<'a, S> {
   }
 }
 
-impl<'a, S: 'a + slot::Config> z80::IOBus for Bus<'a, S> {
-  fn io_read(&self, addr: z80::IOAddr) -> u8 {
+impl<'a, S: 'a + slot::Config> IOBus for Bus<'a, S> {
+  fn io_read(&self, addr: IOAddr) -> u8 {
     match addr {
       IOPORT_PPI_A => self.ppi.port_a(),
       IOPORT_PPI_B => self.ppi.port_b(),
@@ -106,7 +106,7 @@ impl<'a, S: 'a + slot::Config> z80::IOBus for Bus<'a, S> {
     }
   }
 
-  fn io_write(&mut self, addr: z80::IOAddr, val: u8) {
+  fn io_write(&mut self, addr: IOAddr, val: u8) {
     match addr {
       IOPORT_PPI_A => self.ppi.set_port_a(val),
       IOPORT_PPI_B => self.ppi.set_port_b(val),

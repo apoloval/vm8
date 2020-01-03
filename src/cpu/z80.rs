@@ -33,7 +33,9 @@ impl From<MemAddr> for usize {
 }
 
 
-pub type IOAddr = u8;
+// A IO port for the Z80.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct IOAddr(pub u8);
 
 
 // A memory bus
