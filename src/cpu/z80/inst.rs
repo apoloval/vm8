@@ -1,6 +1,6 @@
 use std::num::Wrapping;
 
-use crate::cpu::z80::{Cycles, MemBus, IOBus};
+use crate::cpu::z80::{Cycles, MemBus};
 use crate::cpu::z80::exec::*;
 
 pub fn exec_inst<C: Context>(ctx: &mut C) -> Cycles {
@@ -312,45 +312,45 @@ pub fn ld16<C: Context, S: Src16, D: Dst16>(ctx: &mut C, dst: D, src: S) -> Cycl
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::cpu::z80::CPU;
+  use crate::cpu::z80::TestBench;
 
   #[test]
   fn inst_nop() {
-      let mut cpu = CPU::testbench();
-      let cycles = nop(&mut cpu);
-      assert_eq!(0x0001, cpu.regs.pc);
-      assert_eq!(4, cycles);
+    let mut ctx = TestBench::new();
+    let cycles = nop(&mut ctx);
+    assert_eq!(0x0001, ctx.regs.pc);
+    assert_eq!(4, cycles);
   }
 
   #[test]
   fn inst_add8() {
-      let mut cpu = CPU::testbench();
-      cpu.regs.af.r8_mut().h = 0x42;
-      *cpu.regs.hl.r16_mut() = 0x4001;
-      cpu.mem_mut().mem_write(0x4001, 0x19);
-      let cycles = add8(&mut cpu, IndReg8::HL);
-      assert_eq!(0x5b, cpu.regs.af.r8().h);
-      assert_eq!(0x0001, cpu.regs.pc);
-      assert_eq!(7, cycles);
+    let mut ctx = TestBench::new();
+    ctx.regs.af.r8_mut().h = 0x42;
+    *ctx.regs.hl.r16_mut() = 0x4001;
+    ctx.mem_mut().mem_write(0x4001, 0x19);
+    let cycles = add8(&mut ctx, IndReg8::HL);
+    assert_eq!(0x5b, ctx.regs.af.r8().h);
+    assert_eq!(0x0001, ctx.regs.pc);
+    assert_eq!(7, cycles);
   }
 
   #[test]
   fn inst_ld8() {
-      let mut cpu = CPU::testbench();
-      cpu.regs.bc.r8_mut().h = 0x42;
-      let cycles = ld8(&mut cpu, Reg8::A, Reg8::B);
-      assert_eq!(0x42, cpu.regs.af.r8().h);
-      assert_eq!(0x0001, cpu.regs.pc);
-      assert_eq!(4, cycles);
+    let mut ctx = TestBench::new();
+    ctx.regs.bc.r8_mut().h = 0x42;
+    let cycles = ld8(&mut ctx, Reg8::A, Reg8::B);
+    assert_eq!(0x42, ctx.regs.af.r8().h);
+    assert_eq!(0x0001, ctx.regs.pc);
+    assert_eq!(4, cycles);
   }
 
   #[test]
   fn inst_ld16() {
-      let mut cpu = CPU::testbench();
-      *cpu.regs_mut().hl.r16_mut() = 1001;
-      let cycles = ld16(&mut cpu, Reg16::SP, Reg16::HL);
-      assert_eq!(1001, cpu.regs.sp);
-      assert_eq!(0x0001, cpu.regs.pc);
-      assert_eq!(6, cycles);
+    let mut ctx = TestBench::new();
+    *ctx.regs_mut().hl.r16_mut() = 1001;
+    let cycles = ld16(&mut ctx, Reg16::SP, Reg16::HL);
+    assert_eq!(1001, ctx.regs.sp);
+    assert_eq!(0x0001, ctx.regs.pc);
+    assert_eq!(6, cycles);
   }
 }

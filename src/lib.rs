@@ -1,4 +1,6 @@
 pub mod cpu;
+pub mod io;
+pub mod system;
 
 #[cfg(test)]
 mod tests {

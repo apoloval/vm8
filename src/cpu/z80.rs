@@ -9,10 +9,11 @@ mod regs;
 
 use regs::RegBank;
 
-type Cycles = usize;
+pub type Cycles = usize;
 
-type MemAddr = u16;
-type IOAddr = u8;
+pub type MemAddr = u16;
+pub type IOAddr = u8;
+
 
 // A memory bus
 pub trait MemBus {
@@ -47,12 +48,6 @@ impl MemBus for Vec<u8> {
   }
 }
 
-// An implementation of memory bus for any binary tuple having a mem bus as first element.
-// This is useful for testing, since it enables a tuple of mem and IO buses to implement `Bus`.
-impl<T1: MemBus, T2> MemBus for (T1, T2) {
-  fn mem_read(&self, addr: MemAddr) -> u8 { self.0.mem_read(addr) }
-  fn mem_write(&mut self, addr: MemAddr, val: u8) { self.0.mem_write(addr, val) }
-}
 
 // An IO bus
 pub trait IOBus {
@@ -66,42 +61,42 @@ impl IOBus for HashMap<IOAddr, u8> {
   fn io_write(&mut self, addr: IOAddr, val: u8) { self.insert(addr, val); }
 }
 
-// An implementation of IO bus for any binary tuple having an IO bus as second element.
-// This is useful for testing, since it enables a tuple of mem and IO buses to implement `Bus`.
-impl<T1, T2: IOBus> IOBus for (T1, T2) {
-  fn io_read(&self, addr: IOAddr) -> u8 { self.1.io_read(addr) }
-  fn io_write(&mut self, addr: IOAddr, val: u8) { self.1.io_write(addr, val) }
-}
 
+// A Z80 bus, comprised by memory and IO sub-buses.
 pub trait Bus : MemBus + IOBus {}
 
 impl<T: MemBus + IOBus> Bus for T {}
 
-pub struct CPU<B: Bus> {
-  bus: B,
+
+// The Z80 CPU.
+pub struct CPU {
   regs: RegBank,
 }
 
-impl<B: Bus> CPU<B> {
-  pub fn new(bus: B) -> CPU<B> {
+impl CPU {
+  pub fn new() -> CPU {
     CPU {
       regs: RegBank::default(),
-      bus,
     }
   }
-}
 
-impl CPU<(Vec<u8>, HashMap<IOAddr, u8>)> {
-  fn testbench() -> CPU<(Vec<u8>, HashMap<IOAddr, u8>)> {
-    let mut memory = Vec::with_capacity(64*1024);
-    memory.resize(64*1024, 0);
-    let io = HashMap::new();
-    let bus = (memory, io);
-    Self::new(bus)
+  pub fn exec<B: Bus>(&mut self, bus: &mut B) {
+    let mut ctx = CPUContext {
+      regs: &mut self.regs,
+      bus: bus,
+    };
+    inst::exec_inst(&mut ctx);
   }
 }
 
-impl<B: Bus> exec::Context for CPU<B> {
+
+// A value that contains the context of the CPU for its execution.
+struct CPUContext<'a, B: 'a + Bus> {
+  regs: &'a mut RegBank,
+  bus: &'a mut B,
+}
+
+impl<'a, B: 'a + Bus> exec::Context for CPUContext<'a, B> {
   type Mem = B;
   type IO = B;
 
@@ -111,4 +106,35 @@ impl<B: Bus> exec::Context for CPU<B> {
   fn mem_mut(&mut self) -> &mut Self::Mem { &mut self.bus }
   fn io(&self) -> &Self::IO { &self.bus }
   fn io_mut(&mut self) -> &mut Self::IO { &mut self.bus }
+}
+
+
+// A testbench for Z80 testing. This type implements `exec::Context` trait with trivial
+// memory and IO registers, what makes it a good candidate for testing purposes.
+pub struct TestBench {
+  pub regs: RegBank,
+  pub mem: Vec<u8>,
+  pub io: HashMap<IOAddr, u8>,
+}
+
+impl TestBench {
+  pub fn new() -> TestBench {
+    let regs = RegBank::default();
+    let mut mem = Vec::with_capacity(64*1024);
+    mem.resize(64*1024, 0);
+    let io = HashMap::new();
+    TestBench { regs, mem, io }
+  }
+}
+
+impl exec::Context for TestBench {
+  type Mem = Vec<u8>;
+  type IO = HashMap<IOAddr, u8>;
+
+  fn regs(&self) -> &RegBank { &self.regs }
+  fn regs_mut(&mut self) -> &mut RegBank { &mut self.regs }
+  fn mem(&self) -> &Self::Mem { &self.mem }
+  fn mem_mut(&mut self) -> &mut Self::Mem { &mut self.mem }
+  fn io(&self) -> &Self::IO { &self.io }
+  fn io_mut(&mut self) -> &mut Self::IO { &mut self.io }
 }

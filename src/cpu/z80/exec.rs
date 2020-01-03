@@ -238,153 +238,153 @@ impl Dst16 for Addr16 {
 mod test {
   use super::*;
 
-  use crate::cpu::z80::CPU;
+  use crate::cpu::z80::TestBench;
 
   #[test]
   fn reg8_load() {
-      let mut cpu = CPU::testbench();
-      *cpu.regs.af.r16_mut() = 0x0100;
-      *cpu.regs.bc.r16_mut() = 0x0203;
-      *cpu.regs.de.r16_mut() = 0x0405;
-      *cpu.regs.hl.r16_mut() = 0x0607;
+    let mut ctx = TestBench::new();
+    *ctx.regs.af.r16_mut() = 0x0100;
+    *ctx.regs.bc.r16_mut() = 0x0203;
+    *ctx.regs.de.r16_mut() = 0x0405;
+    *ctx.regs.hl.r16_mut() = 0x0607;
 
-      assert_eq!(0x01, Reg8::A.load(&cpu));
-      assert_eq!(0x02, Reg8::B.load(&cpu));
-      assert_eq!(0x03, Reg8::C.load(&cpu));
-      assert_eq!(0x04, Reg8::D.load(&cpu));
-      assert_eq!(0x05, Reg8::E.load(&cpu));
-      assert_eq!(0x06, Reg8::H.load(&cpu));
-      assert_eq!(0x07, Reg8::L.load(&cpu));
+    assert_eq!(0x01, Reg8::A.load(&ctx));
+    assert_eq!(0x02, Reg8::B.load(&ctx));
+    assert_eq!(0x03, Reg8::C.load(&ctx));
+    assert_eq!(0x04, Reg8::D.load(&ctx));
+    assert_eq!(0x05, Reg8::E.load(&ctx));
+    assert_eq!(0x06, Reg8::H.load(&ctx));
+    assert_eq!(0x07, Reg8::L.load(&ctx));
   }
 
   #[test]
   fn reg8_store() {
-      let mut cpu = CPU::testbench();
-      Reg8::A.store(&mut cpu, 0x01);
-      Reg8::B.store(&mut cpu, 0x02);
-      Reg8::C.store(&mut cpu, 0x03);
-      Reg8::D.store(&mut cpu, 0x04);
-      Reg8::E.store(&mut cpu, 0x05);
-      Reg8::H.store(&mut cpu, 0x06);
-      Reg8::L.store(&mut cpu, 0x07);
+    let mut ctx = TestBench::new();
+    Reg8::A.store(&mut ctx, 0x01);
+    Reg8::B.store(&mut ctx, 0x02);
+    Reg8::C.store(&mut ctx, 0x03);
+    Reg8::D.store(&mut ctx, 0x04);
+    Reg8::E.store(&mut ctx, 0x05);
+    Reg8::H.store(&mut ctx, 0x06);
+    Reg8::L.store(&mut ctx, 0x07);
 
-      assert_eq!(0x01, cpu.regs.af.r8().h);
-      assert_eq!(0x02, cpu.regs.bc.r8().h);
-      assert_eq!(0x03, cpu.regs.bc.r8().l);
-      assert_eq!(0x04, cpu.regs.de.r8().h);
-      assert_eq!(0x05, cpu.regs.de.r8().l);
-      assert_eq!(0x06, cpu.regs.hl.r8().h);
-      assert_eq!(0x07, cpu.regs.hl.r8().l);
+    assert_eq!(0x01, ctx.regs.af.r8().h);
+    assert_eq!(0x02, ctx.regs.bc.r8().h);
+    assert_eq!(0x03, ctx.regs.bc.r8().l);
+    assert_eq!(0x04, ctx.regs.de.r8().h);
+    assert_eq!(0x05, ctx.regs.de.r8().l);
+    assert_eq!(0x06, ctx.regs.hl.r8().h);
+    assert_eq!(0x07, ctx.regs.hl.r8().l);
   }
 
   #[test]
   fn indreg8_load() {
-      let mut cpu = CPU::testbench();
-      *cpu.regs.bc.r16_mut() = 0x1001;
-      *cpu.regs.de.r16_mut() = 0x1002;
-      *cpu.regs.hl.r16_mut() = 0x1003;
-      cpu.mem_mut().mem_write(0x1001, 101);
-      cpu.mem_mut().mem_write(0x1002, 102);
-      cpu.mem_mut().mem_write(0x1003, 103);
+    let mut ctx = TestBench::new();
+    *ctx.regs.bc.r16_mut() = 0x1001;
+    *ctx.regs.de.r16_mut() = 0x1002;
+    *ctx.regs.hl.r16_mut() = 0x1003;
+    ctx.mem_mut().mem_write(0x1001, 101);
+    ctx.mem_mut().mem_write(0x1002, 102);
+    ctx.mem_mut().mem_write(0x1003, 103);
 
-      assert_eq!(101, IndReg8::BC.load(&cpu));
-      assert_eq!(102, IndReg8::DE.load(&cpu));
-      assert_eq!(103, IndReg8::HL.load(&cpu));
+    assert_eq!(101, IndReg8::BC.load(&ctx));
+    assert_eq!(102, IndReg8::DE.load(&ctx));
+    assert_eq!(103, IndReg8::HL.load(&ctx));
   }
 
   #[test]
   fn indreg8_store() {
-      let mut cpu = CPU::testbench();
-      *cpu.regs.bc.r16_mut() = 0x1001;
-      *cpu.regs.de.r16_mut() = 0x1002;
-      *cpu.regs.hl.r16_mut() = 0x1003;
-      IndReg8::BC.store(&mut cpu, 101);
-      IndReg8::DE.store(&mut cpu, 102);
-      IndReg8::HL.store(&mut cpu, 103);
+    let mut ctx = TestBench::new();
+    *ctx.regs.bc.r16_mut() = 0x1001;
+    *ctx.regs.de.r16_mut() = 0x1002;
+    *ctx.regs.hl.r16_mut() = 0x1003;
+    IndReg8::BC.store(&mut ctx, 101);
+    IndReg8::DE.store(&mut ctx, 102);
+    IndReg8::HL.store(&mut ctx, 103);
 
-      assert_eq!(101, cpu.mem().mem_read(0x1001));
-      assert_eq!(102, cpu.mem().mem_read(0x1002));
-      assert_eq!(103, cpu.mem().mem_read(0x1003));
+    assert_eq!(101, ctx.mem().mem_read(0x1001));
+    assert_eq!(102, ctx.mem().mem_read(0x1002));
+    assert_eq!(103, ctx.mem().mem_read(0x1003));
   }
 
   #[test]
   fn reg16_load() {
-      let mut cpu = CPU::testbench();
-      *cpu.regs.bc.r16_mut() = 1001;
-      *cpu.regs.de.r16_mut() = 1002;
-      *cpu.regs.hl.r16_mut() = 1003;
+    let mut ctx = TestBench::new();
+    *ctx.regs.bc.r16_mut() = 1001;
+    *ctx.regs.de.r16_mut() = 1002;
+    *ctx.regs.hl.r16_mut() = 1003;
 
-      assert_eq!(1001, Reg16::BC.load(&cpu));
-      assert_eq!(1002, Reg16::DE.load(&cpu));
-      assert_eq!(1003, Reg16::HL.load(&cpu));
+    assert_eq!(1001, Reg16::BC.load(&ctx));
+    assert_eq!(1002, Reg16::DE.load(&ctx));
+    assert_eq!(1003, Reg16::HL.load(&ctx));
   }
 
   #[test]
   fn reg16_store() {
-      let mut cpu = CPU::testbench();
-      Reg16::BC.store(&mut cpu, 1001);
-      Reg16::DE.store(&mut cpu, 1002);
-      Reg16::HL.store(&mut cpu, 1003);
+    let mut ctx = TestBench::new();
+    Reg16::BC.store(&mut ctx, 1001);
+    Reg16::DE.store(&mut ctx, 1002);
+    Reg16::HL.store(&mut ctx, 1003);
 
-      assert_eq!(1001, cpu.regs().bc.r16());
-      assert_eq!(1002, cpu.regs().de.r16());
-      assert_eq!(1003, cpu.regs().hl.r16());
+    assert_eq!(1001, ctx.regs().bc.r16());
+    assert_eq!(1002, ctx.regs().de.r16());
+    assert_eq!(1003, ctx.regs().hl.r16());
   }
 
   #[test]
   fn liter8_load() {
-      let mut cpu = CPU::testbench();
-      cpu.regs_mut().pc = 0x4000;
-      cpu.mem_mut().mem_write(0x4001, 101);
-      assert_eq!(101, Liter8.load(&cpu));
+    let mut ctx = TestBench::new();
+    ctx.regs_mut().pc = 0x4000;
+    ctx.mem_mut().mem_write(0x4001, 101);
+    assert_eq!(101, Liter8.load(&ctx));
   }
 
   #[test]
   fn liter16_load() {
-      let mut cpu = CPU::testbench();
-      cpu.regs_mut().pc = 0x4000;
-      cpu.mem_mut().mem_write16(0x4001, 0x1234);
-      assert_eq!(0x1234, Liter16.load(&cpu));
+    let mut ctx = TestBench::new();
+    ctx.regs_mut().pc = 0x4000;
+    ctx.mem_mut().mem_write16(0x4001, 0x1234);
+    assert_eq!(0x1234, Liter16.load(&ctx));
   }
 
   #[test]
   fn addr8_load() {
-      let mut cpu = CPU::testbench();
-      cpu.regs_mut().pc = 0x4000;
-      cpu.mem_mut().mem_write16(0x4001, 0x1234);
-      cpu.mem_mut().mem_write(0x1234, 101);
-      assert_eq!(101, Addr8.load(& cpu));
+    let mut ctx = TestBench::new();
+    ctx.regs_mut().pc = 0x4000;
+    ctx.mem_mut().mem_write16(0x4001, 0x1234);
+    ctx.mem_mut().mem_write(0x1234, 101);
+    assert_eq!(101, Addr8.load(& ctx));
   }
 
   #[test]
   fn addr8_store() {
-      let mut cpu = CPU::testbench();
-      cpu.regs_mut().pc = 0x4000;
-      cpu.mem_mut().mem_write16(0x4001, 0x1234);
+    let mut ctx = TestBench::new();
+    ctx.regs_mut().pc = 0x4000;
+    ctx.mem_mut().mem_write16(0x4001, 0x1234);
 
-      Addr8.store(&mut cpu, 101);
+    Addr8.store(&mut ctx, 101);
 
-      assert_eq!(101, cpu.mem().mem_read(0x1234));
-  }
+    assert_eq!(101, ctx.mem().mem_read(0x1234));
+}
 
   #[test]
   fn addr16_load() {
-      let mut cpu = CPU::testbench();
-      cpu.regs_mut().pc = 0x4000;
-      cpu.mem_mut().mem_write16(0x4001, 0x1234);
-      cpu.mem_mut().mem_write16(0x1234, 0x4567);
-      assert_eq!(0x4567, Addr16.load(&cpu));
+    let mut ctx = TestBench::new();
+    ctx.regs_mut().pc = 0x4000;
+    ctx.mem_mut().mem_write16(0x4001, 0x1234);
+    ctx.mem_mut().mem_write16(0x1234, 0x4567);
+    assert_eq!(0x4567, Addr16.load(&ctx));
   }
 
   #[test]
   fn addr16_store() {
-      let mut cpu = CPU::testbench();
-      cpu.regs_mut().pc = 0x4000;
-      cpu.mem_mut().mem_write(0x4001, 0x34);
-      cpu.mem_mut().mem_write(0x4002, 0x12);
+    let mut ctx = TestBench::new();
+    ctx.regs_mut().pc = 0x4000;
+    ctx.mem_mut().mem_write(0x4001, 0x34);
+    ctx.mem_mut().mem_write(0x4002, 0x12);
 
-      Addr16.store(&mut cpu, 0x4567);
+    Addr16.store(&mut ctx, 0x4567);
 
-      assert_eq!(0x4567, cpu.mem().mem_read16(0x1234));
+    assert_eq!(0x4567, ctx.mem().mem_read16(0x1234));
   }
 }
