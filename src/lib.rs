@@ -1,4 +1,8 @@
+#![allow(dead_code)]
+#![allow(unused_macros)]
+
 pub mod cpu;
+pub mod dev;
 pub mod emu;
 pub mod io;
 pub mod system;
