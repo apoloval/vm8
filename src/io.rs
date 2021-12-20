@@ -1,7 +1,7 @@
 use std::boxed::Box;
 use std::marker::PhantomData;
 
-use bus::{Address, Bus, Data};
+use crate::bus::{Address, Bus, Data};
 
 pub struct Linear<A: Address, D: Data> {
     address: PhantomData<A>,
