@@ -17,8 +17,8 @@ impl Register {
     pub fn low(&self) -> u8 { unsafe { self.as_byte.l } }
     pub fn high(&self) -> u8 { unsafe { self.as_byte.h } }
 
-    pub fn set_low(&mut self, val: u8) { unsafe { self.as_byte.l = val } }
-    pub fn set_high(&mut self, val: u8) { unsafe { self.as_byte.h = val } }
+    pub fn set_low(&mut self, val: u8) { self.as_byte.l = val }
+    pub fn set_high(&mut self, val: u8) { self.as_byte.h = val }
 }
 
 impl Default for Register {
