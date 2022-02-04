@@ -1,4 +1,5 @@
 pub mod z80;
+pub mod z81;
 
 #[derive(Default)]
 pub struct ExecutionPlan {
