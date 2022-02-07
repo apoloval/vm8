@@ -155,8 +155,26 @@ impl CPU {
             0x8D => self.add8(bus, op::Reg8::A, op::Reg8::L, true, 1, 4),
             0x8E => self.add8(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), true, 1, 7),
             0x8F => self.add8(bus, op::Reg8::A, op::Reg8::A, true, 1, 4),
+            0x90 => self.sub8(bus, op::Reg8::A, op::Reg8::B, false, 1, 4),
+            0x91 => self.sub8(bus, op::Reg8::A, op::Reg8::C, false, 1, 4),
+            0x92 => self.sub8(bus, op::Reg8::A, op::Reg8::D, false, 1, 4),
+            0x93 => self.sub8(bus, op::Reg8::A, op::Reg8::E, false, 1, 4),
+            0x94 => self.sub8(bus, op::Reg8::A, op::Reg8::H, false, 1, 4),
+            0x95 => self.sub8(bus, op::Reg8::A, op::Reg8::L, false, 1, 4),
+            0x96 => self.sub8(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), false, 1, 7),
+            0x97 => self.sub8(bus, op::Reg8::A, op::Reg8::A, false, 1, 4),
+            0x98 => self.sub8(bus, op::Reg8::A, op::Reg8::B, true, 1, 4),
+            0x99 => self.sub8(bus, op::Reg8::A, op::Reg8::C, true, 1, 4),
+            0x9A => self.sub8(bus, op::Reg8::A, op::Reg8::D, true, 1, 4),
+            0x9B => self.sub8(bus, op::Reg8::A, op::Reg8::E, true, 1, 4),
+            0x9C => self.sub8(bus, op::Reg8::A, op::Reg8::H, true, 1, 4),
+            0x9D => self.sub8(bus, op::Reg8::A, op::Reg8::L, true, 1, 4),
+            0x9E => self.sub8(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), true, 1, 7),
+            0x9F => self.sub8(bus, op::Reg8::A, op::Reg8::A, true, 1, 4),
             0xC6 => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xCE => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
+            0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
+            0xDE => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
             0xF9 => self.ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             _ => unimplemented!(),
         }
@@ -175,9 +193,9 @@ impl CPU {
 
         self.regs.update_flags(
             flag::intrinsic(c) * 
-            flag::H.on(flag::carry_byte(a, c)) * 
+            flag::H.on(flag::carry_nibble(a, c)) * 
             flag::V.on(flag::overflow(a, b, c)) * 
-            flag::C.on(flag::carry(a, c, 0x0FFF)) - flag::N
+            flag::C.on(flag::carry_byte(a, c)) - flag::N
         );
 
         self.regs.inc_pc(size);
@@ -265,4 +283,27 @@ impl CPU {
         self.regs.inc_pc(1);
         self.cycles += 4;
     }
+
+    fn sub8<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, with_carry: bool, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let mut b = src.get(&ctx);
+        if with_carry && ctx.regs.flag(flag::C) {
+            b += 1;
+        }
+        let c = a - b;
+        dst.set(&mut ctx, c);
+
+        self.regs.update_flags(
+            flag::intrinsic(c) * 
+            flag::H.on(flag::borrow_nibble(a, c)) * 
+            flag::V.on(flag::underflow(a, b, c)) * 
+            flag::C.on(flag::borrow_byte(a, c)) + flag::N
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
 }
