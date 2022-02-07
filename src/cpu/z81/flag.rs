@@ -103,7 +103,7 @@ impl Affection {
 /// Intrinsic flags are those that do not depend on the operation performed, but the result. They are
 /// S, Z, F5 and F3. 
 pub fn intrinsic(val: u8) -> Affection {
-    S.on(val & 0x80 > 0) * Z.on(val == 0) * intrinsic_undocumented(val)
+    S.on(signed(val)) * Z.on(val == 0) * intrinsic_undocumented(val)
 }
 
 /// Return the intrinsic values of undocumented flags F3 and F5.
@@ -131,6 +131,18 @@ pub fn borrow<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
 
 #[inline] pub fn overflow(a: u8, b: u8, c: u8) -> bool { ((a ^ b ^ 0x80) & (b ^ c) & 0x80) != 0 }
 #[inline] pub fn underflow(a: u8, b: u8, c: u8) -> bool {  ((a ^ b) & ((a ^ c) & 0x80)) != 0 }
+
+#[inline] 
+pub fn parity(mut c: u8) -> bool {
+    let mut ones = 0;
+    while c > 0 {
+        if c & 0x1 > 0 { ones += 1 }
+        c >>= 1;
+    }
+    ones % 2 == 0
+}
+
+#[inline] pub fn signed(c: u8) -> bool { c & 0x80 > 0 }
 
 #[cfg(test)]
 mod test {
@@ -168,5 +180,16 @@ mod test {
         assert_eq!(flags.apply(0b1000_0000), 0b1000_0000);
         assert_eq!(flags.apply(0b0100_0000), 0b1100_0000);
         assert_eq!(flags.apply(0b1100_0000), 0b1100_0000);
+    }
+
+    #[test]
+    fn test_parity() {
+        assert!(parity(0b0000_0000));
+        assert!(parity(0b0000_0011));
+        assert!(parity(0b0011_0011));
+
+        assert!(!parity(0b0000_0001));
+        assert!(!parity(0b0000_0111));
+        assert!(!parity(0b1011_0011));
     }
 }

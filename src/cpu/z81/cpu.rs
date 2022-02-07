@@ -171,6 +171,38 @@ impl CPU {
             0x9D => self.sub8(bus, op::Reg8::A, op::Reg8::L, true, 1, 4),
             0x9E => self.sub8(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), true, 1, 7),
             0x9F => self.sub8(bus, op::Reg8::A, op::Reg8::A, true, 1, 4),
+            0xA0 => self.and(bus, op::Reg8::A, op::Reg8::B, 1, 4),
+            0xA1 => self.and(bus, op::Reg8::A, op::Reg8::C, 1, 4),
+            0xA2 => self.and(bus, op::Reg8::A, op::Reg8::D, 1, 4),
+            0xA3 => self.and(bus, op::Reg8::A, op::Reg8::E, 1, 4),
+            0xA4 => self.and(bus, op::Reg8::A, op::Reg8::H, 1, 4),
+            0xA5 => self.and(bus, op::Reg8::A, op::Reg8::L, 1, 4),
+            0xA6 => self.and(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), 1, 7),
+            0xA7 => self.and(bus, op::Reg8::A, op::Reg8::A,  1, 4),
+            0xA8 => self.xor(bus, op::Reg8::A, op::Reg8::B, 1, 4),
+            0xA9 => self.xor(bus, op::Reg8::A, op::Reg8::C, 1, 4),
+            0xAA => self.xor(bus, op::Reg8::A, op::Reg8::D, 1, 4),
+            0xAB => self.xor(bus, op::Reg8::A, op::Reg8::E, 1, 4),
+            0xAC => self.xor(bus, op::Reg8::A, op::Reg8::H, 1, 4),
+            0xAD => self.xor(bus, op::Reg8::A, op::Reg8::L, 1, 4),
+            0xAE => self.xor(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), 1, 7),
+            0xAF => self.xor(bus, op::Reg8::A, op::Reg8::A, 1, 4),
+            0xB0 => self.or(bus, op::Reg8::A, op::Reg8::B, 1, 4),
+            0xB1 => self.or(bus, op::Reg8::A, op::Reg8::C, 1, 4),
+            0xB2 => self.or(bus, op::Reg8::A, op::Reg8::D, 1, 4),
+            0xB3 => self.or(bus, op::Reg8::A, op::Reg8::E, 1, 4),
+            0xB4 => self.or(bus, op::Reg8::A, op::Reg8::H, 1, 4),
+            0xB5 => self.or(bus, op::Reg8::A, op::Reg8::L, 1, 4),
+            0xB6 => self.or(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), 1, 7),
+            0xB7 => self.or(bus, op::Reg8::A, op::Reg8::A,  1, 4),
+            0xB8 => self.cp(bus, op::Reg8::A, op::Reg8::B, 1, 4),
+            0xB9 => self.cp(bus, op::Reg8::A, op::Reg8::C, 1, 4),
+            0xBA => self.cp(bus, op::Reg8::A, op::Reg8::D, 1, 4),
+            0xBB => self.cp(bus, op::Reg8::A, op::Reg8::E, 1, 4),
+            0xBC => self.cp(bus, op::Reg8::A, op::Reg8::H, 1, 4),
+            0xBD => self.cp(bus, op::Reg8::A, op::Reg8::L, 1, 4),
+            0xBE => self.cp(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), 1, 7),
+            0xBF => self.cp(bus, op::Reg8::A, op::Reg8::A,  1, 4),
             0xC6 => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xCE => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
@@ -216,6 +248,44 @@ impl CPU {
             flag::intrinsic_undocumented(ch) * 
             flag::H.on(flag::carry(a, c, 0x0FFF)) * 
             flag::C.on(flag::carry(a, c, 0x0FFF)) - flag::N
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
+    fn and<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let b = src.get(&ctx);
+        let c = a & b;
+        dst.set(&mut ctx, c);
+
+        self.regs.update_flags(
+            flag::intrinsic(c) * 
+            flag::P.on(flag::parity(c)) * 
+            flag::C.on(flag::carry_byte(a, c)) + flag::H - flag::N - flag::C
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
+    fn cp<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
+        let ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let b = src.get(&ctx);
+        let c = a - b;
+
+        self.regs.update_flags(
+            flag::S.on(flag::signed(c)) * 
+            flag::Z.on(c == 0) * 
+            flag::intrinsic_undocumented(b) *
+            flag::H.on(flag::borrow_nibble(a, c)) * 
+            flag::V.on(flag::underflow(a, b, c)) * 
+            flag::C.on(flag::borrow_byte(a, c)) + flag::N
         );
 
         self.regs.inc_pc(size);
@@ -284,6 +354,24 @@ impl CPU {
         self.cycles += 4;
     }
 
+    fn or<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let b = src.get(&ctx);
+        let c = a | b;
+        dst.set(&mut ctx, c);
+
+        self.regs.update_flags(
+            flag::intrinsic(c) * 
+            flag::P.on(flag::parity(c)) * 
+            flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
     fn sub8<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, with_carry: bool, size: usize, cycles: usize) 
     where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
         let mut ctx = op::Context::from(bus, &mut self.regs);
@@ -306,4 +394,21 @@ impl CPU {
         self.cycles += cycles;
     }
 
+    fn xor<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let b = src.get(&ctx);
+        let c = a ^ b;
+        dst.set(&mut ctx, c);
+
+        self.regs.update_flags(
+            flag::intrinsic(c) * 
+            flag::P.on(flag::parity(c)) * 
+            flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
 }
