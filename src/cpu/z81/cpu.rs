@@ -33,7 +33,8 @@ impl CPU {
             0x03 => self.inc16(bus, op::Reg16::BC, 1, 6),
             0x04 => self.inc8(bus, op::Reg8::B, 1, 4),
             0x05 => self.dec8(bus, op::Reg8::B, 1, 4),
-            0x06 => self.ld(bus, op::Reg8::B, op::Imm8::with_offset(1), 2, 7),
+            0x06 => self.ld(bus, op::Reg8::B, op::Imm8::with_offset(1), 2, 7),            
+            0x09 => self.add16(bus, op::Reg16::HL, op::Reg16::BC, 1, 11),            
             0x0B => self.dec16(bus, op::Reg16::BC, 1, 6),
             0x0D => self.dec8(bus, op::Reg8::C, 1, 4),
             0x0A => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::BC), 1, 7),
@@ -47,6 +48,7 @@ impl CPU {
             0x16 => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
             0x1A => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::DE), 1, 7),
             0x1B => self.dec16(bus, op::Reg16::DE, 1, 6),
+            0x19 => self.add16(bus, op::Reg16::HL, op::Reg16::DE, 1, 11),
             0x1C => self.inc8(bus, op::Reg8::E, 1, 4),
             0x1D => self.dec8(bus, op::Reg8::E, 1, 4),
             0x1E => self.ld(bus, op::Reg8::E, op::Imm8::with_offset(1), 2, 7),
@@ -56,6 +58,7 @@ impl CPU {
             0x24 => self.inc8(bus, op::Reg8::H, 1, 4),
             0x25 => self.dec8(bus, op::Reg8::H, 1, 4),
             0x26 => self.ld(bus, op::Reg8::H, op::Imm8::with_offset(1), 2, 7),
+            0x29 => self.add16(bus, op::Reg16::HL, op::Reg16::HL, 1, 11),
             0x2A => self.ld(bus, op::Reg16::HL, op::Ind16(op::Imm16::with_offset(1)), 3, 16),
             0x2B => self.dec16(bus, op::Reg16::HL, 1, 6),
             0x2C => self.inc8(bus, op::Reg8::L, 1, 4),
@@ -67,6 +70,7 @@ impl CPU {
             0x34 => self.inc8(bus, op::Ind8(op::Reg16::HL), 1, 11),
             0x35 => self.dec8(bus, op::Ind8(op::Reg16::HL), 1, 11),
             0x36 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Imm8::with_offset(1), 2, 10),
+            0x39 => self.add16(bus, op::Reg16::HL, op::Reg16::SP, 1, 11),
             0x3A => self.ld(bus, op::Reg8::A, op::Ind8(op::Imm16::with_offset(1)), 3, 13),
             0x3B => self.dec16(bus, op::Reg16::SP, 1, 6),
             0x3C => self.inc8(bus, op::Reg8::A, 1, 4),
@@ -140,6 +144,26 @@ impl CPU {
         }
     }
 
+    fn add16<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u16>, S: op::SrcOp<u16> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let b = src.get(&ctx);
+        let c = a + b;
+        dst.set(&mut ctx, c);
+
+        let ch = (c >> 8) as u8;
+
+        self.regs.update_flags(
+            flag::intrinsic_undocumented(ch) * 
+            flag::H.on(flag::carry(a, c, 0x0FFF)) * 
+            flag::C.on(flag::carry(a, c, 0x0FFF)) - flag::N
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
     fn dec8<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
     where B: Bus, D: op::DestOp<u8> {
         let mut ctx = op::Context::from(bus, &mut self.regs);
@@ -148,7 +172,7 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) + flag::H.on(flag::borrow_nibble(a, c)) + flag::V.on(flag::underflow(a, 1, c)) + flag::N
+            flag::intrinsic(c) * flag::H.on(flag::borrow_nibble(a, c)) * flag::V.on(flag::underflow(a, 1, c)) + flag::N
         );
 
         self.regs.inc_pc(size);
@@ -172,7 +196,7 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) + flag::H.on(flag::carry_nibble(a, c)) + flag::V.on(flag::overflow(a, 1, c)) - flag::N
+            flag::intrinsic(c) * flag::H.on(flag::carry_nibble(a, c)) * flag::V.on(flag::overflow(a, 1, c)) - flag::N
         );
 
         self.regs.inc_pc(size);

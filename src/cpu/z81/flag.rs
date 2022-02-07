@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub};
+use std::ops::{Add, Mul, Sub};
 
 /// A flag used in the Z80 processor. 
 #[derive(Copy, Clone)]
@@ -68,9 +68,9 @@ impl Add<Flag> for Affection {
     }
 }
 
-impl Add<Affection> for Affection {
+impl Mul<Affection> for Affection {
     type Output = Self;
-    fn add(self, rhs: Affection) -> Self {
+    fn mul(self, rhs: Affection) -> Self {
         Self {
             set: rhs.set | (self.set & rhs.reset),
             reset: rhs.reset & (self.reset | rhs.set),
@@ -100,7 +100,12 @@ impl Affection {
 /// Intrinsic flags are those that do not depend on the operation performed, but the result. They are
 /// S, Z, F5 and F3. 
 pub fn intrinsic(val: u8) -> Affection {
-    S.on(val & 0x80 > 0) + Z.on(val == 0) + F5.on(val & 0b0010_0000 > 0) + F3.on(val & 0b0000_1000 > 0)
+    S.on(val & 0x80 > 0) * Z.on(val == 0) * intrinsic_undocumented(val)
+}
+
+/// Return the intrinsic values of undocumented flags F3 and F5.
+pub fn intrinsic_undocumented(val: u8) -> Affection {
+    F5.on(val & 0b0010_0000 > 0) * F3.on(val & 0b0000_1000 > 0)
 }
 
 #[inline] pub fn carry_nibble(a: u8, c: u8) -> bool { carry(a, c, 0x0F) }
@@ -108,7 +113,7 @@ pub fn intrinsic(val: u8) -> Affection {
 #[inline] pub fn carry_word(a: u16, c: u16) -> bool { carry(a, c, 0xFFFF) }
 
 #[inline]
-fn carry<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
+pub fn carry<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
     (a.into() & mask) > (c.into() & mask)
 }
 
@@ -117,7 +122,7 @@ fn carry<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
 #[inline] pub fn borrow_word(a: u16, c: u16) -> bool { borrow(a, c, 0xFFFF) }
 
 #[inline]
-fn borrow<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
+pub fn borrow<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
     (a.into() & mask) < (c.into() & mask)
 }
 
