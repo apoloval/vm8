@@ -33,7 +33,8 @@ impl CPU {
             0x03 => self.inc16(bus, op::Reg16::BC, 1, 6),
             0x04 => self.inc8(bus, op::Reg8::B, 1, 4),
             0x05 => self.dec8(bus, op::Reg8::B, 1, 4),
-            0x06 => self.ld(bus, op::Reg8::B, op::Imm8::with_offset(1), 2, 7),            
+            0x06 => self.ld(bus, op::Reg8::B, op::Imm8::with_offset(1), 2, 7),
+            0x07 => self.rlca(),
             0x09 => self.add16(bus, op::Reg16::HL, op::Reg16::BC, 1, 11),            
             0x0B => self.dec16(bus, op::Reg16::BC, 1, 6),
             0x0D => self.dec8(bus, op::Reg8::C, 1, 4),
@@ -370,6 +371,21 @@ impl CPU {
 
         self.regs.inc_pc(size);
         self.cycles += cycles;
+    }
+
+    fn rlca(&mut self) {
+        let a = self.regs.a();
+        let c = (a << 1) | (a >> 7);
+
+        self.regs.set_a(c);
+
+        self.regs.update_flags(
+            flag::intrinsic_undocumented(c) * 
+            flag::C.on(c & 0x01 > 0) - flag::H - flag::N
+        );
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
     }
 
     fn sub8<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, with_carry: bool, size: usize, cycles: usize) 
