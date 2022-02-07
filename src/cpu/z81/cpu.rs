@@ -1,5 +1,6 @@
 use crate::cpu::z81::bus::Bus;
 use crate::cpu::z81::reg::Registers;
+use crate::cpu::z81::flag;
 use crate::cpu::z81::op;
 
 pub struct CPU {
@@ -30,27 +31,35 @@ impl CPU {
             0x01 => self.ld(bus, op::Reg16::BC, op::Imm16::with_offset(1), 3, 10),
             0x02 => self.ld(bus, op::Ind8(op::Reg16::BC), op::Reg8::A, 1, 7),
             0x03 => self.inc16(bus, op::Reg16::BC, 1, 6),
+            0x04 => self.inc8(bus, op::Reg8::B, 1, 4),
             0x06 => self.ld(bus, op::Reg8::B, op::Imm8::with_offset(1), 2, 7),
-            0x0a => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::BC), 1, 7),
-            0x0e => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
+            0x0A => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::BC), 1, 7),
+            0x0C => self.inc8(bus, op::Reg8::C, 1, 4),
+            0x0E => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
             0x11 => self.ld(bus, op::Reg16::DE, op::Imm16::with_offset(1), 3, 10),
             0x12 => self.ld(bus, op::Ind8(op::Reg16::DE), op::Reg8::A, 1, 7),
             0x13 => self.inc16(bus, op::Reg16::DE, 1, 6),
+            0x14 => self.inc8(bus, op::Reg8::D, 1, 4),
             0x16 => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
-            0x1a => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::DE), 1, 7),
-            0x1e => self.ld(bus, op::Reg8::E, op::Imm8::with_offset(1), 2, 7),
+            0x1A => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::DE), 1, 7),
+            0x1C => self.inc8(bus, op::Reg8::E, 1, 4),
+            0x1E => self.ld(bus, op::Reg8::E, op::Imm8::with_offset(1), 2, 7),
             0x21 => self.ld(bus, op::Reg16::HL, op::Imm16::with_offset(1), 3, 10),
             0x22 => self.ld(bus, op::Ind16(op::Imm16::with_offset(1)), op::Reg16::HL, 3, 16),
             0x23 => self.inc16(bus, op::Reg16::HL, 1, 6),
+            0x24 => self.inc8(bus, op::Reg8::H, 1, 4),
             0x26 => self.ld(bus, op::Reg8::H, op::Imm8::with_offset(1), 2, 7),
-            0x2a => self.ld(bus, op::Reg16::HL, op::Ind16(op::Imm16::with_offset(1)), 3, 16),
-            0x2e => self.ld(bus, op::Reg8::L, op::Imm8::with_offset(1), 2, 7),
+            0x2A => self.ld(bus, op::Reg16::HL, op::Ind16(op::Imm16::with_offset(1)), 3, 16),
+            0x2C => self.inc8(bus, op::Reg8::L, 1, 4),
+            0x2E => self.ld(bus, op::Reg8::L, op::Imm8::with_offset(1), 2, 7),
             0x31 => self.ld(bus, op::Reg16::SP, op::Imm16::with_offset(1), 3, 10),
             0x32 => self.ld(bus, op::Ind8(op::Imm16::with_offset(1)), op::Reg8::A, 3, 13),
             0x33 => self.inc16(bus, op::Reg16::SP, 1, 6),
+            0x34 => self.inc8(bus, op::Ind8(op::Reg16::HL), 1, 11),
             0x36 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Imm8::with_offset(1), 2, 10),
-            0x3a => self.ld(bus, op::Reg8::A, op::Ind8(op::Imm16::with_offset(1)), 3, 13),
-            0x3e => self.ld(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
+            0x3A => self.ld(bus, op::Reg8::A, op::Ind8(op::Imm16::with_offset(1)), 3, 13),
+            0x3C => self.inc8(bus, op::Reg8::A, 1, 4),
+            0x3E => self.ld(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
             0x40 => self.ld(bus, op::Reg8::B, op::Reg8::B, 1, 4),
             0x41 => self.ld(bus, op::Reg8::B, op::Reg8::C, 1, 4),
             0x42 => self.ld(bus, op::Reg8::B, op::Reg8::D, 1, 4),
@@ -117,6 +126,21 @@ impl CPU {
             0xF9 => self.ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             _ => unimplemented!(),
         }
+    }
+
+    fn inc8<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx) + 1;
+        let c = a + 1;
+        dst.set(&mut ctx, c);
+
+        self.regs.update_flags(
+            flag::intrinsic(c) + flag::H.on(flag::carry_nibble(a, c)) + flag::V.on(flag::overflow(a, 1, c)) - flag::N
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
     }
 
     fn inc16<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
