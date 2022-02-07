@@ -37,23 +37,26 @@ impl CPU {
             0x07 => self.rlca(),
             0x08 => self.ex(bus, op::Reg16::AF, op::Reg16::AF_, 1, 4),
             0x09 => self.add16(bus, op::Reg16::HL, op::Reg16::BC, 1, 11),            
-            0x0B => self.dec16(bus, op::Reg16::BC, 1, 6),
-            0x0D => self.dec8(bus, op::Reg8::C, 1, 4),
             0x0A => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::BC), 1, 7),
+            0x0B => self.dec16(bus, op::Reg16::BC, 1, 6),
             0x0C => self.inc8(bus, op::Reg8::C, 1, 4),
+            0x0D => self.dec8(bus, op::Reg8::C, 1, 4),
             0x0E => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
+            0x0F => self.rrca(),
             0x11 => self.ld(bus, op::Reg16::DE, op::Imm16::with_offset(1), 3, 10),
             0x12 => self.ld(bus, op::Ind8(op::Reg16::DE), op::Reg8::A, 1, 7),
             0x13 => self.inc16(bus, op::Reg16::DE, 1, 6),
             0x14 => self.inc8(bus, op::Reg8::D, 1, 4),
             0x15 => self.dec8(bus, op::Reg8::D, 1, 4),
             0x16 => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
+            0x17 => self.rla(),
             0x1A => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::DE), 1, 7),
             0x1B => self.dec16(bus, op::Reg16::DE, 1, 6),
             0x19 => self.add16(bus, op::Reg16::HL, op::Reg16::DE, 1, 11),
             0x1C => self.inc8(bus, op::Reg8::E, 1, 4),
             0x1D => self.dec8(bus, op::Reg8::E, 1, 4),
             0x1E => self.ld(bus, op::Reg8::E, op::Imm8::with_offset(1), 2, 7),
+            0x1F => self.rra(),
             0x21 => self.ld(bus, op::Reg16::HL, op::Imm16::with_offset(1), 3, 10),
             0x22 => self.ld(bus, op::Ind16(op::Imm16::with_offset(1)), op::Reg16::HL, 3, 16),
             0x23 => self.inc16(bus, op::Reg16::HL, 1, 6),
@@ -389,6 +392,23 @@ impl CPU {
         self.cycles += cycles;
     }
 
+    fn rla(&mut self) {
+        let a = self.regs.a();
+        let mut c = (a << 1);
+        if self.regs.flag(flag::C) {
+            c |= 0x01;
+        }
+
+        self.regs.set_a(c);
+
+        self.regs.update_flags(
+            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x80 > 0) - flag::H - flag::N
+        );
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
     fn rlca(&mut self) {
         let a = self.regs.a();
         let c = (a << 1) | (a >> 7);
@@ -396,8 +416,38 @@ impl CPU {
         self.regs.set_a(c);
 
         self.regs.update_flags(
-            flag::intrinsic_undocumented(c) * 
-            flag::C.on(c & 0x01 > 0) - flag::H - flag::N
+            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x80 > 0) - flag::H - flag::N
+        );
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
+    fn rra(&mut self) {
+        let a = self.regs.a();
+        let mut c = (a >> 1);
+        if self.regs.flag(flag::C) {
+            c |= 0x80;
+        }
+
+        self.regs.set_a(c);
+
+        self.regs.update_flags(
+            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x01 > 0) - flag::H - flag::N
+        );
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
+    fn rrca(&mut self) {
+        let a = self.regs.a();
+        let c = (a >> 1) | (a << 7);
+
+        self.regs.set_a(c);
+
+        self.regs.update_flags(
+            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x01 > 0) - flag::H - flag::N
         );
 
         self.regs.inc_pc(1);
