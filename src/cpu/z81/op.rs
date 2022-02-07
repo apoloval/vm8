@@ -50,15 +50,17 @@ impl DestOp<u8> for Reg8 {
     }
 }
 
-pub enum Reg16 { BC, DE, HL, SP }
+pub enum Reg16 { AF, BC, DE, HL, SP, AF_ }
 
 impl SrcOp<u16> for Reg16 {
     fn get<B: Bus>(&self, ctx: &Context<B>) -> u16 { 
         match self {
+            Reg16::AF => ctx.regs.af(),
             Reg16::BC => ctx.regs.bc(),
             Reg16::DE => ctx.regs.de(),
             Reg16::HL => ctx.regs.hl(),
             Reg16::SP => ctx.regs.sp(),
+            Reg16::AF_ => ctx.regs.af_(),
         }
     }
 }
@@ -66,10 +68,12 @@ impl SrcOp<u16> for Reg16 {
 impl DestOp<u16> for Reg16 {
     fn set<B: Bus>(&self, ctx: &mut Context<B>, val: u16) {
         match self {
+            Reg16::AF => ctx.regs.set_af(val),
             Reg16::BC => ctx.regs.set_bc(val),
             Reg16::DE => ctx.regs.set_de(val),
             Reg16::HL => ctx.regs.set_hl(val),
             Reg16::SP => ctx.regs.set_sp(val),
+            Reg16::AF_ => ctx.regs.set_af_(val),
         }
     }
 }

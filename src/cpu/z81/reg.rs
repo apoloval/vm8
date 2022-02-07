@@ -96,12 +96,12 @@ impl Registers {
     #[inline] pub fn set_h(&mut self, val: u8) { self.hl.set_high(val) }
     #[inline] pub fn set_l(&mut self, val: u8) { self.hl.set_low(val) }
 
-    #[inline] #[cfg(test)] pub fn af_(&self) -> u16 { *self.af_ }
+    #[inline] pub fn af_(&self) -> u16 { *self.af_ }
     #[inline] #[cfg(test)] pub fn bc_(&self) -> u16 { *self.bc_ }
     #[inline] #[cfg(test)] pub fn de_(&self) -> u16 { *self.de_ }
     #[inline] #[cfg(test)] pub fn hl_(&self) -> u16 { *self.hl_ }
 
-    #[inline] #[cfg(test)] pub fn set_af_(&mut self, val: u16) { *self.af_ = val }
+    #[inline] pub fn set_af_(&mut self, val: u16) { *self.af_ = val }
     #[inline] #[cfg(test)] pub fn set_bc_(&mut self, val: u16) { *self.bc_ = val }
     #[inline] #[cfg(test)] pub fn set_de_(&mut self, val: u16) { *self.de_ = val }
     #[inline] #[cfg(test)] pub fn set_hl_(&mut self, val: u16) { *self.hl_ = val }

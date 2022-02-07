@@ -35,6 +35,7 @@ impl CPU {
             0x05 => self.dec8(bus, op::Reg8::B, 1, 4),
             0x06 => self.ld(bus, op::Reg8::B, op::Imm8::with_offset(1), 2, 7),
             0x07 => self.rlca(),
+            0x08 => self.ex(bus, op::Reg16::AF, op::Reg16::AF_, 1, 4),
             0x09 => self.add16(bus, op::Reg16::HL, op::Reg16::BC, 1, 11),            
             0x0B => self.dec16(bus, op::Reg16::BC, 1, 6),
             0x0D => self.dec8(bus, op::Reg8::C, 1, 4),
@@ -208,6 +209,8 @@ impl CPU {
             0xCE => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xDE => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
+            0xE3 => self.ex(bus, op::Ind16(op::Reg16::SP), op::Reg16::HL, 1, 19),
+            0xEB => self.ex(bus, op::Reg16::DE, op::Reg16::HL, 1, 4),
             0xF9 => self.ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             _ => unimplemented!(),
         }
@@ -313,6 +316,19 @@ impl CPU {
         let mut ctx = op::Context::from(bus, &mut self.regs);
         let val = dst.get(&ctx) - 1;
         dst.set(&mut ctx, val);
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
+    fn ex<B, D1, D2> (&mut self, bus: &mut B, opa: D1, opb: D2, size: usize, cycles: usize) 
+    where B: Bus, D1: op::DestOp<u16>, D2: op::DestOp<u16> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = opa.get(&ctx);
+        let b = opb.get(&ctx);
+
+        opa.set(&mut ctx, b);
+        opb.set(&mut ctx, a);
+
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
