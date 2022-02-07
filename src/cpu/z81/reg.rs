@@ -125,6 +125,9 @@ impl Registers {
     #[inline] pub fn inc_sp(&mut self, val: usize) -> u16 { *self.sp += val as u16; *self.sp }
     #[inline] pub fn dec_sp(&mut self, val: usize) -> u16 { *self.sp -= val as u16; *self.sp }
 
+    #[inline] pub fn flag(&self, f: flag::Flag) -> bool { f.check(self.flags()) }
+
+    #[inline] 
     pub fn update_flags(&mut self, aff: flag::Affection) {
         let mut f = self.flags();
         f = aff.apply(f);

@@ -139,9 +139,49 @@ impl CPU {
             0x7D => self.ld(bus, op::Reg8::A, op::Reg8::L, 1, 4),
             0x7E => self.ld(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), 1, 7),
             0x7F => self.ld(bus, op::Reg8::A, op::Reg8::A, 1, 4),
+            0x80 => self.add8(bus, op::Reg8::A, op::Reg8::B, false, 1, 4),
+            0x81 => self.add8(bus, op::Reg8::A, op::Reg8::C, false, 1, 4),
+            0x82 => self.add8(bus, op::Reg8::A, op::Reg8::D, false, 1, 4),
+            0x83 => self.add8(bus, op::Reg8::A, op::Reg8::E, false, 1, 4),
+            0x84 => self.add8(bus, op::Reg8::A, op::Reg8::H, false, 1, 4),
+            0x85 => self.add8(bus, op::Reg8::A, op::Reg8::L, false, 1, 4),
+            0x86 => self.add8(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), false, 1, 7),
+            0x87 => self.add8(bus, op::Reg8::A, op::Reg8::A, false, 1, 4),
+            0x88 => self.add8(bus, op::Reg8::A, op::Reg8::B, true, 1, 4),
+            0x89 => self.add8(bus, op::Reg8::A, op::Reg8::C, true, 1, 4),
+            0x8A => self.add8(bus, op::Reg8::A, op::Reg8::D, true, 1, 4),
+            0x8B => self.add8(bus, op::Reg8::A, op::Reg8::E, true, 1, 4),
+            0x8C => self.add8(bus, op::Reg8::A, op::Reg8::H, true, 1, 4),
+            0x8D => self.add8(bus, op::Reg8::A, op::Reg8::L, true, 1, 4),
+            0x8E => self.add8(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), true, 1, 7),
+            0x8F => self.add8(bus, op::Reg8::A, op::Reg8::A, true, 1, 4),
+            0xC6 => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
+            0xCE => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
             0xF9 => self.ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             _ => unimplemented!(),
         }
+    }
+
+    fn add8<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, with_carry: bool, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        let a = dst.get(&ctx);
+        let mut b = src.get(&ctx);
+        if with_carry && ctx.regs.flag(flag::C) {
+            b += 1;
+        }
+        let c = a + b;
+        dst.set(&mut ctx, c);
+
+        self.regs.update_flags(
+            flag::intrinsic(c) * 
+            flag::H.on(flag::carry_byte(a, c)) * 
+            flag::V.on(flag::overflow(a, b, c)) * 
+            flag::C.on(flag::carry(a, c, 0x0FFF)) - flag::N
+        );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
     }
 
     fn add16<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 

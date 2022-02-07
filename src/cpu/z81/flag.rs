@@ -11,6 +11,9 @@ impl Flag {
         if cond { aff + self }
         else { aff - self }
     }
+
+    /// Check whether this flag is set on the given value.
+    pub fn check(&self, val: u8) -> bool { self.set_mask & val > 0 }
 }
 
 /// Sign flag, typically set when result has its 7th bit (sign) is set. 
