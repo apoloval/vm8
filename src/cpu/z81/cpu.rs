@@ -43,6 +43,7 @@ impl CPU {
             0x0D => self.dec8(bus, op::Reg8::C, 1, 4),
             0x0E => self.ld(bus, op::Reg8::C, op::Imm8::with_offset(1), 2, 7),
             0x0F => self.rrca(),
+            0x10 => self.djnz(bus),
             0x11 => self.ld(bus, op::Reg16::DE, op::Imm16::with_offset(1), 3, 10),
             0x12 => self.ld(bus, op::Ind8(op::Reg16::DE), op::Reg8::A, 1, 7),
             0x13 => self.inc16(bus, op::Reg16::DE, 1, 6),
@@ -321,6 +322,19 @@ impl CPU {
         dst.set(&mut ctx, val);
         self.regs.inc_pc(size);
         self.cycles += cycles;
+    }
+
+    fn djnz<B: Bus>(&mut self, bus: &mut B) {
+        let a = self.regs.c();
+        let c = a - 1;
+        if c != 0 {
+            let rel = bus.mem_read(self.regs.pc() + 1) as i8;
+            self.regs.inc_pc_signed(rel);
+            self.cycles += 13;
+        } else {
+            self.regs.inc_pc(2);
+            self.cycles += 8;
+        }
     }
 
     fn ex<B, D1, D2> (&mut self, bus: &mut B, opa: D1, opb: D2, size: usize, cycles: usize) 
