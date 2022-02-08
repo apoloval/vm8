@@ -238,7 +238,7 @@ impl CPU {
             0xC4 => self.call(bus, !flag::Z),
             0xC5 => self.push(bus, op::Reg16::BC, 1, 11),
             0xC6 => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
-            0xC7 => todo!(),
+            0xC7 => self.rst(bus, 0x00),
             0xC8 => self.ret(bus, flag::Z),
             0xC9 => self.ret(bus, flag::Any),
             0xCA => self.jp(bus, flag::Z, op::Imm16::with_offset(1), 3, 10),
@@ -246,7 +246,7 @@ impl CPU {
             0xCC => self.call(bus, flag::Z),
             0xCD => self.call(bus, flag::Any),
             0xCE => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
-            0xCF => todo!(),
+            0xCF => self.rst(bus, 0x08),
 
             0xD0 => self.ret(bus, !flag::C),
             0xD1 => self.pop(bus, op::Reg16::DE, 1, 10),
@@ -255,7 +255,7 @@ impl CPU {
             0xD4 => self.call(bus, !flag::C),
             0xD5 => self.push(bus, op::Reg16::DE, 1, 11),
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
-            0xD7 => todo!(),
+            0xD7 => self.rst(bus, 0x10),
             0xD8 => self.ret(bus, flag::C),
             0xD9 => self.exx(),
             0xDA => self.jp(bus, flag::C, op::Imm16::with_offset(1), 3, 10),
@@ -263,7 +263,7 @@ impl CPU {
             0xDC => self.call(bus, flag::C),
             0xDD => todo!(),
             0xDE => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
-            0xDF => todo!(),
+            0xDF => self.rst(bus, 0x18),
 
             0xE0 => self.ret(bus, !flag::P),
             0xE1 => self.pop(bus, op::Reg16::HL, 1, 10),
@@ -272,7 +272,7 @@ impl CPU {
             0xE4 => self.call(bus, !flag::P),
             0xE5 => self.push(bus, op::Reg16::HL, 1, 11),
             0xE6 => todo!(),
-            0xE7 => todo!(),
+            0xE7 => self.rst(bus, 0x20),
             0xE8 => self.ret(bus, flag::P),
             0xE9 => self.jp(bus, flag::Any, op::Reg16::HL, 1, 4),
             0xEA => self.jp(bus, flag::P, op::Imm16::with_offset(1), 3, 10),
@@ -280,7 +280,7 @@ impl CPU {
             0xEC => self.call(bus, flag::P),
             0xED => todo!(),
             0xEE => todo!(),
-            0xEF => todo!(),
+            0xEF => self.rst(bus, 0x28),
             
             0xF0 => self.ret(bus, !flag::N),
             0xF1 => self.pop(bus, op::Reg16::AF, 1, 10),
@@ -289,7 +289,7 @@ impl CPU {
             0xF4 => self.call(bus, !flag::N),
             0xF5 => self.push(bus, op::Reg16::AF, 1, 11),
             0xF6 => todo!(),
-            0xF7 => todo!(),
+            0xF7 => self.rst(bus, 0x30),
             0xF8 => self.ret(bus, flag::N),
             0xF9 => self.ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             0xFA => self.jp(bus, flag::N, op::Imm16::with_offset(1), 3, 10),
@@ -297,7 +297,7 @@ impl CPU {
             0xFC => self.call(bus, flag::N),
             0xFD => todo!(),
             0xFE => todo!(),
-            0xFF => todo!(),
+            0xFF => self.rst(bus, 0x38),
         }
     }
 
@@ -686,6 +686,12 @@ impl CPU {
 
         self.regs.inc_pc(1);
         self.cycles += 4;
+    }
+
+    fn rst<B: Bus>(&mut self, bus: &mut B, addr: u16) {
+        self.stack_push(bus, self.regs.pc() + 1);
+        self.regs.set_pc(addr);
+        self.cycles += 11;
     }
 
     fn stack_pop<B: Bus>(&mut self, bus: &B) -> u16 {
