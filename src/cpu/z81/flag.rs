@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul, Sub};
+use std::ops::{Add, Mul, Not, Sub};
 
 /// A flag used in the Z80 processor. 
 #[derive(Copy, Clone)]
@@ -11,9 +11,15 @@ impl Flag {
         if cond { aff + self }
         else { aff - self }
     }
+}
 
-    /// Check whether this flag is set on the given value.
-    pub fn check(&self, val: u8) -> bool { self.set_mask & val > 0 }
+impl Predicate for Flag {
+    fn eval(&self, f: u8) -> bool { self.set_mask & f > 0 }
+}
+
+impl Not for Flag {
+    type Output = Inv<Flag>;
+    fn not(self) -> Inv<Flag> { Inv(self) }
 }
 
 /// Sign flag, typically set when result has its 7th bit (sign) is set. 
@@ -98,6 +104,25 @@ impl Affection {
     }
 }
 
+/// A predicate over some flags.
+pub trait Predicate {
+    fn eval(&self, f: u8) -> bool;
+}
+
+/// A predicate that always evaluates to true.
+pub struct Any;
+
+impl Predicate for Any {
+    fn eval(&self, _: u8) -> bool { true }
+}
+
+/// A predicate that is inverted
+pub struct Inv<T: Predicate>(T);
+
+impl<T: Predicate> Predicate for Inv<T> {
+    fn eval(&self, f: u8) -> bool { !self.0.eval(f) }
+}
+
 /// Return the intrinsic flags for the given value.
 /// 
 /// Intrinsic flags are those that do not depend on the operation performed, but the result. They are
@@ -122,7 +147,6 @@ pub fn carry<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
 
 #[inline] pub fn borrow_nibble(a: u8, c: u8) -> bool { borrow(a, c, 0x0F) }
 #[inline] pub fn borrow_byte(a: u8, c: u8) -> bool { borrow(a, c, 0xFF) }
-#[inline] pub fn borrow_word(a: u16, c: u16) -> bool { borrow(a, c, 0xFFFF) }
 
 #[inline]
 pub fn borrow<T: Into<usize>>(a: T, c: T, mask: usize) -> bool {
@@ -180,6 +204,48 @@ mod test {
         assert_eq!(flags.apply(0b1000_0000), 0b1000_0000);
         assert_eq!(flags.apply(0b0100_0000), 0b1100_0000);
         assert_eq!(flags.apply(0b1100_0000), 0b1100_0000);
+    }
+
+    #[test]
+    fn test_predicate() {
+        assert_eq!(S.eval(0b1000_0000), true);
+        assert_eq!(Z.eval(0b0100_0000), true);
+        assert_eq!(F5.eval(0b0010_0000), true);
+        assert_eq!(H.eval(0b0001_0000), true);
+        assert_eq!(F3.eval(0b0000_1000), true);
+        assert_eq!(PV.eval(0b0000_0100), true);
+        assert_eq!(N.eval(0b0000_0010), true);
+        assert_eq!(C.eval(0b0000_0001), true);
+
+        assert_eq!(S.eval(0b0000_0000), false);
+        assert_eq!(Z.eval(0b0000_0000), false);
+        assert_eq!(F5.eval(0b0000_0000), false);
+        assert_eq!(H.eval(0b0000_0000), false);
+        assert_eq!(F3.eval(0b0000_0000), false);
+        assert_eq!(PV.eval(0b0000_0000), false);
+        assert_eq!(N.eval(0b0000_0000), false);
+        assert_eq!(C.eval(0b0000_0000), false);
+    }
+
+    #[test]
+    fn test_predicate_not() {
+        assert_eq!((!S).eval(0b1000_0000), false);
+        assert_eq!((!Z).eval(0b0100_0000), false);
+        assert_eq!((!F5).eval(0b0010_0000), false);
+        assert_eq!((!H).eval(0b0001_0000), false);
+        assert_eq!((!F3).eval(0b0000_1000), false);
+        assert_eq!((!PV).eval(0b0000_0100), false);
+        assert_eq!((!N).eval(0b0000_0010), false);
+        assert_eq!((!C).eval(0b0000_0001), false);
+
+        assert_eq!((!S).eval(0b0000_0000), true);
+        assert_eq!((!Z).eval(0b0000_0000), true);
+        assert_eq!((!F5).eval(0b0000_0000), true);
+        assert_eq!((!H).eval(0b0000_0000), true);
+        assert_eq!((!F3).eval(0b0000_0000), true);
+        assert_eq!((!PV).eval(0b0000_0000), true);
+        assert_eq!((!N).eval(0b0000_0000), true);
+        assert_eq!((!C).eval(0b0000_0000), true);
     }
 
     #[test]

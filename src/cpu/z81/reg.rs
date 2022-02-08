@@ -1,7 +1,7 @@
 use std::mem;
 use std::ops::{Deref, DerefMut};
 
-use crate::cpu::z81::flag;
+use crate::cpu::z81::flag::{self, Predicate};
 
 #[derive(Clone, Copy)]
 pub struct Name8Pair {
@@ -125,7 +125,7 @@ impl Registers {
     #[inline] pub fn inc_sp(&mut self, val: usize) -> u16 { *self.sp += val as u16; *self.sp }
     #[inline] pub fn dec_sp(&mut self, val: usize) -> u16 { *self.sp -= val as u16; *self.sp }
 
-    #[inline] pub fn flag(&self, f: flag::Flag) -> bool { f.check(self.flags()) }
+    #[inline] pub fn flag(&self, f: flag::Flag) -> bool { f.eval(self.flags()) }
 
     #[inline] 
     pub fn update_flags(&mut self, aff: flag::Affection) {
