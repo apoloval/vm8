@@ -1,6 +1,6 @@
 use crate::cpu::z81::bus::Bus;
 use crate::cpu::z81::reg::Registers;
-use crate::cpu::z81::flag;
+use crate::cpu::z81::flag::{self, Predicate};
 use crate::cpu::z81::op;
 
 pub struct CPU {
@@ -68,7 +68,7 @@ impl CPU {
             0x24 => self.inc8(bus, op::Reg8::H, 1, 4),
             0x25 => self.dec8(bus, op::Reg8::H, 1, 4),
             0x26 => self.ld(bus, op::Reg8::H, op::Imm8::with_offset(1), 2, 7),
-            0x27 => todo!(),
+            0x27 => self.daa(),
             0x28 => self.jr(bus, flag::Z),
             0x29 => self.add16(bus, op::Reg16::HL, op::Reg16::HL, 1, 11),
             0x2A => self.ld(bus, op::Reg16::HL, op::Ind16(op::Imm16::with_offset(1)), 3, 16),
@@ -313,9 +313,9 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * 
-            flag::H.on(flag::carry_nibble(a, c)) * 
-            flag::V.on(flag::overflow(a, b, c)) * 
+            flag::intrinsic(c) & 
+            flag::H.on(flag::carry_nibble(a, c)) &
+            flag::V.on(flag::overflow(a, b, c)) &
             flag::C.on(flag::carry_byte(a, c)) - flag::N
         );
 
@@ -334,8 +334,8 @@ impl CPU {
         let ch = (c >> 8) as u8;
 
         self.regs.update_flags(
-            flag::intrinsic_undocumented(ch) * 
-            flag::H.on(flag::carry(a, c, 0x0FFF)) * 
+            flag::intrinsic_undocumented(ch) &
+            flag::H.on(flag::carry(a, c, 0x0FFF)) &
             flag::C.on(flag::carry_word(a, c)) - flag::N
         );
 
@@ -352,8 +352,8 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * 
-            flag::P.on(flag::parity(c)) * 
+            flag::intrinsic(c) &
+            flag::P.on(flag::parity(c)) &
             flag::C.on(flag::carry_byte(a, c)) + flag::H - flag::N - flag::C
         );
 
@@ -369,16 +369,49 @@ impl CPU {
         let c = a - b;
 
         self.regs.update_flags(
-            flag::S.on(flag::signed(c)) * 
-            flag::Z.on(c == 0) * 
-            flag::intrinsic_undocumented(b) *
-            flag::H.on(flag::borrow_nibble(a, c)) * 
-            flag::V.on(flag::underflow(a, b, c)) * 
+            flag::S.on(flag::signed(c)) &
+            flag::Z.on(c == 0) &
+            flag::intrinsic_undocumented(b) &
+            flag::H.on(flag::borrow_nibble(a, c)) &
+            flag::V.on(flag::underflow(a, b, c)) &
             flag::C.on(flag::borrow_byte(a, c)) + flag::N
         );
 
         self.regs.inc_pc(size);
         self.cycles += cycles;
+    }
+
+    fn daa(&mut self) {
+        let mut reg_a = self.regs.a();
+        let reg_ah = reg_a >> 4;
+        let reg_al = reg_a & 0x0F;
+        let reg_f = self.regs.flags();
+
+        let flag_n = flag::N.eval(reg_f);
+        let flag_h = flag::H.eval(reg_f);
+        let flag_c = flag::C.eval(reg_f);
+
+        let mut has_halfcarry = false;
+        let mut has_carry = false;
+        if reg_al > 9 || flag_h {
+            if flag_n { reg_a -= 0x06 } else { reg_a += 0x06 }
+            has_halfcarry = true;
+        }
+        if reg_ah > 9 || flag_c {
+            if flag_n { reg_a -= 0x60 } else { reg_a += 0x60 }
+            has_carry = true
+        }
+        self.regs.set_a(reg_a);
+
+        self.regs.update_flags(
+            flag::intrinsic(reg_a) &
+            flag::C.on(has_carry) &
+            flag::P.on(flag::parity(reg_a)) &
+            flag::H.on(has_halfcarry)
+        );
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
     }
 
     fn dec8<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
@@ -389,7 +422,7 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * flag::H.on(flag::borrow_nibble(a, c)) * flag::V.on(flag::underflow(a, 1, c)) + flag::N
+            flag::intrinsic(c) & flag::H.on(flag::borrow_nibble(a, c)) & flag::V.on(flag::underflow(a, 1, c)) + flag::N
         );
 
         self.regs.inc_pc(size);
@@ -448,7 +481,7 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * flag::H.on(flag::carry_nibble(a, c)) * flag::V.on(flag::overflow(a, 1, c)) - flag::N
+            flag::intrinsic(c) & flag::H.on(flag::carry_nibble(a, c)) & flag::V.on(flag::overflow(a, 1, c)) - flag::N
         );
 
         self.regs.inc_pc(size);
@@ -499,8 +532,8 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * 
-            flag::P.on(flag::parity(c)) * 
+            flag::intrinsic(c) &
+            flag::P.on(flag::parity(c)) &
             flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
         );
 
@@ -518,7 +551,7 @@ impl CPU {
         self.regs.set_a(c);
 
         self.regs.update_flags(
-            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x80 > 0) - flag::H - flag::N
+            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x80 > 0) - flag::H - flag::N
         );
 
         self.regs.inc_pc(1);
@@ -532,7 +565,7 @@ impl CPU {
         self.regs.set_a(c);
 
         self.regs.update_flags(
-            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x80 > 0) - flag::H - flag::N
+            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x80 > 0) - flag::H - flag::N
         );
 
         self.regs.inc_pc(1);
@@ -549,7 +582,7 @@ impl CPU {
         self.regs.set_a(c);
 
         self.regs.update_flags(
-            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x01 > 0) - flag::H - flag::N
+            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x01 > 0) - flag::H - flag::N
         );
 
         self.regs.inc_pc(1);
@@ -563,7 +596,7 @@ impl CPU {
         self.regs.set_a(c);
 
         self.regs.update_flags(
-            flag::intrinsic_undocumented(c) * flag::C.on(a & 0x01 > 0) - flag::H - flag::N
+            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x01 > 0) - flag::H - flag::N
         );
 
         self.regs.inc_pc(1);
@@ -582,9 +615,9 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * 
-            flag::H.on(flag::borrow_nibble(a, c)) * 
-            flag::V.on(flag::underflow(a, b, c)) * 
+            flag::intrinsic(c) &
+            flag::H.on(flag::borrow_nibble(a, c)) &
+            flag::V.on(flag::underflow(a, b, c)) & 
             flag::C.on(flag::borrow_byte(a, c)) + flag::N
         );
 
@@ -601,8 +634,8 @@ impl CPU {
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(
-            flag::intrinsic(c) * 
-            flag::P.on(flag::parity(c)) * 
+            flag::intrinsic(c) &
+            flag::P.on(flag::parity(c)) &
             flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
         );
 

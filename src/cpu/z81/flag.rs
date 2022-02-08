@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul, Not, Sub};
+use std::ops::{Add, BitAnd, Not, Sub};
 
 /// A flag used in the Z80 processor. 
 #[derive(Copy, Clone)]
@@ -77,9 +77,9 @@ impl Add<Flag> for Affection {
     }
 }
 
-impl Mul<Affection> for Affection {
+impl BitAnd<Affection> for Affection {
     type Output = Self;
-    fn mul(self, rhs: Affection) -> Self {
+    fn bitand(self, rhs: Affection) -> Self {
         Self {
             set: rhs.set | (self.set & rhs.reset),
             reset: rhs.reset & (self.reset | rhs.set),
@@ -128,12 +128,12 @@ impl<T: Predicate> Predicate for Inv<T> {
 /// Intrinsic flags are those that do not depend on the operation performed, but the result. They are
 /// S, Z, F5 and F3. 
 pub fn intrinsic(val: u8) -> Affection {
-    S.on(signed(val)) * Z.on(val == 0) * intrinsic_undocumented(val)
+    S.on(signed(val)) & Z.on(val == 0) & intrinsic_undocumented(val)
 }
 
 /// Return the intrinsic values of undocumented flags F3 and F5.
 pub fn intrinsic_undocumented(val: u8) -> Affection {
-    F5.on(val & 0b0010_0000 > 0) * F3.on(val & 0b0000_1000 > 0)
+    F5.on(val & 0b0010_0000 > 0) & F3.on(val & 0b0000_1000 > 0)
 }
 
 #[inline] pub fn carry_nibble(a: u8, c: u8) -> bool { carry(a, c, 0x0F) }
