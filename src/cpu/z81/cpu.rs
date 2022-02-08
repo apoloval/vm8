@@ -257,7 +257,7 @@ impl CPU {
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xD7 => todo!(),
             0xD8 => todo!(),
-            0xD9 => todo!(),
+            0xD9 => self.exx(),
             0xDA => todo!(),
             0xDB => todo!(),
             0xDC => todo!(),
@@ -429,6 +429,15 @@ impl CPU {
 
         self.regs.inc_pc(size);
         self.cycles += cycles;
+    }
+
+    fn exx(&mut self){
+        self.regs.swap_bc();
+        self.regs.swap_de();
+        self.regs.swap_hl();
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
     }
 
     fn inc8<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
