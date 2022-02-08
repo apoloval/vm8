@@ -251,7 +251,7 @@ impl CPU {
             0xD0 => self.ret(bus, !flag::C),
             0xD1 => self.pop(bus, op::Reg16::DE, 1, 10),
             0xD2 => self.jp(bus, !flag::C, op::Imm16::with_offset(1), 3, 10),
-            0xD3 => todo!(),
+            0xD3 => self.out(bus, op::Imm8::with_offset(1), op::Reg8::A, 2, 11),
             0xD4 => self.call(bus, !flag::C),
             0xD5 => self.push(bus, op::Reg16::DE, 1, 11),
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
@@ -590,6 +590,17 @@ impl CPU {
             flag::P.on(flag::parity(c)) &
             flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
         );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
+    fn out<B, S1, S2>(&mut self, bus: &mut B, dst: S1, src: S2, size: usize, cycles: usize) 
+    where B: Bus, S1: op::SrcOp<u8>, S2: op::SrcOp<u8> {
+        let ctx = op::Context::from(bus, &mut self.regs);
+        let val = src.get(&ctx);
+        let port = dst.get(&ctx);
+        bus.io_write(port, val);
 
         self.regs.inc_pc(size);
         self.cycles += cycles;
