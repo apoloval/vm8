@@ -271,7 +271,7 @@ impl CPU {
             0xE3 => self.exec_ex(bus, op::Ind16(op::Reg16::SP), op::Reg16::HL, 1, 19),
             0xE4 => self.exec_call(bus, !flag::P),
             0xE5 => self.exec_push(bus, op::Reg16::HL, 1, 11),
-            0xE6 => todo!(),
+            0xE6 => self.exec_and(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
             0xE7 => self.exec_rst(bus, 0x20),
             0xE8 => self.exec_ret(bus, flag::P),
             0xE9 => self.exec_jp(bus, flag::Any, op::Reg16::HL, 1, 4),
@@ -279,7 +279,7 @@ impl CPU {
             0xEB => self.exec_ex(bus, op::Reg16::DE, op::Reg16::HL, 1, 4),
             0xEC => self.exec_call(bus, flag::P),
             0xED => todo!(),
-            0xEE => todo!(),
+            0xEE => self.exec_xor(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
             0xEF => self.exec_rst(bus, 0x28),
             
             0xF0 => self.exec_ret(bus, !flag::N),
@@ -288,7 +288,7 @@ impl CPU {
             0xF3 => todo!(),
             0xF4 => self.exec_call(bus, !flag::N),
             0xF5 => self.exec_push(bus, op::Reg16::AF, 1, 11),
-            0xF6 => todo!(),
+            0xF6 => self.exec_or(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
             0xF7 => self.exec_rst(bus, 0x30),
             0xF8 => self.exec_ret(bus, flag::N),
             0xF9 => self.exec_ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
@@ -296,7 +296,7 @@ impl CPU {
             0xFB => todo!(),
             0xFC => self.exec_call(bus, flag::N),
             0xFD => todo!(),
-            0xFE => todo!(),
+            0xFE => self.exec_cp(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
             0xFF => self.exec_rst(bus, 0x38),
         }
     }
