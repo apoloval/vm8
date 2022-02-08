@@ -232,11 +232,11 @@ impl CPU {
             0xBF => self.cp(bus, op::Reg8::A, op::Reg8::A,  1, 4),
 
             0xC0 => self.ret(bus, !flag::Z),
-            0xC1 => todo!(),
+            0xC1 => self.pop(bus, op::Reg16::BC, 1, 10),
             0xC2 => todo!(),
             0xC3 => todo!(),
             0xC4 => todo!(),
-            0xC5 => todo!(),
+            0xC5 => self.push(bus, op::Reg16::BC, 1, 11),
             0xC6 => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xC7 => todo!(),
             0xC8 => self.ret(bus, flag::Z),
@@ -249,11 +249,11 @@ impl CPU {
             0xCF => todo!(),
 
             0xD0 => self.ret(bus, !flag::C),
-            0xD1 => todo!(),
+            0xD1 => self.pop(bus, op::Reg16::DE, 1, 10),
             0xD2 => todo!(),
             0xD3 => todo!(),
             0xD4 => todo!(),
-            0xD5 => todo!(),
+            0xD5 => self.push(bus, op::Reg16::DE, 1, 11),
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xD7 => todo!(),
             0xD8 => self.ret(bus, flag::C),
@@ -266,11 +266,11 @@ impl CPU {
             0xDF => todo!(),
 
             0xE0 => self.ret(bus, !flag::P),
-            0xE1 => todo!(),
+            0xE1 => self.pop(bus, op::Reg16::HL, 1, 10),
             0xE2 => todo!(),
             0xE3 => self.ex(bus, op::Ind16(op::Reg16::SP), op::Reg16::HL, 1, 19),
             0xE4 => todo!(),
-            0xE5 => todo!(),
+            0xE5 => self.push(bus, op::Reg16::HL, 1, 11),
             0xE6 => todo!(),
             0xE7 => todo!(),
             0xE8 => self.ret(bus, flag::P),
@@ -283,11 +283,11 @@ impl CPU {
             0xEF => todo!(),
             
             0xF0 => self.ret(bus, !flag::N),
-            0xF1 => todo!(),
+            0xF1 => self.pop(bus, op::Reg16::AF, 1, 10),
             0xF2 => todo!(),
             0xF3 => todo!(),
             0xF4 => todo!(),
-            0xF5 => todo!(),
+            0xF5 => self.push(bus, op::Reg16::AF, 1, 11),
             0xF6 => todo!(),
             0xF7 => todo!(),
             0xF8 => self.ret(bus, flag::N),
@@ -563,6 +563,26 @@ impl CPU {
             flag::P.on(flag::parity(c)) &
             flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
         );
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
+    fn pop<B, D>(&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
+    where B: Bus, D: op::DestOp<u16> {
+        let val = self.stack_pop(bus);
+        let mut ctx = op::Context::from(bus, &mut self.regs);
+        dst.set(&mut ctx, val);
+
+        self.regs.inc_pc(size);
+        self.cycles += cycles;
+    }
+
+    fn push<B, S>(&mut self, bus: &mut B, src: S, size: usize, cycles: usize) 
+    where B: Bus, S: op::SrcOp<u16> {
+        let ctx = op::Context::from(bus, &mut self.regs);
+        let val = src.get(&ctx);
+        self.stack_push(bus, val);
 
         self.regs.inc_pc(size);
         self.cycles += cycles;
