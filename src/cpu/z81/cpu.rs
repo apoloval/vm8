@@ -76,7 +76,7 @@ impl CPU {
             0x2C => self.inc8(bus, op::Reg8::L, 1, 4),
             0x2D => self.dec8(bus, op::Reg8::L, 1, 4),
             0x2E => self.ld(bus, op::Reg8::L, op::Imm8::with_offset(1), 2, 7),
-            0x2F => todo!(),
+            0x2F => self.cpl(),
 
             0x30 => self.jr(bus, !flag::C),
             0x31 => self.ld(bus, op::Reg16::SP, op::Imm16::with_offset(1), 3, 10),
@@ -379,6 +379,17 @@ impl CPU {
 
         self.regs.inc_pc(size);
         self.cycles += cycles;
+    }
+
+    fn cpl(&mut self) {
+        let a = self.regs.a();
+        let c = !a;
+        self.regs.set_a(c);
+
+        self.regs.update_flags(flag::intrinsic_undocumented(c) + flag::N + flag::H);
+
+        self.regs.inc_pc(1);
+        self.cycles += 4;
     }
 
     fn daa(&mut self) {
