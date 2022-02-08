@@ -152,7 +152,7 @@ impl CPU {
             0x73 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Reg8::E, 1, 7),
             0x74 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Reg8::H, 1, 7),
             0x75 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Reg8::L, 1, 7),
-            0x76 => todo!(),
+            0x76 => self.halt(),
             0x77 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Reg8::A, 1, 7),
             0x78 => self.ld(bus, op::Reg8::A, op::Reg8::B, 1, 4),
             0x79 => self.ld(bus, op::Reg8::A, op::Reg8::C, 1, 4),
@@ -493,6 +493,10 @@ impl CPU {
         self.regs.swap_hl();
 
         self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
+    fn halt(&mut self) {
         self.cycles += 4;
     }
 
