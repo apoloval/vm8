@@ -85,7 +85,7 @@ impl CPU {
             0x34 => self.inc8(bus, op::Ind8(op::Reg16::HL), 1, 11),
             0x35 => self.dec8(bus, op::Ind8(op::Reg16::HL), 1, 11),
             0x36 => self.ld(bus, op::Ind8(op::Reg16::HL), op::Imm8::with_offset(1), 2, 10),
-            0x37 => todo!(),
+            0x37 => self.scf(),
             0x38 => self.jr(bus, flag::C),
             0x39 => self.add16(bus, op::Reg16::HL, op::Reg16::SP, 1, 11),
             0x3A => self.ld(bus, op::Reg8::A, op::Ind8(op::Imm16::with_offset(1)), 3, 13),
@@ -93,7 +93,7 @@ impl CPU {
             0x3C => self.inc8(bus, op::Reg8::A, 1, 4),
             0x3D => self.dec8(bus, op::Reg8::A, 1, 4),
             0x3E => self.ld(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
-            0x3F => todo!(),
+            0x3F => self.ccf(),
 
             0x40 => self.ld(bus, op::Reg8::B, op::Reg8::B, 1, 4),
             0x41 => self.ld(bus, op::Reg8::B, op::Reg8::C, 1, 4),
@@ -361,6 +361,18 @@ impl CPU {
         self.cycles += cycles;
     }
 
+    fn ccf(&mut self) {
+        let f = self.regs.flags();
+        let flag_c = flag::C.eval(f);
+        self.regs.update_flags(            
+            flag::intrinsic_undocumented(self.regs.a()) &
+            flag::C.on(!flag_c) &
+            flag::H.on(flag_c) + flag::N
+        );
+        self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
     fn cp<B, D, S> (&mut self, bus: &mut B, dst: D, src: S, size: usize, cycles: usize) 
     where B: Bus, D: op::DestOp<u8>, S: op::SrcOp<u8> {
         let ctx = op::Context::from(bus, &mut self.regs);
@@ -610,6 +622,14 @@ impl CPU {
             flag::intrinsic_undocumented(c) & flag::C.on(a & 0x01 > 0) - flag::H - flag::N
         );
 
+        self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
+    fn scf(&mut self) {
+        self.regs.update_flags(
+            flag::intrinsic_undocumented(self.regs.a()) + flag::C - flag::N - flag::H
+        );
         self.regs.inc_pc(1);
         self.cycles += 4;
     }
