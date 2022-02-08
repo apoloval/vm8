@@ -231,7 +231,7 @@ impl CPU {
             0xBE => self.cp(bus, op::Reg8::A, op::Ind8(op::Reg16::HL), 1, 7),
             0xBF => self.cp(bus, op::Reg8::A, op::Reg8::A,  1, 4),
 
-            0xC0 => todo!(),
+            0xC0 => self.ret(bus, !flag::Z),
             0xC1 => todo!(),
             0xC2 => todo!(),
             0xC3 => todo!(),
@@ -239,8 +239,8 @@ impl CPU {
             0xC5 => todo!(),
             0xC6 => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xC7 => todo!(),
-            0xC8 => todo!(),
-            0xC9 => todo!(),
+            0xC8 => self.ret(bus, flag::Z),
+            0xC9 => self.ret(bus, flag::Any),
             0xCA => todo!(),
             0xCB => todo!(),
             0xCC => todo!(),
@@ -248,7 +248,7 @@ impl CPU {
             0xCE => self.add8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
             0xCF => todo!(),
 
-            0xD0 => todo!(),
+            0xD0 => self.ret(bus, !flag::C),
             0xD1 => todo!(),
             0xD2 => todo!(),
             0xD3 => todo!(),
@@ -256,7 +256,7 @@ impl CPU {
             0xD5 => todo!(),
             0xD6 => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), false, 1, 4),
             0xD7 => todo!(),
-            0xD8 => todo!(),
+            0xD8 => self.ret(bus, flag::C),
             0xD9 => self.exx(),
             0xDA => todo!(),
             0xDB => todo!(),
@@ -265,7 +265,7 @@ impl CPU {
             0xDE => self.sub8(bus, op::Reg8::A, op::Imm8::with_offset(1), true, 1, 4),
             0xDF => todo!(),
 
-            0xE0 => todo!(),
+            0xE0 => self.ret(bus, !flag::P),
             0xE1 => todo!(),
             0xE2 => todo!(),
             0xE3 => self.ex(bus, op::Ind16(op::Reg16::SP), op::Reg16::HL, 1, 19),
@@ -273,7 +273,7 @@ impl CPU {
             0xE5 => todo!(),
             0xE6 => todo!(),
             0xE7 => todo!(),
-            0xE8 => todo!(),
+            0xE8 => self.ret(bus, flag::P),
             0xE9 => todo!(),
             0xEA => todo!(),
             0xEB => self.ex(bus, op::Reg16::DE, op::Reg16::HL, 1, 4),
@@ -282,7 +282,7 @@ impl CPU {
             0xEE => todo!(),
             0xEF => todo!(),
             
-            0xF0 => todo!(),
+            0xF0 => self.ret(bus, !flag::N),
             0xF1 => todo!(),
             0xF2 => todo!(),
             0xF3 => todo!(),
@@ -290,7 +290,7 @@ impl CPU {
             0xF5 => todo!(),
             0xF6 => todo!(),
             0xF7 => todo!(),
-            0xF8 => todo!(),
+            0xF8 => self.ret(bus, flag::N),
             0xF9 => self.ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             0xFA => todo!(),
             0xFB => todo!(),
@@ -568,6 +568,17 @@ impl CPU {
         self.cycles += cycles;
     }
 
+    fn ret<B: Bus, P: flag::Predicate>(&mut self, bus: &mut B, pred: P) {
+        if pred.eval(self.regs.flags()) {
+            let addr = self.stack_pop(bus);
+            self.regs.set_pc(addr);
+            self.cycles += 11;
+        } else {
+            self.regs.inc_pc(1);
+            self.cycles += 5;
+        }
+    }
+
     fn rla(&mut self) {
         let a = self.regs.a();
         let mut c = a << 1;
@@ -628,6 +639,17 @@ impl CPU {
 
         self.regs.inc_pc(1);
         self.cycles += 4;
+    }
+
+    fn stack_pop<B: Bus>(&mut self, bus: &B) -> u16 {
+        let val = bus.mem_read_word(self.regs.sp());
+        self.regs.inc_sp(2);
+        val
+    }
+
+    fn stack_push<B: Bus>(&mut self, bus: &mut B, val: u16) {
+        self.regs.dec_sp(2);
+        bus.mem_write_word(self.regs.sp(), val);
     }
 
     fn scf(&mut self) {
