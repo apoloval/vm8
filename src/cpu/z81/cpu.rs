@@ -9,6 +9,16 @@ pub struct CPU {
 
     iff1: bool,
     iff2: bool,
+    
+    flags_inc8: flag::PrecomputedUnary,
+    flags_dec8: flag::PrecomputedUnary,
+    flags_rla: flag::PrecomputedUnary,
+    flags_rra: flag::PrecomputedUnary,
+    flags_add8: flag::PrecomputedBinary,
+    flags_sub8: flag::PrecomputedBinary,
+    flags_and8: flag::PrecomputedBinary,
+    flags_xor8: flag::PrecomputedBinary,
+    flags_or8: flag::PrecomputedBinary,
 }
 
 impl CPU {
@@ -18,6 +28,15 @@ impl CPU {
             cycles: 0,
             iff1: false,
             iff2: false,
+            flags_inc8: flag::PrecomputedUnary::for_inc8(),
+            flags_dec8: flag::PrecomputedUnary::for_dec8(),
+            flags_rla: flag::PrecomputedUnary::for_rla(),
+            flags_rra: flag::PrecomputedUnary::for_rra(),
+            flags_add8: flag::PrecomputedBinary::for_add8(),
+            flags_sub8: flag::PrecomputedBinary::for_sub8(),
+            flags_and8: flag::PrecomputedBinary::for_and8(),
+            flags_xor8: flag::PrecomputedBinary::for_xor8(),
+            flags_or8: flag::PrecomputedBinary::for_or8(),
         }
     }
 
@@ -317,13 +336,7 @@ impl CPU {
         let c = a + b;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) & 
-            flag::H.on(flag::carry_nibble(a, c)) &
-            flag::V.on(flag::overflow(a, b, c)) &
-            flag::C.on(flag::carry_byte(a, c)) - flag::N
-        );
-
+        self.regs.update_flags(self.flags_add8.for_ops(a, b));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -356,12 +369,7 @@ impl CPU {
         let c = a & b;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) &
-            flag::P.on(flag::parity(c)) &
-            flag::C.on(flag::carry_byte(a, c)) + flag::H - flag::N - flag::C
-        );
-
+        self.regs.update_flags(self.flags_and8.for_ops(a, b));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -397,17 +405,8 @@ impl CPU {
         let ctx = op::Context::from(bus, &mut self.regs);
         let a = dst.get(&ctx);
         let b = src.get(&ctx);
-        let c = a - b;
 
-        self.regs.update_flags(
-            flag::S.on(flag::signed(c)) &
-            flag::Z.on(c == 0) &
-            flag::intrinsic_undocumented(b) &
-            flag::H.on(flag::borrow_nibble(a, c)) &
-            flag::V.on(flag::underflow(a, b, c)) &
-            flag::C.on(flag::borrow_byte(a, c)) + flag::N
-        );
-
+        self.regs.update_flags(self.flags_sub8.for_ops(a, b));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -459,14 +458,11 @@ impl CPU {
     fn exec_dec8<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
     where B: Bus, D: op::DestOp<u8> {
         let mut ctx = op::Context::from(bus, &mut self.regs);
-        let a = dst.get(&ctx) + 1;
+        let a = dst.get(&ctx);
         let c = a - 1;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) & flag::H.on(flag::borrow_nibble(a, c)) & flag::V.on(flag::underflow(a, 1, c)) + flag::N
-        );
-
+        self.regs.update_flags(self.flags_dec8.for_op(a));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -548,14 +544,11 @@ impl CPU {
     fn exec_inc8<B, D> (&mut self, bus: &mut B, dst: D, size: usize, cycles: usize) 
     where B: Bus, D: op::DestOp<u8> {
         let mut ctx = op::Context::from(bus, &mut self.regs);
-        let a = dst.get(&ctx) + 1;
+        let a = dst.get(&ctx);
         let c = a + 1;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) & flag::H.on(flag::carry_nibble(a, c)) & flag::V.on(flag::overflow(a, 1, c)) - flag::N
-        );
-
+        self.regs.update_flags(self.flags_inc8.for_op(a));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -616,12 +609,7 @@ impl CPU {
         let c = a | b;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) &
-            flag::P.on(flag::parity(c)) &
-            flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
-        );
-
+        self.regs.update_flags(self.flags_or8.for_ops(a, b));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -677,10 +665,7 @@ impl CPU {
 
         self.regs.set_a(c);
 
-        self.regs.update_flags(
-            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x80 > 0) - flag::H - flag::N
-        );
-
+        self.regs.update_flags(self.flags_rla.for_op(a));
         self.regs.inc_pc(1);
         self.cycles += 4;
     }
@@ -691,10 +676,7 @@ impl CPU {
 
         self.regs.set_a(c);
 
-        self.regs.update_flags(
-            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x80 > 0) - flag::H - flag::N
-        );
-
+        self.regs.update_flags(self.flags_rla.for_op(a));
         self.regs.inc_pc(1);
         self.cycles += 4;
     }
@@ -708,10 +690,7 @@ impl CPU {
 
         self.regs.set_a(c);
 
-        self.regs.update_flags(
-            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x01 > 0) - flag::H - flag::N
-        );
-
+        self.regs.update_flags(self.flags_rra.for_op(a));
         self.regs.inc_pc(1);
         self.cycles += 4;
     }
@@ -722,10 +701,7 @@ impl CPU {
 
         self.regs.set_a(c);
 
-        self.regs.update_flags(
-            flag::intrinsic_undocumented(c) & flag::C.on(a & 0x01 > 0) - flag::H - flag::N
-        );
-
+        self.regs.update_flags(self.flags_rra.for_op(a));
         self.regs.inc_pc(1);
         self.cycles += 4;
     }
@@ -755,13 +731,7 @@ impl CPU {
         let c = a - b;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) &
-            flag::H.on(flag::borrow_nibble(a, c)) &
-            flag::V.on(flag::underflow(a, b, c)) & 
-            flag::C.on(flag::borrow_byte(a, c)) + flag::N
-        );
-
+        self.regs.update_flags(self.flags_sub8.for_ops(a, b));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }
@@ -774,12 +744,7 @@ impl CPU {
         let c = a ^ b;
         dst.set(&mut ctx, c);
 
-        self.regs.update_flags(
-            flag::intrinsic(c) &
-            flag::P.on(flag::parity(c)) &
-            flag::C.on(flag::carry_byte(a, c)) - flag::H - flag::N - flag::C
-        );
-
+        self.regs.update_flags(self.flags_xor8.for_ops(a, b));
         self.regs.inc_pc(size);
         self.cycles += cycles;
     }

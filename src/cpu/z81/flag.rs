@@ -60,6 +60,7 @@ pub const V: Flag = PV;
 /// 
 /// Affections are typically combined using add and sub operators, with either
 /// other flags or other affections.
+#[derive(Clone, Copy)]
 pub struct Affection { set: u8, reset: u8 }
 
 impl Default for Affection {
@@ -167,6 +168,132 @@ pub fn parity(mut c: u8) -> bool {
 }
 
 #[inline] pub fn signed(c: u8) -> bool { c & 0x80 > 0 }
+
+/// Precomputed flags for unary operators.
+pub struct PrecomputedUnary {
+    affections: Vec<Affection>,
+}
+
+impl PrecomputedUnary {
+    /// Return precomputed flags for inc8 operation.
+    pub fn for_inc8() -> Self {
+        Self::precompute(|i| {
+            let a = i;
+            let c = i + 1;
+            intrinsic(c) & H.on(carry_nibble(a, c)) & V.on(overflow(a, 1, c)) - N
+        })
+    }
+
+    /// Return precomputed flags for dec8 operation.
+    pub fn for_dec8() -> Self {
+        Self::precompute(|i| {
+            let a = i;
+            let c = i - 1;
+            intrinsic(c) & H.on(borrow_nibble(a, c)) & V.on(underflow(a, 1, c)) + N
+        })
+    }
+
+    /// Return precomputed flags for rla/rlca operations.
+    pub fn for_rla() -> Self {
+        Self::precompute(|i| {
+            let a = i;
+            let c = a << 1;
+            intrinsic_undocumented(c) & C.on(a & 0x80 > 0) - H - N
+        })
+    }
+
+    /// Return precomputed flags for rra/rrca operations.
+    pub fn for_rra() -> Self {
+        Self::precompute(|i| {
+            let a = i;
+            let c = a >> 1;
+            intrinsic_undocumented(c) & C.on(a & 0x01 > 0) - H - N
+        })
+    }
+
+    fn precompute<F: Fn(u8) -> Affection>(f: F) -> Self {
+        let mut affections = Vec::with_capacity(256);
+        for i in 0..=255 {
+            affections.push(f(i));
+        }
+        Self { affections }
+    }
+
+    /// Return the flags affection for the given operand.
+    pub fn for_op(&self, op: u8) -> Affection { self.affections[op as usize] }
+}
+
+/// Precomputed flags for binary operators.
+pub struct PrecomputedBinary {
+    affections: Vec<Affection>,
+}
+
+impl PrecomputedBinary {
+    /// Return precomputed flags for add8(a, b) operation.
+    pub fn for_add8() -> Self {
+        Self::precompute(|a, b| {
+            let c = a + b;
+            intrinsic(c) & 
+                H.on(carry_nibble(a, c)) & 
+                V.on(overflow(a, b, c)) & 
+                C.on(carry_byte(a, c)) - N
+        })
+    }
+
+    /// Return precomputed flags for sub8(a, b) operation.
+    pub fn for_sub8() -> Self {
+        Self::precompute(|a, b| {
+            let c = a - b;
+            intrinsic(c) &
+                H.on(borrow_nibble(a, c)) &
+                V.on(underflow(a, b, c)) & 
+                C.on(borrow_byte(a, c)) + N
+        })
+    }
+
+    /// Return precomputed flags for and8(a, b) operation.
+    pub fn for_and8() -> Self {
+        Self::precompute(|a, b| {
+            let c = a & b;
+            intrinsic(c) &
+                P.on(parity(c)) &
+                C.on(carry_byte(a, c)) + H - N - C
+        })
+    }
+
+    /// Return precomputed flags for xor8(a, b) operation.
+    pub fn for_xor8() -> Self {
+        Self::precompute(|a, b| {
+            let c = a ^ b;
+            intrinsic(c) &
+                P.on(parity(c)) &
+                C.on(carry_byte(a, c)) - H - N - C
+        })
+    }
+
+    /// Return precomputed flags for or8(a, b) operation.
+    pub fn for_or8() -> Self {
+        Self::precompute(|a, b| {
+            let c = a | b;
+            intrinsic(c) &
+                P.on(parity(c)) &
+                C.on(carry_byte(a, c)) - H - N - C
+        })
+    }
+
+    fn precompute<F: Fn(u8, u8) -> Affection>(f: F) -> Self {
+        let mut affections = Vec::with_capacity(256);
+        for a in 0..=255 {
+            for b in 0..=255 {
+                affections.push(f(a, b));
+            }
+        }
+        Self { affections }
+    }
+
+    /// Return the flags affection for the given operand.
+    pub fn for_ops(&self, a: u8, b: u8) -> Affection { self.affections[a as usize * 256 + b as usize] }
+}
 
 #[cfg(test)]
 mod test {
