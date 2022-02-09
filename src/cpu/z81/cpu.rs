@@ -6,6 +6,9 @@ use crate::cpu::z81::op;
 pub struct CPU {
     regs: Registers,
     cycles: usize,
+
+    iff1: bool,
+    iff2: bool,
 }
 
 impl CPU {
@@ -13,6 +16,8 @@ impl CPU {
         Self {
             regs: Registers::new(),
             cycles: 0,
+            iff1: false,
+            iff2: false,
         }
     }
 
@@ -285,7 +290,7 @@ impl CPU {
             0xF0 => self.exec_ret(bus, !flag::N),
             0xF1 => self.exec_pop(bus, op::Reg16::AF, 1, 10),
             0xF2 => self.exec_jp(bus, !flag::N, op::Imm16::with_offset(1), 3, 10),
-            0xF3 => todo!(),
+            0xF3 => self.exec_di(),
             0xF4 => self.exec_call(bus, !flag::N),
             0xF5 => self.exec_push(bus, op::Reg16::AF, 1, 11),
             0xF6 => self.exec_or(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
@@ -293,7 +298,7 @@ impl CPU {
             0xF8 => self.exec_ret(bus, flag::N),
             0xF9 => self.exec_ld(bus, op::Reg16::SP, op::Reg16::HL, 1, 6),
             0xFA => self.exec_jp(bus, flag::N, op::Imm16::with_offset(1), 3, 10),
-            0xFB => todo!(),
+            0xFB => self.exec_ei(),
             0xFC => self.exec_call(bus, flag::N),
             0xFD => todo!(),
             0xFE => self.exec_cp(bus, op::Reg8::A, op::Imm8::with_offset(1), 2, 7),
@@ -475,6 +480,14 @@ impl CPU {
         self.cycles += cycles;
     }
 
+
+    fn exec_di(&mut self) {
+        self.iff1 = false;
+        self.iff2 = false;
+        self.regs.inc_pc(1);
+        self.cycles += 4;
+    }
+
     fn exec_djnz<B: Bus>(&mut self, bus: &mut B) {
         let a = self.regs.c();
         let c = a - 1;
@@ -486,6 +499,13 @@ impl CPU {
             self.regs.inc_pc(2);
             self.cycles += 8;
         }
+    }
+
+    fn exec_ei(&mut self) {
+        self.iff1 = true;
+        self.iff2 = true;
+        self.regs.inc_pc(1);
+        self.cycles += 4;
     }
 
     fn exec_ex<B, D1, D2> (&mut self, bus: &mut B, opa: D1, opb: D2, size: usize, cycles: usize) 
