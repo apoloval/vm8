@@ -20,10 +20,11 @@ impl System {
 
     pub fn exec_cmd(&mut self, cmd: Command) {
         match cmd {
-            Command::Help => Command::print_help(),
-            Command::MemRead { addr} => self.exec_memread(addr.unwrap_or(self.cpu.regs().pc())),
             Command::Regs => self.exec_regs(),
             Command::Step => self.exec_step(),
+            Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.cpu.regs().pc())),
+            Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
+            _ => unreachable!(),
         }
     }
 
@@ -31,9 +32,17 @@ impl System {
         for org in (addr..addr+256).step_by(16) {
             print!("  {:04X}:", org);
             for offset in 0..16 {
-                print!(" {:02X}", self.bus.mem[offset as usize]);
+                print!(" {:02X}", self.bus.mem[(org+offset) as usize]);
             }
             println!("")
+        }
+    }
+
+    fn exec_memwrite(&mut self, addr: u16, data: Vec<u8>) {
+        let mut ptr = addr;
+        for byte in data {
+            self.bus.mem[ptr as usize] = byte;
+            ptr += 1;
         }
     }
 
