@@ -20,6 +20,7 @@ pub mod clock;
 pub mod cpu;
 pub mod io;
 pub mod mem;
+pub mod sys;
 
 #[cfg(test)]
 mod tests {

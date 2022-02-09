@@ -44,6 +44,8 @@ impl CPU {
 
     pub fn reset_cycles(&mut self) { self.cycles = 0 }
 
+    pub fn regs(&self) -> &Registers { &self.regs }
+
     pub fn exec<B: Bus>(&mut self, b: &mut B) {
         let opcode = b.mem_read(self.regs.pc());
         self.decode(b, opcode);
