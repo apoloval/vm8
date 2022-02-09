@@ -7,14 +7,17 @@ pub enum Command {
     Exit,
     Regs,
     Step,
+    Reset,
     MemRead { addr: Option<u16> },
     MemWrite { addr: u16, data: Vec<u8> },
 }
 
 #[derive(Debug)]
 pub enum ParseError {
-    UnknownCommand,
-    InvalidParameter,
+    NoInput,
+    NotEnoughParameters,
+    UnknownCommand(String),
+    InvalidParameter(String),
     Io(io::Error),
 }
 
@@ -25,8 +28,10 @@ impl From<io::Error> for ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> { 
         match self {
-            ParseError::UnknownCommand => write!(f, "unknown command"),
-            ParseError::InvalidParameter => write!(f, "invalid parameter"),
+            ParseError::NoInput => write!(f, "no input given"),
+            ParseError::NotEnoughParameters => write!(f, "not enough parameters"),
+            ParseError::UnknownCommand(cmd) => write!(f, "unknown command '{}'", cmd),
+            ParseError::InvalidParameter(param) => write!(f, "invalid parameter '{}'", param),
             ParseError::Io(e) => write!(f, "IO error: {}", e),
         }
     }
@@ -40,9 +45,11 @@ impl Command {
             Some("exit") | Some("x") => Ok(Command::Exit),
             Some("regs") | Some("r") => Ok(Command::Regs),
             Some("step") | Some("s") => Ok(Command::Step),
+            Some("reset")  => Ok(Command::Reset),
             Some("memread") => Self::parse_memread(params),
             Some("memwrite") => Self::parse_memwrite(params),
-            _ => Err(ParseError::UnknownCommand),
+            Some(other) => Err(ParseError::UnknownCommand(String::from(other))),
+            None => Err(ParseError::NoInput),
         }
     }
 
@@ -52,6 +59,7 @@ impl Command {
         println!("  exit | x                Exit and return to shell");
         println!("  regs | r                Print status of CPU registers");
         println!("  step | s                Execute one CPU step");
+        println!("  reset                   Reset the system");
         println!("  memread [<addr>]        Print memory content starting at <addr>[default:PC]");
         println!("  memwrite <addr> <data>  Write data into memory at given address");
         println!("");
@@ -68,13 +76,13 @@ impl Command {
     }
 
     fn parse_memwrite<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
-        let addr = params.next().ok_or(ParseError::InvalidParameter).and_then(Self::parse_addr)?;
-        let data = params.next().ok_or(ParseError::InvalidParameter).and_then(Self::parse_data)?;
+        let addr = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_addr)?;
+        let data = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_data)?;
         Ok(Command::MemWrite { addr, data })
     }
 
     fn parse_addr(s: &str) -> Result<u16, ParseError> {
-        u16::from_str_radix(s, 16).or(Err(ParseError::InvalidParameter))
+        u16::from_str_radix(s, 16).or(Err(ParseError::InvalidParameter(String::from(s))))
     }
 
     fn parse_data(s: &str) -> Result<Vec<u8>, ParseError> {
@@ -84,7 +92,7 @@ impl Command {
         if let Some(file) = s.strip_prefix("file:") {
             return Self::parse_data_file(file);
         }
-        Err(ParseError::InvalidParameter)
+        Err(ParseError::InvalidParameter(String::from(s)))
     }
 
     fn parse_data_literal(s: &str) -> Result<Vec<u8>, ParseError> {
@@ -93,7 +101,7 @@ impl Command {
             if let Some(byte) = u8::from_str_radix(&s[i..i+2], 16).ok() {
                 bytes.push(byte);
             } else {
-                return Err(ParseError::InvalidParameter)
+                return Err(ParseError::InvalidParameter(String::from(s)))
             }
         }
         Ok(bytes)

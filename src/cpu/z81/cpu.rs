@@ -23,7 +23,7 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> Self {
-        Self {
+        let mut cpu = Self {
             regs: Registers::new(),
             cycles: 0,
             iff1: false,
@@ -37,7 +37,17 @@ impl CPU {
             flags_and8: flag::PrecomputedBinary::for_and8(),
             flags_xor8: flag::PrecomputedBinary::for_xor8(),
             flags_or8: flag::PrecomputedBinary::for_or8(),
-        }
+        };
+        cpu.reset();
+        cpu
+    }
+
+    pub fn reset(&mut self) {
+        self.regs.set_pc(0x0000);
+        self.regs.set_af(0xFFFF);
+        self.regs.set_sp(0xFFFF);
+        self.iff1 = false;
+        self.iff2 = false;
     }
 
     pub fn cycles(&self) -> usize { self.cycles }

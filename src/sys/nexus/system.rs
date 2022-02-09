@@ -22,10 +22,15 @@ impl System {
         match cmd {
             Command::Regs => self.exec_regs(),
             Command::Step => self.exec_step(),
+            Command::Reset => self.exec_reset(),
             Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.cpu.regs().pc())),
             Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
             _ => unreachable!(),
         }
+    }
+
+    fn exec_reset(&mut self) {
+        self.cpu.reset();
     }
 
     fn exec_memread(&self, addr: u16) {
