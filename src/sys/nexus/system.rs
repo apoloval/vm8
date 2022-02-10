@@ -1,3 +1,7 @@
+use std::fs;
+use std::io::{self, Read};
+use std::path::Path;
+
 use crate::cpu::z81;
 use crate::sys::nexus::Command;
 
@@ -7,11 +11,14 @@ pub struct System {
 }
 
 impl System {
-    pub fn new() -> Self {
-        Self {
+    pub fn new(bios_path: &Path) -> io::Result<Self> {
+        let mut sys = Self {
             cpu: z81::CPU::new(),
             bus: Bus::new(),
-        }
+        };
+        let bios = Self::load_bios(bios_path)?;
+        sys.exec_memwrite(0x0000, bios);
+        Ok(sys)
     }
 
     pub fn prompt(&self) -> String {
@@ -27,6 +34,15 @@ impl System {
             Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
             _ => unreachable!(),
         }
+    }
+
+    fn load_bios(path: &Path) -> io::Result<Vec<u8>> {
+        let f = fs::File::open(path)?;
+        let mut reader = io::BufReader::new(f);
+        let mut buffer = Vec::new();
+    
+        reader.read_to_end(&mut buffer)?;
+        Ok(buffer)
     }
 
     fn exec_reset(&mut self) {

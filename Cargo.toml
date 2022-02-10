@@ -10,6 +10,7 @@ nightly = []
 
 [dependencies]
 byteorder = "1.2"
+dirs = "1.0.4"
 num-traits = "0.2"
 rustyline = "9.1.0"
 time = "0.1"
