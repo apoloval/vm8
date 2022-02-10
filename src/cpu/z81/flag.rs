@@ -179,7 +179,7 @@ impl PrecomputedUnary {
     pub fn for_inc8() -> Self {
         Self::precompute(|i| {
             let a = i;
-            let c = i + 1;
+            let c = i.wrapping_add(1);
             intrinsic(c) & H.on(carry_nibble(a, c)) & V.on(overflow(a, 1, c)) - N
         })
     }
@@ -188,7 +188,7 @@ impl PrecomputedUnary {
     pub fn for_dec8() -> Self {
         Self::precompute(|i| {
             let a = i;
-            let c = i - 1;
+            let c = i.wrapping_sub(1);
             intrinsic(c) & H.on(borrow_nibble(a, c)) & V.on(underflow(a, 1, c)) + N
         })
     }
@@ -232,7 +232,7 @@ impl PrecomputedBinary {
     /// Return precomputed flags for add8(a, b) operation.
     pub fn for_add8() -> Self {
         Self::precompute(|a, b| {
-            let c = a + b;
+            let c = a.wrapping_add(b);
             intrinsic(c) & 
                 H.on(carry_nibble(a, c)) & 
                 V.on(overflow(a, b, c)) & 
@@ -243,7 +243,7 @@ impl PrecomputedBinary {
     /// Return precomputed flags for sub8(a, b) operation.
     pub fn for_sub8() -> Self {
         Self::precompute(|a, b| {
-            let c = a - b;
+            let c = a.wrapping_sub(b);
             intrinsic(c) &
                 H.on(borrow_nibble(a, c)) &
                 V.on(underflow(a, b, c)) & 

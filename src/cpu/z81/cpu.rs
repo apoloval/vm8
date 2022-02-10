@@ -504,8 +504,9 @@ impl CPU {
     }
 
     fn exec_djnz(&mut self, bus: &mut impl Bus) {
-        let a = self.regs.c();
-        let c = a - 1;
+        let a = self.regs.b();
+        let c = a.wrapping_sub(1);
+        self.regs.set_b(c);
         if c != 0 {
             let rel = bus.mem_read(self.regs.pc() + 1) as i8;
             self.regs.inc_pc_signed(rel);
@@ -779,5 +780,60 @@ impl CPU {
     fn stack_push(&mut self, bus: &mut impl Bus, val: u16) {
         self.regs.dec_sp(2);
         bus.mem_write_word(self.regs.sp(), val);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use rstest::*;
+    
+    use crate::cpu::z81::bus::FakeBus;
+
+    use super::*;
+
+    #[fixture]
+    fn fixture() -> Fixture {
+        Fixture {
+            cpu: CPU::new(),
+            bus: FakeBus::new(),
+        }
+    }
+
+
+    struct Fixture {
+        cpu: CPU,
+        bus: FakeBus,
+    }
+
+    impl Fixture {
+        fn mem_write(&mut self, org: u16, data: &[u8]) {
+            let mut i = org;
+            for b in data {
+                self.bus.mem_write(i, *b);
+                i = i.wrapping_add(1);
+            }
+        }
+    }
+
+    #[rstest]
+    #[case(0x10, 0x1000, 10, 0x1010, 9)]
+    #[case(-0x10, 0x1000, 10, 0x0FF0, 9)]
+    #[case(0x10, 0x1000, 1, 0x1002, 0)]
+    fn test_djnz(
+        mut fixture: Fixture, 
+        #[case] op: i8, 
+        #[case] pc: u16,
+        #[case] b: u8, 
+        #[case] exp_pc: u16,
+        #[case] exp_b: u8, 
+    ) {
+        fixture.mem_write(pc, &[0x10, op as u8]);
+        fixture.cpu.regs.set_pc(pc);
+        fixture.cpu.regs.set_b(b);
+
+        fixture.cpu.exec(&mut fixture.bus);
+
+        assert_eq!(fixture.cpu.regs.b(), exp_b);
+        assert_eq!(fixture.cpu.regs.pc(), exp_pc);
     }
 }

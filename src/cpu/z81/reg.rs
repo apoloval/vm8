@@ -114,7 +114,7 @@ impl Registers {
     #[inline] pub fn swap_de(&mut self) { mem::swap(&mut self.de, &mut self.de_); }
     #[inline] pub fn swap_hl(&mut self) { mem::swap(&mut self.hl, &mut self.hl_); }
 
-    #[inline] pub fn inc_pc(&mut self, val: usize) -> u16 { *self.pc += val as u16; *self.pc }
+    #[inline] pub fn inc_pc(&mut self, val: usize) -> u16 { *self.pc = self.pc.wrapping_add(val as u16); *self.pc }
     #[inline] pub fn inc_pc_signed(&mut self, val: i8) -> u16 { self.inc_pc(val as usize) }
 
     #[inline] pub fn inc_sp(&mut self, val: usize) -> u16 { *self.sp += val as u16; *self.sp }
