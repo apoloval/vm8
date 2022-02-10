@@ -16,6 +16,7 @@ time = "0.1"
 
 [dev-dependencies]
 rand = "0.5"
+rstest = "0.12.0"
 
 [build-dependencies]
 rustc_version = "0.1.*"
