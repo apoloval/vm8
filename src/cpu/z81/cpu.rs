@@ -509,7 +509,7 @@ impl CPU {
         self.regs.set_b(c);
         if c != 0 {
             let rel = bus.mem_read(self.regs.pc() + 1) as i8;
-            self.regs.inc_pc_signed(rel);
+            self.regs.inc_pc_signed(rel.wrapping_add(2)); // as it is relative to the next instruction
             self.cycles += 13;
         } else {
             self.regs.inc_pc(2);
@@ -607,8 +607,8 @@ impl CPU {
     fn exec_jr(&mut self, bus: &mut impl Bus, pred: impl flag::Predicate) {
         let f = self.regs.flags();
         if pred.eval(f) {
-            let rel = bus.mem_read(self.regs.pc() + 1) as i8;
-            self.regs.inc_pc_signed(rel);
+            let rel = bus.mem_read(self.regs.pc().wrapping_add(1)) as i8;
+            self.regs.inc_pc_signed(rel.wrapping_add(2)); // as it is relative to next instruction
             self.cycles += 13;
         } else {
             self.regs.inc_pc(2);
@@ -816,8 +816,8 @@ mod test {
     }
 
     #[rstest]
-    #[case(0x10, 0x1000, 10, 0x1010, 9)]
-    #[case(-0x10, 0x1000, 10, 0x0FF0, 9)]
+    #[case(0x10, 0x1000, 10, 0x1012, 9)]
+    #[case(-0x10, 0x1000, 10, 0x0FF2, 9)]
     #[case(0x10, 0x1000, 1, 0x1002, 0)]
     fn test_djnz(
         mut fixture: Fixture, 
@@ -834,6 +834,33 @@ mod test {
         fixture.cpu.exec(&mut fixture.bus);
 
         assert_eq!(fixture.cpu.regs.b(), exp_b);
+        assert_eq!(fixture.cpu.regs.pc(), exp_pc);
+    }
+
+    #[rstest]
+    #[case([0x18, 0xFA], 0x1000, 0b0000_0000, 0x0FFC)] // JR -6
+    #[case([0x18, 0x06], 0x1000, 0b0000_0000, 0x1008)] // JR 6
+    #[case([0x20, 0x06], 0x1000, 0b0000_0000, 0x1008)] // JR NZ, 6 ; jump
+    #[case([0x20, 0x06], 0x1000, 0b0100_0000, 0x1002)] // JR NZ, 6 ; no jump
+    #[case([0x28, 0x06], 0x1000, 0b0100_0000, 0x1008)] // JR Z, 6 ; jump
+    #[case([0x28, 0x06], 0x1000, 0b0000_0000, 0x1002)] // JR Z, 6 ; no jump
+    #[case([0x30, 0x06], 0x1000, 0b0000_0000, 0x1008)] // JR NC, 6 ; jump
+    #[case([0x30, 0x06], 0x1000, 0b0000_0001, 0x1002)] // JR NC, 6 ; no jump
+    #[case([0x38, 0x06], 0x1000, 0b0000_0001, 0x1008)] // JR C, 6 ; jump
+    #[case([0x38, 0x06], 0x1000, 0b0000_0000, 0x1002)] // JR C, 6 ; no jump
+    fn test_jr(
+        mut fixture: Fixture, 
+        #[case] opcode: [u8; 2], 
+        #[case] pc: u16,
+        #[case] f: u8, 
+        #[case] exp_pc: u16,
+    ) {
+        fixture.mem_write(pc, &opcode);
+        fixture.cpu.regs.set_pc(pc);
+        fixture.cpu.regs.set_flags(f);
+
+        fixture.cpu.exec(&mut fixture.bus);
+
         assert_eq!(fixture.cpu.regs.pc(), exp_pc);
     }
 }
