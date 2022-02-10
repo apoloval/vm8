@@ -8,8 +8,8 @@ pub enum Command {
     Regs,
     Step,
     Reset,
-    MemRead { addr: Option<u16> },
-    MemWrite { addr: u16, data: Vec<u8> },
+    MemRead { addr: Option<u32> },
+    MemWrite { addr: u32, data: Vec<u8> },
 }
 
 #[derive(Debug)]
@@ -81,8 +81,8 @@ impl Command {
         Ok(Command::MemWrite { addr, data })
     }
 
-    fn parse_addr(s: &str) -> Result<u16, ParseError> {
-        u16::from_str_radix(s, 16).or(Err(ParseError::InvalidParameter(String::from(s))))
+    fn parse_addr(s: &str) -> Result<u32, ParseError> {
+        u32::from_str_radix(s, 16).or(Err(ParseError::InvalidParameter(String::from(s))))
     }
 
     fn parse_data(s: &str) -> Result<Vec<u8>, ParseError> {

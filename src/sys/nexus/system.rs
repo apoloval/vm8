@@ -4,6 +4,7 @@ use std::path::Path;
 
 use crate::cpu::z81;
 use crate::sys::nexus::Command;
+use crate::sys::nexus::mmu::MMU;
 
 pub struct System {    
     cpu: z81::CPU,
@@ -12,17 +13,15 @@ pub struct System {
 
 impl System {
     pub fn new(bios_path: &Path) -> io::Result<Self> {
-        let mut sys = Self {
-            cpu: z81::CPU::new(),
-            bus: Bus::new(),
-        };
         let bios = Self::load_bios(bios_path)?;
-        sys.exec_memwrite(0x0000, bios);
-        Ok(sys)
+        Ok(Self {
+            cpu: z81::CPU::new(),
+            bus: Bus::new(bios),
+        })        
     }
 
     pub fn prompt(&self) -> String {
-        format!("[PC:{:04X}]> ", self.cpu.regs().pc())
+        format!("[{}]> ", self.mapped_addr_display(self.cpu.regs().pc()))
     }
 
     pub fn exec_cmd(&mut self, cmd: Command) {
@@ -30,7 +29,7 @@ impl System {
             Command::Regs => self.exec_regs(),
             Command::Step => self.exec_step(),
             Command::Reset => self.exec_reset(),
-            Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.cpu.regs().pc())),
+            Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.mapped_addr(self.cpu.regs().pc()))),
             Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
             _ => unreachable!(),
         }
@@ -49,7 +48,7 @@ impl System {
         self.cpu.reset();
     }
 
-    fn exec_memread(&self, addr: u16) {
+    fn exec_memread(&self, addr: u32) {
         for org in (addr..addr+256).step_by(16) {
             print!("  {:04X}:", org);
             for offset in 0..16 {
@@ -59,7 +58,7 @@ impl System {
         }
     }
 
-    fn exec_memwrite(&mut self, addr: u16, data: Vec<u8>) {
+    fn exec_memwrite(&mut self, addr: u32, data: Vec<u8>) {
         let mut ptr = addr;
         for byte in data {
             self.bus.mem[ptr as usize] = byte;
@@ -74,29 +73,61 @@ impl System {
         println!("  DE: {:04X} [{:04X}]", regs.de(), regs.de_());
         println!("  HL: {:04X} [{:04X}]", regs.hl(), regs.hl_());
         println!("  SP: {:04X}", regs.sp());
-        println!("  PC: {:04X}", regs.pc());
+        println!("  PC: {}", self.mapped_addr_display(regs.pc()));
     }
 
     fn exec_step(&mut self) {
         self.cpu.exec(&mut self.bus);
     }
+
+    fn mapped_addr(&self, addr: u16) -> u32 { 
+        self.bus.mmu.map_addr(addr)
+    }
+
+    fn mapped_addr_display(&self, addr: u16) -> String {
+        format!("{:04X}::{:05X}", addr, self.mapped_addr(addr))
+    }
 }
 
 struct Bus {
-    mem: Box<[u8; 64*1024]>,    
+    mem: Vec<u8>,
+    mmu: MMU,
 }
 
 impl Bus {
-    fn new() -> Self {
-        Self {
-            mem: Box::new([0; 64*1024]),
+    fn new(bios: Vec<u8>) -> Self {
+        let mut bus = Self {
+            mem: vec![0; 1*1024*2014],
+            mmu: MMU::new(),
+        };
+        let mut ptr = 0xF0000;
+        for byte in bios {
+            bus.mem[ptr] = byte;
+            ptr += 1;
         }
+        bus
     }
 }
 
 impl z81::Bus for Bus {    
-    fn mem_read(&self, addr: u16) -> u8 { self.mem[addr as usize] }
-    fn mem_write(&mut self, addr: u16, val: u8) { self.mem[addr as usize] = val }
+    fn mem_read(&self, addr: u16) -> u8 { 
+        let paddr = self.mmu.map_addr(addr);
+        self.mem[paddr as usize] 
+    }
+    
+    fn mem_write(&mut self, addr: u16, val: u8) {
+        let paddr = self.mmu.map_addr(addr);
+        if paddr < 0xE0000 {
+            self.mem[paddr as usize] = val 
+        }
+    }
+
     fn io_read(&self, _port: u8) -> u8 { 0xFF}
-    fn io_write(&mut self, _port: u8, _val: u8) { }
+
+    fn io_write(&mut self, port: u8, val: u8) { 
+        match port {
+            0x60..=0x67 => self.mmu.write(port - 0x60, val),
+            _ => {},
+        };
+    }
 }
