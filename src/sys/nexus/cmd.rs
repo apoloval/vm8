@@ -112,13 +112,15 @@ impl Command {
 
     fn parse_addr(s: &str) -> Result<Addr, ParseError> {
         if let Some(pa) = s.strip_prefix(":") {
-            u32::from_str_radix(pa, 16)
-                .map(|a| Addr::Physical(a))
-                .or(Err(ParseError::InvalidParameter(String::from(s))))
+            match u32::from_str_radix(pa, 16) {
+                Ok(val) if val & 0xFFFFF == val => Ok(Addr::Physical(val)),
+                _ => Err(ParseError::InvalidParameter(String::from(s))),
+            }
         } else {
-            u16::from_str_radix(s, 16)
-                .map(|a| Addr::Logical(a))
-                .or(Err(ParseError::InvalidParameter(String::from(s))))
+            match u16::from_str_radix(s, 16) {
+                Ok(val) => Ok(Addr::Logical(val)),
+                _ => Err(ParseError::InvalidParameter(String::from(s))),
+            }
         }
     }
 }
