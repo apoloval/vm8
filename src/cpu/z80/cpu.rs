@@ -355,6 +355,8 @@ impl CPU {
             0x71 => self.exec_out(bus, Reg8::C, Lit8(0), 2, 12),
             0x78 => self.exec_in(bus, Some(Reg8::A), Reg8::C, true, 2, 12),
             0x79 => self.exec_out(bus, Reg8::C, Reg8::A, 2, 12),
+            0xA0 => self.exec_ldi(bus, false),
+            0xB0 => self.exec_ldi(bus, true),    
             _ => self.exec_nop(2, 8),
         }
     }
@@ -630,6 +632,33 @@ impl CPU {
         dst.set(&mut ctx, val);
         self.regs.inc_pc(size);
         self.cycles += cycles;
+    }
+
+    fn exec_ldi(&mut self, bus: &mut impl Bus, repeat: bool) {
+        let from = self.regs.hl();
+        let to = self.regs.de();
+        let byte = bus.mem_read(from);
+        bus.mem_write(to, byte);
+        let count = self.regs.bc();
+
+        self.regs.set_hl(from.wrapping_add(1));
+        self.regs.set_de(to.wrapping_add(1));
+        self.regs.set_bc(count.wrapping_sub(1));
+
+        let val_plus_a = byte.wrapping_add(self.regs.a());
+        self.regs.update_flags(
+            flag::PV.on(count > 0) &
+            flag::F5.on(val_plus_a & 0x01 > 0) &
+            flag::F3.on(val_plus_a & 0x08 > 0) - flag::H - flag::N,
+        );
+
+        if !repeat || self.regs.bc() == 0 {
+            // LDI or LDIR with BC=0
+            self.regs.inc_pc(2);
+            self.cycles += 16;
+        } else {
+            self.cycles += 21;
+        }
     }
 
     fn exec_nop(&mut self, size: usize, cycles: usize) {
