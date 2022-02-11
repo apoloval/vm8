@@ -33,7 +33,9 @@ impl System {
             Command::Reset => self.exec_reset(),
             Command::Step => self.exec_step(),
             Command::Resume => self.exec_resume(),
-            Command::Breakpoint { addr } => self.exec_breakpoint(addr),
+            Command::BreakSet { addr } => self.exec_break_set(addr),
+            Command::BreakShow => self.exec_break_show(),
+            Command::BreakDelete { addr } => self.exec_break_delete(addr),
             Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.mapped_addr(self.cpu.regs().pc()))),
             Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
             _ => unreachable!(),
@@ -53,8 +55,23 @@ impl System {
         self.cpu.reset();
     }
 
-    fn exec_breakpoint(&mut self, addr: u16) {
+    fn exec_break_set(&mut self, addr: u16) {
         self.breakpoints.insert(addr, ());
+    }
+
+    fn exec_break_show(&mut self) {
+        for addr in self.breakpoints.keys() {
+            println!("  {}", self.mapped_addr_display(*addr));
+        }
+        println!("");
+    }
+
+    fn exec_break_delete(&mut self, addr: Option<u16>) {
+        if let Some(a) = addr {
+            self.breakpoints.remove(&a);
+        } else {
+            self.breakpoints.clear();
+        }
     }
 
     fn exec_memread(&self, addr: u32) {

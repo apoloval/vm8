@@ -9,7 +9,9 @@ pub enum Command {
     Step,
     Resume,
     Reset,
-    Breakpoint { addr: u16 },
+    BreakSet { addr: u16 },
+    BreakShow,
+    BreakDelete { addr: Option<u16> },
     MemRead { addr: Option<u32> },
     MemWrite { addr: u32, data: Vec<u8> },
 }
@@ -48,7 +50,9 @@ impl Command {
             Some("status") | Some("st") => Ok(Command::Status),
             Some("step") | Some("s") => Ok(Command::Step),
             Some("resume") | Some("r") => Ok(Command::Resume),
-            Some("breakpoint") | Some("bp") => Self::parse_breakpoint(params),
+            Some("break") | Some("b") => Self::parse_break(params),
+            Some("delete") => Self::parse_delete(params),
+            Some("show") => Self::parse_show(params),
             Some("reset")  => Ok(Command::Reset),
             Some("memread") => Self::parse_memread(params),
             Some("memwrite") => Self::parse_memwrite(params),
@@ -64,7 +68,9 @@ impl Command {
         println!("  status | s                      Print status of the system");
         println!("  step | s                        Execute one CPU step");
         println!("  resume | r                      Resume the execution");
-        println!("  breakpoint <addr> | bp          Put a breakpoint at given address");
+        println!("  break <addr> | b                Set breakpoint at <addr>");
+        println!("  delete [<addr>]                 Delete breakpoints, or that at <addr>");
+        println!("  show break                      Show defined breakpoints");
         println!("  reset                           Reset the system");
         println!("  memread [<addr>]                Print memory at <addr> [default:PC]");
         println!("  memwrite <addr> <data>          Write data into memory at given address");
@@ -74,9 +80,25 @@ impl Command {
         println!("  file:[<byte>]+           Literal data with bytes in hexadecimal");
     }
 
-    fn parse_breakpoint<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
+    fn parse_show<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
+        let what = params.next().ok_or(ParseError::NotEnoughParameters)?;
+        match what {
+            "break" => Ok(Command::BreakShow),
+            other => Err(ParseError::InvalidParameter(String::from(other))),
+        }
+        
+    }
+
+    fn parse_break<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
         let addr = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_addr)?;
-        Ok(Command::Breakpoint { addr: addr as u16 })
+        Ok(Command::BreakSet { addr: addr as u16 })
+    }
+
+    fn parse_delete<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
+        match params.next() {
+            Some(addr) => Self::parse_addr(addr).map(|a| Command::BreakDelete { addr: Some(a as u16) }),
+            None => Ok(Command::BreakDelete { addr: None }),
+        }
     }
 
     fn parse_memread<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
