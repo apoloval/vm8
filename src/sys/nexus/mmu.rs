@@ -40,6 +40,12 @@ impl MMU {
         
     }
 
+    pub fn is_enabled(&self) -> bool { self.enabled }
+
+    pub fn read(&self, reg: u8) -> u8 {
+        self.regs[reg as usize & 0x07] 
+    }
+
     pub fn write(&mut self, reg: u8, val: u8) {
         self.regs[reg as usize & 0x07] = val;
         self.enabled = true;

@@ -26,7 +26,7 @@ impl System {
 
     pub fn exec_cmd(&mut self, cmd: Command) {
         match cmd {
-            Command::Regs => self.exec_regs(),
+            Command::Status => self.exec_status(),
             Command::Step => self.exec_step(),
             Command::Reset => self.exec_reset(),
             Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.mapped_addr(self.cpu.regs().pc()))),
@@ -66,14 +66,47 @@ impl System {
         }
     }
 
-    fn exec_regs(&self) {
+    fn exec_status(&self) {
+        self.print_cpu_regs();
+        self.print_mmu_regs();
+    }
+
+    fn print_cpu_regs(&self) {
         let regs = self.cpu.regs();
-        println!("  AF: {:04X} [{:04X}]", regs.af(), regs.af_());
-        println!("  BC: {:04X} [{:04X}]", regs.bc(), regs.bc_());
-        println!("  DE: {:04X} [{:04X}]", regs.de(), regs.de_());
-        println!("  HL: {:04X} [{:04X}]", regs.hl(), regs.hl_());
-        println!("  SP: {:04X}", regs.sp());
-        println!("  PC: {}", self.mapped_addr_display(regs.pc()));
+        println!(
+            "  CPU: AF={:04X}[{:04X}]   PC={}", 
+            regs.af(), regs.af_(), self.mapped_addr_display(regs.pc()),
+        );
+        println!(
+            "       BC={:04X}[{:04X}]   SP={}", 
+            regs.bc(), regs.bc_(), self.mapped_addr_display(regs.sp()),
+        );
+        println!(
+            "       DE={:04X}[{:04X}]", 
+            regs.de(), regs.de_(),
+        );
+        println!(
+            "       HL={:04X}[{:04X}]", 
+            regs.hl(), regs.hl_(),
+        );
+        println!("");
+    }
+
+    fn print_mmu_regs(&self) {
+        let mmu = &self.bus.mmu;
+        for i in 0u16..8 {
+            println!(
+                "  {} R{}={}   PAGE.{:X}={:05X}   PAGE.{:X}={:05X}", 
+                if i == 0 { "MMU:" } else { "    " },
+                i,
+                if mmu.is_enabled() { format!("{:02X}", mmu.read(i as u8)) } else { String::from("XX") }, 
+                i*2,
+                self.mapped_addr((i*2) << 12),
+                i*2 + 1,
+                self.mapped_addr((i*2 + 1) << 12),
+            );
+        }
+        println!("");
     }
 
     fn exec_step(&mut self) {
@@ -85,7 +118,7 @@ impl System {
     }
 
     fn mapped_addr_display(&self, addr: u16) -> String {
-        format!("{:04X}::{:05X}", addr, self.mapped_addr(addr))
+        format!("{:04X}:{:05X}", addr, self.mapped_addr(addr))
     }
 }
 

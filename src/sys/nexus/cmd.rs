@@ -5,7 +5,7 @@ use std::io::{self, Read};
 pub enum Command {
     Help,
     Exit,
-    Regs,
+    Status,
     Step,
     Reset,
     MemRead { addr: Option<u32> },
@@ -43,7 +43,7 @@ impl Command {
         match params.next() {
             Some("help") | Some("?") => Ok(Command::Help),
             Some("exit") | Some("x") => Ok(Command::Exit),
-            Some("regs") | Some("r") => Ok(Command::Regs),
+            Some("status") | Some("st") => Ok(Command::Status),
             Some("step") | Some("s") => Ok(Command::Step),
             Some("reset")  => Ok(Command::Reset),
             Some("memread") => Self::parse_memread(params),
@@ -57,7 +57,7 @@ impl Command {
         println!("Commands:");
         println!("  help | ?                Print this help");
         println!("  exit | x                Exit and return to shell");
-        println!("  regs | r                Print status of CPU registers");
+        println!("  status | s              Print status of the system");
         println!("  step | s                Execute one CPU step");
         println!("  reset                   Reset the system");
         println!("  memread [<addr>]        Print memory content starting at <addr>[default:PC]");
