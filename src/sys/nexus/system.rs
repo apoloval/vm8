@@ -32,15 +32,14 @@ impl System {
 
     pub fn exec_cmd(&mut self, cmd: Command) {
         match cmd {
-            Command::Status => self.exec_status(),
+            Command::StatusShow => self.exec_status(),
             Command::Reset => self.exec_reset(),
             Command::Step => self.exec_step(),
             Command::Resume => self.exec_resume(),
             Command::BreakSet { addr } => self.exec_break_set(addr),
             Command::BreakShow => self.exec_break_show(),
             Command::BreakDelete { addr } => self.exec_break_delete(addr),
-            Command::MemRead { addr } => self.exec_memread(addr),
-            Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
+            Command::MemShow { addr } => self.exec_mem_show(addr),
             _ => unreachable!(),
         }
     }
@@ -93,7 +92,7 @@ impl System {
         };            
     }
 
-    fn exec_memread(&self, addr: Option<Addr>) {
+    fn exec_mem_show(&self, addr: Option<Addr>) {
         let addr_phy = self.resolve_addr(addr.unwrap_or(Addr::Logical(self.cpu.regs().pc())));
         for org in (addr_phy..addr_phy+256).step_by(16) {
             print!("  {:04X}:", org);
@@ -101,15 +100,6 @@ impl System {
                 print!(" {:02X}", self.bus.mem[(org+offset) as usize]);
             }
             println!("")
-        }
-    }
-
-    fn exec_memwrite(&mut self, addr: Addr, data: Vec<u8>) {
-        let addr_phy = self.resolve_addr(addr);
-        let mut ptr = addr_phy;
-        for byte in data {
-            self.bus.mem[ptr as usize] = byte;
-            ptr = ptr.wrapping_add(1);
         }
     }
 

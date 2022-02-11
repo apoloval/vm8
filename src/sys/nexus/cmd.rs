@@ -1,21 +1,19 @@
 use std::fmt;
-use std::fs;
-use std::io::{self, Read};
+use std::io;
 
 use crate::sys::nexus::Addr;
 
 pub enum Command {
     Help,
     Exit,
-    Status,
+    StatusShow,
     Step,
     Resume,
     Reset,
     BreakSet { addr: Addr },
     BreakShow,
     BreakDelete { addr: Option<Addr> },
-    MemRead { addr: Option<Addr> },
-    MemWrite { addr: Addr, data: Vec<u8> },
+    MemShow { addr: Option<Addr> },
 }
 
 #[derive(Debug)]
@@ -49,43 +47,45 @@ impl Command {
         match params.next() {
             Some("help") | Some("?") => Ok(Command::Help),
             Some("exit") | Some("x") => Ok(Command::Exit),
-            Some("status") | Some("st") => Ok(Command::Status),
             Some("step") | Some("s") => Ok(Command::Step),
             Some("resume") | Some("r") => Ok(Command::Resume),
             Some("break") | Some("b") => Self::parse_break(params),
             Some("delete") => Self::parse_delete(params),
             Some("show") => Self::parse_show(params),
+            Some("st") => Ok(Command::StatusShow),
+            Some("m") => Self::parse_show_mem(params),
             Some("reset")  => Ok(Command::Reset),
-            Some("memread") => Self::parse_memread(params),
-            Some("memwrite") => Self::parse_memwrite(params),
             Some(other) => Err(ParseError::UnknownCommand(String::from(other))),
             None => Err(ParseError::NoInput),
         }
     }
 
     pub fn print_help() {
-        println!("Commands:");
-        println!("  help | ?                        Print this help");
-        println!("  exit | x                        Exit and return to shell");
-        println!("  status | s                      Print status of the system");
-        println!("  step | s                        Execute one CPU step");
-        println!("  resume | r                      Resume the execution");
+        println!("Breakpoint commands:");
         println!("  break <addr> | b                Set breakpoint at <addr>");
         println!("  delete [<addr>]                 Delete breakpoints, or that at <addr>");
         println!("  show break                      Show defined breakpoints");
+        println!("Runtime behavior commands:");
+        println!("  resume | r                      Resume the execution");
         println!("  reset                           Reset the system");
-        println!("  memread [<addr>]                Print memory at <addr> [default:PC]");
-        println!("  memwrite <addr> <data>          Write data into memory at given address");
+        println!("  step | s                        Execute one CPU step");
+        println!("  show status | st                Show status of the system");
+        println!("  show mem [<addr>] | m           Show memory at <addr> [default:PC]");
+        println!("Program control commands:");
+        println!("  help | ?                        Print this help");
+        println!("  exit | x                        Exit and return to shell");
         println!("");
         println!("Data formats:");
-        println!("  data:[<byte>]+           Literal data with bytes in hexadecimal");
-        println!("  file:[<byte>]+           Literal data with bytes in hexadecimal");
+        println!("  <addr>=[0-9A-F]{{1,4}}          A logical address");
+        println!("  <addr>=:[0-9A-F]{{1,5}}         A physical address");
     }
 
     fn parse_show<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
         let what = params.next().ok_or(ParseError::NotEnoughParameters)?;
         match what {
             "break" => Ok(Command::BreakShow),
+            "status" => Ok(Command::StatusShow),
+            "mem" => Self::parse_show_mem(params),
             other => Err(ParseError::InvalidParameter(String::from(other))),
         }
         
@@ -103,17 +103,11 @@ impl Command {
         }
     }
 
-    fn parse_memread<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
+    fn parse_show_mem<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
         match params.next() {
-            Some(addr) => Self::parse_addr(addr).map(|a| Command::MemRead { addr: Some(a) }),
-            None => Ok(Command::MemRead { addr: None }),
+            Some(addr) => Self::parse_addr(addr).map(|a| Command::MemShow { addr: Some(a) }),
+            None => Ok(Command::MemShow { addr: None }),
         }
-    }
-
-    fn parse_memwrite<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
-        let addr = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_addr)?;
-        let data = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_data)?;
-        Ok(Command::MemWrite { addr, data })
     }
 
     fn parse_addr(s: &str) -> Result<Addr, ParseError> {
@@ -126,36 +120,5 @@ impl Command {
                 .map(|a| Addr::Logical(a))
                 .or(Err(ParseError::InvalidParameter(String::from(s))))
         }
-    }
-
-    fn parse_data(s: &str) -> Result<Vec<u8>, ParseError> {
-        if let Some(data) = s.strip_prefix("data:") {
-            return Self::parse_data_literal(data);
-        }
-        if let Some(file) = s.strip_prefix("file:") {
-            return Self::parse_data_file(file);
-        }
-        Err(ParseError::InvalidParameter(String::from(s)))
-    }
-
-    fn parse_data_literal(s: &str) -> Result<Vec<u8>, ParseError> {
-        let mut bytes = Vec::with_capacity(s.len() / 2);
-        for i in (0..s.len()).step_by(2) {
-            if let Some(byte) = u8::from_str_radix(&s[i..i+2], 16).ok() {
-                bytes.push(byte);
-            } else {
-                return Err(ParseError::InvalidParameter(String::from(s)))
-            }
-        }
-        Ok(bytes)
-    }
-
-    fn parse_data_file(s: &str) -> Result<Vec<u8>, ParseError> {
-        let f = fs::File::open(s)?;
-        let mut reader = io::BufReader::new(f);
-        let mut buffer = Vec::new();
-    
-        reader.read_to_end(&mut buffer)?;
-        Ok(buffer)
     }
 }
