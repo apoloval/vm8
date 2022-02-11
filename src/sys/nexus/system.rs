@@ -4,13 +4,15 @@ use std::io::{self, Read};
 use std::path::Path;
 
 use crate::cpu::z80;
-use crate::sys::nexus::Command;
+use crate::sys::nexus::Addr;
+use crate::sys::nexus::cmd::Command;
 use crate::sys::nexus::mmu::MMU;
 
 pub struct System {    
     cpu: z80::CPU,
     bus: Bus,
-    breakpoints: HashMap<u16, ()>,
+    break_log: HashMap<u16, ()>,
+    break_phy: HashMap<u32, ()>,
 }
 
 impl System {
@@ -19,12 +21,13 @@ impl System {
         Ok(Self {
             cpu: z80::CPU::new(),
             bus: Bus::new(bios),
-            breakpoints: HashMap::new(),
+            break_log: HashMap::new(),
+            break_phy: HashMap::new(),
         })        
     }
 
     pub fn prompt(&self) -> String {
-        format!("[{}]> ", self.mapped_addr_display(self.cpu.regs().pc()))
+        format!("[{}]> ", self.display_addr(Addr::Logical(self.cpu.regs().pc())))
     }
 
     pub fn exec_cmd(&mut self, cmd: Command) {
@@ -36,7 +39,7 @@ impl System {
             Command::BreakSet { addr } => self.exec_break_set(addr),
             Command::BreakShow => self.exec_break_show(),
             Command::BreakDelete { addr } => self.exec_break_delete(addr),
-            Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.mapped_addr(self.cpu.regs().pc()))),
+            Command::MemRead { addr } => self.exec_memread(addr),
             Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
             _ => unreachable!(),
         }
@@ -55,27 +58,44 @@ impl System {
         self.cpu.reset();
     }
 
-    fn exec_break_set(&mut self, addr: u16) {
-        self.breakpoints.insert(addr, ());
+    fn exec_break_set(&mut self, addr: Addr) {
+        match addr {
+            Addr::Logical(a) => self.break_log.insert(a, ()),
+            Addr::Physical(a) => self.break_phy.insert(a, ()),
+        };        
     }
 
     fn exec_break_show(&mut self) {
-        for addr in self.breakpoints.keys() {
-            println!("  {}", self.mapped_addr_display(*addr));
+        if self.break_log.len() > 0 {
+            println!("Logical address:");
+            for addr in self.break_log.keys() {
+                println!("  {}", self.display_addr(Addr::Logical(*addr)));
+            }
+            println!("");
         }
-        println!("");
+        if self.break_phy.len() > 0 {
+            println!("Logical address:");
+            for addr in self.break_phy.keys() {
+                println!("  {}", self.display_addr(Addr::Physical(*addr)));
+            }
+            println!("");
+        }
     }
 
-    fn exec_break_delete(&mut self, addr: Option<u16>) {
-        if let Some(a) = addr {
-            self.breakpoints.remove(&a);
-        } else {
-            self.breakpoints.clear();
-        }
+    fn exec_break_delete(&mut self, addr: Option<Addr>) {
+        match addr {
+            Some(Addr::Logical(it)) => { self.break_log.remove(&it); },
+            Some(Addr::Physical(it)) => { self.break_phy.remove(&it); },
+            None => {
+                self.break_log.clear();
+                self.break_phy.clear();
+            },
+        };            
     }
 
-    fn exec_memread(&self, addr: u32) {
-        for org in (addr..addr+256).step_by(16) {
+    fn exec_memread(&self, addr: Option<Addr>) {
+        let addr_phy = self.resolve_addr(addr.unwrap_or(Addr::Logical(self.cpu.regs().pc())));
+        for org in (addr_phy..addr_phy+256).step_by(16) {
             print!("  {:04X}:", org);
             for offset in 0..16 {
                 print!(" {:02X}", self.bus.mem[(org+offset) as usize]);
@@ -84,11 +104,12 @@ impl System {
         }
     }
 
-    fn exec_memwrite(&mut self, addr: u32, data: Vec<u8>) {
-        let mut ptr = addr;
+    fn exec_memwrite(&mut self, addr: Addr, data: Vec<u8>) {
+        let addr_phy = self.resolve_addr(addr);
+        let mut ptr = addr_phy;
         for byte in data {
             self.bus.mem[ptr as usize] = byte;
-            ptr += 1;
+            ptr = ptr.wrapping_add(1);
         }
     }
 
@@ -101,11 +122,11 @@ impl System {
         let regs = self.cpu.regs();
         println!(
             "  CPU: AF={:04X}[{:04X}]   PC={}", 
-            regs.af(), regs.af_(), self.mapped_addr_display(regs.pc()),
+            regs.af(), regs.af_(), self.display_addr(Addr::Logical(regs.pc())),
         );
         println!(
             "       BC={:04X}[{:04X}]   SP={}", 
-            regs.bc(), regs.bc_(), self.mapped_addr_display(regs.sp()),
+            regs.bc(), regs.bc_(), self.display_addr(Addr::Logical(regs.sp())),
         );
         println!(
             "       DE={:04X}[{:04X}]", 
@@ -127,9 +148,9 @@ impl System {
                 i,
                 if mmu.is_enabled() { format!("{:02X}", mmu.read(i as u8)) } else { String::from("XX") }, 
                 i*2,
-                self.mapped_addr((i*2) << 12),
+                self.resolve_addr(Addr::Logical((i*2) << 12)),
                 i*2 + 1,
-                self.mapped_addr((i*2 + 1) << 12),
+                self.resolve_addr(Addr::Logical((i*2 + 1) << 12)),
             );
         }
         println!("");
@@ -142,21 +163,32 @@ impl System {
     fn exec_resume(&mut self) {
         loop {
             self.cpu.exec(&mut self.bus);
-            let pc = self.cpu.regs().pc();
-            if self.breakpoints.contains_key(&pc) {
-                println!("Breakpoint at {}", self.mapped_addr_display(pc));
+            let pc_log = self.cpu.regs().pc();
+            if self.break_log.contains_key(&pc_log) {
+                println!("Breakpoint at {}", self.display_addr(Addr::Logical(pc_log)));
+                break;
+            }
+            let pc_phy = self.bus.mmu.map_addr(self.cpu.regs().pc());
+            if self.break_phy.contains_key(&pc_phy) {
+                println!("Breakpoint at {}", self.display_addr(Addr::Physical(pc_phy)));
                 break;
             }
         }
     }
 
-    fn mapped_addr(&self, addr: u16) -> u32 { 
-        self.bus.mmu.map_addr(addr)
+    fn resolve_addr(&self, addr: Addr) -> u32 { 
+        match addr {
+            Addr::Logical(a) => self.bus.mmu.map_addr(a),
+            Addr::Physical(a) => a,
+        }
     }
 
-    fn mapped_addr_display(&self, addr: u16) -> String {
-        format!("{:04X}:{:05X}", addr, self.mapped_addr(addr))
-    }
+    fn display_addr(&self, addr: Addr) -> String {
+        match addr {
+            Addr::Logical(a) => format!("{:04X}:{:05X}", a, self.bus.mmu.map_addr(a)),
+            Addr::Physical(a) => format!(":{:05X}", a),
+        }
+    }    
 }
 
 struct Bus {

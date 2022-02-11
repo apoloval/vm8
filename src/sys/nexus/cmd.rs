@@ -2,6 +2,8 @@ use std::fmt;
 use std::fs;
 use std::io::{self, Read};
 
+use crate::sys::nexus::Addr;
+
 pub enum Command {
     Help,
     Exit,
@@ -9,11 +11,11 @@ pub enum Command {
     Step,
     Resume,
     Reset,
-    BreakSet { addr: u16 },
+    BreakSet { addr: Addr },
     BreakShow,
-    BreakDelete { addr: Option<u16> },
-    MemRead { addr: Option<u32> },
-    MemWrite { addr: u32, data: Vec<u8> },
+    BreakDelete { addr: Option<Addr> },
+    MemRead { addr: Option<Addr> },
+    MemWrite { addr: Addr, data: Vec<u8> },
 }
 
 #[derive(Debug)]
@@ -91,12 +93,12 @@ impl Command {
 
     fn parse_break<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
         let addr = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_addr)?;
-        Ok(Command::BreakSet { addr: addr as u16 })
+        Ok(Command::BreakSet { addr })
     }
 
     fn parse_delete<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
         match params.next() {
-            Some(addr) => Self::parse_addr(addr).map(|a| Command::BreakDelete { addr: Some(a as u16) }),
+            Some(addr) => Self::parse_addr(addr).map(|a| Command::BreakDelete { addr: Some(a) }),
             None => Ok(Command::BreakDelete { addr: None }),
         }
     }
@@ -114,8 +116,16 @@ impl Command {
         Ok(Command::MemWrite { addr, data })
     }
 
-    fn parse_addr(s: &str) -> Result<u32, ParseError> {
-        u32::from_str_radix(s, 16).or(Err(ParseError::InvalidParameter(String::from(s))))
+    fn parse_addr(s: &str) -> Result<Addr, ParseError> {
+        if let Some(pa) = s.strip_prefix(":") {
+            u32::from_str_radix(pa, 16)
+                .map(|a| Addr::Physical(a))
+                .or(Err(ParseError::InvalidParameter(String::from(s))))
+        } else {
+            u16::from_str_radix(s, 16)
+                .map(|a| Addr::Logical(a))
+                .or(Err(ParseError::InvalidParameter(String::from(s))))
+        }
     }
 
     fn parse_data(s: &str) -> Result<Vec<u8>, ParseError> {
