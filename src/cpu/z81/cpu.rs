@@ -340,13 +340,21 @@ impl CPU {
     fn decode_ext(&mut self, bus: &mut impl Bus, opcode: u8) {
         match opcode {
             0x40 => self.exec_in(bus, Some(Reg8::B), Reg8::C, true, 2, 12),
+            0x41 => self.exec_out(bus, Reg8::C, Reg8::B, 2, 12),            
             0x48 => self.exec_in(bus, Some(Reg8::C), Reg8::C, true, 2, 12),
+            0x49 => self.exec_out(bus, Reg8::C, Reg8::C, 2, 12),
             0x50 => self.exec_in(bus, Some(Reg8::D), Reg8::C, true, 2, 12),
+            0x51 => self.exec_out(bus, Reg8::C, Reg8::D, 2, 12),
             0x58 => self.exec_in(bus, Some(Reg8::E), Reg8::C, true, 2, 12),
+            0x59 => self.exec_out(bus, Reg8::C, Reg8::E, 2, 12),
             0x60 => self.exec_in(bus, Some(Reg8::H), Reg8::C, true, 2, 12),
+            0x61 => self.exec_out(bus, Reg8::C, Reg8::H, 2, 12),
             0x68 => self.exec_in(bus, Some(Reg8::L), Reg8::C, true, 2, 12),
+            0x69 => self.exec_out(bus, Reg8::C, Reg8::L, 2, 12),
             0x70 => self.exec_in(bus, None, Reg8::C, true, 2, 12),
+            0x71 => self.exec_out(bus, Reg8::C, Lit8(0), 2, 12),
             0x78 => self.exec_in(bus, Some(Reg8::A), Reg8::C, true, 2, 12),
+            0x79 => self.exec_out(bus, Reg8::C, Reg8::A, 2, 12),
             _ => self.exec_nop(2, 8),
         }
     }

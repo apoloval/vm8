@@ -23,6 +23,13 @@ pub trait DestOp<T> : SrcOp<T> {
     fn set<B: Bus>(&self, ctx: &mut Context<B>, val: T);
 }
 
+/// A literal 8-bit value that can be used as source operand.
+pub struct Lit8(pub u8);
+
+impl SrcOp<u8> for Lit8 {
+    fn get<B: Bus>(&self, _: &Context<B>) -> u8 { self.0 }
+}
+
 /// A 8-bit CPU register that can act as source and destination operand.
 pub enum Reg8 { A, B, C, D, E, H, L }
 
