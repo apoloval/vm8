@@ -86,7 +86,7 @@ impl CPU {
             0x13 => self.exec_inc16(bus, Reg16::DE, 1, 6),
             0x14 => self.exec_inc8(bus, Reg8::D, 1, 4),
             0x15 => self.exec_dec8(bus, Reg8::D, 1, 4),
-            0x16 => self.exec_ld(bus, Reg8::C, Imm8::with_offset(1), 2, 7),
+            0x16 => self.exec_ld(bus, Reg8::D, Imm8::with_offset(1), 2, 7),
             0x17 => self.exec_rla(),            
             0x18 => self.exec_jr(bus, flag::Any),
             0x19 => self.exec_add16(bus, Reg16::HL, Reg16::DE, 1, 11),
@@ -828,12 +828,22 @@ mod test {
 
     use super::*;
 
+    const FIXTURE_BC_ADDR: u16 = 0xF000;
+    const FIXTURE_DE_ADDR: u16 = 0xF100;
+    const FIXTURE_HL_ADDR: u16 = 0xF200;
+    const FIXTURE_SP_ADDR: u16 = 0xF300;
+
     #[fixture]
     fn fixture() -> Fixture {
-        Fixture {
+        let mut fix = Fixture {
             cpu: CPU::new(),
             bus: FakeBus::new(),
-        }
+        };
+        fix.cpu.regs.set_bc(FIXTURE_BC_ADDR);
+        fix.cpu.regs.set_de(FIXTURE_DE_ADDR);
+        fix.cpu.regs.set_hl(FIXTURE_HL_ADDR);
+        fix.cpu.regs.set_sp(FIXTURE_SP_ADDR);
+        fix
     }
 
 
@@ -899,5 +909,127 @@ mod test {
         fixture.cpu.exec(&mut fixture.bus);
 
         assert_eq!(fixture.cpu.regs.pc(), exp_pc);
+    }
+
+    trait GetByte : FnOnce(&Fixture) -> u8 {}
+    impl<T: FnOnce(&Fixture) -> u8> GetByte for T {}
+
+    trait SetByte : FnOnce(&mut Fixture, u8) {}
+    impl<T: FnOnce(&mut Fixture, u8)> SetByte for T {}
+
+    fn get_a(f: &Fixture) -> u8 { f.cpu.regs.a() }
+    fn get_b(f: &Fixture) -> u8 { f.cpu.regs.b() }
+    fn get_c(f: &Fixture) -> u8 { f.cpu.regs.c() }
+    fn get_d(f: &Fixture) -> u8 { f.cpu.regs.d() }
+    fn get_e(f: &Fixture) -> u8 { f.cpu.regs.e() }
+    fn get_h(f: &Fixture) -> u8 { f.cpu.regs.h() }
+    fn get_l(f: &Fixture) -> u8 { f.cpu.regs.l() }
+    fn get_ind_bc(f: &Fixture) ->u8 { f.bus.mem_read(f.cpu.regs.bc()) }
+    fn get_ind_de(f: &Fixture) ->u8 { f.bus.mem_read(f.cpu.regs.de()) }    
+    fn get_ind_hl(f: &Fixture) ->u8 { f.bus.mem_read(f.cpu.regs.hl()) }
+
+    fn get_mem_byte(addr: u16) -> impl GetByte {
+        move |f: &Fixture| f.bus.mem_read(addr)
+    }
+
+    fn set_none(_: &mut Fixture, _: u8) {}
+    fn set_a(f: &mut Fixture, v: u8) { f.cpu.regs.set_a(v) }
+    fn set_b(f: &mut Fixture, v: u8) { f.cpu.regs.set_b(v) }
+    fn set_c(f: &mut Fixture, v: u8) { f.cpu.regs.set_c(v) }
+    fn set_d(f: &mut Fixture, v: u8) { f.cpu.regs.set_d(v) }
+    fn set_e(f: &mut Fixture, v: u8) { f.cpu.regs.set_e(v) }
+    fn set_h(f: &mut Fixture, v: u8) { f.cpu.regs.set_h(v) }
+    fn set_l(f: &mut Fixture, v: u8) { f.cpu.regs.set_l(v) }
+    fn set_ind_hl(f: &mut Fixture, v: u8) { f.bus.mem_write(FIXTURE_HL_ADDR, v) }
+
+    #[rstest]
+    /* 01: LD B,B    */ #[case(&[0x40], get_b, set_b, 0x0001)]      
+    /* 02: LD B,C    */ #[case(&[0x41], get_b, set_c, 0x0001)]      
+    /* 03: LD B,D    */ #[case(&[0x42], get_b, set_d, 0x0001)]      
+    /* 04: LD B,E    */ #[case(&[0x43], get_b, set_e, 0x0001)]      
+    /* 05: LD B,H    */ #[case(&[0x44], get_b, set_h, 0x0001)]      
+    /* 06: LD B,L    */ #[case(&[0x45], get_b, set_l, 0x0001)]      
+    /* 07: LD B,(HL) */ #[case(&[0x46], get_b, set_ind_hl, 0x0001)] 
+    /* 08: LD B,A    */ #[case(&[0x47], get_b, set_a, 0x0001)]      
+    /* 09: LD C,B    */ #[case(&[0x48], get_c, set_b, 0x0001)]      
+    /* 10: LD C,C    */ #[case(&[0x49], get_c, set_c, 0x0001)]      
+    /* 11: LD C,D    */ #[case(&[0x4A], get_c, set_d, 0x0001)]      
+    /* 12: LD C,E    */ #[case(&[0x4B], get_c, set_e, 0x0001)]      
+    /* 13: LD C,H    */ #[case(&[0x4C], get_c, set_h, 0x0001)]      
+    /* 14: LD C,L    */ #[case(&[0x4D], get_c, set_l, 0x0001)]      
+    /* 15: LD C,(HL) */ #[case(&[0x4E], get_c, set_ind_hl, 0x0001)] 
+    /* 16: LD C,A    */ #[case(&[0x4F], get_c, set_a, 0x0001)]      
+    /* 17: LD D,B    */ #[case(&[0x50], get_d, set_b, 0x0001)]      
+    /* 18: LD D,C    */ #[case(&[0x51], get_d, set_c, 0x0001)]      
+    /* 19: LD D,D    */ #[case(&[0x52], get_d, set_d, 0x0001)]      
+    /* 20: LD D,E    */ #[case(&[0x53], get_d, set_e, 0x0001)]      
+    /* 21: LD D,H    */ #[case(&[0x54], get_d, set_h, 0x0001)]      
+    /* 22: LD D,L    */ #[case(&[0x55], get_d, set_l, 0x0001)]      
+    /* 23: LD D,(HL) */ #[case(&[0x56], get_d, set_ind_hl, 0x0001)] 
+    /* 24: LD D,A    */ #[case(&[0x57], get_d, set_a, 0x0001)]      
+    /* 25: LD E,B    */ #[case(&[0x58], get_e, set_b, 0x0001)]      
+    /* 26: LD E,C    */ #[case(&[0x59], get_e, set_c, 0x0001)]      
+    /* 27: LD E,D    */ #[case(&[0x5A], get_e, set_d, 0x0001)]      
+    /* 28: LD E,E    */ #[case(&[0x5B], get_e, set_e, 0x0001)]      
+    /* 29: LD E,H    */ #[case(&[0x5C], get_e, set_h, 0x0001)]      
+    /* 30: LD E,L    */ #[case(&[0x5D], get_e, set_l, 0x0001)]      
+    /* 31: LD E,(HL) */ #[case(&[0x5E], get_e, set_ind_hl, 0x0001)] 
+    /* 32: LD E,A    */ #[case(&[0x5F], get_e, set_a, 0x0001)]      
+    /* 33: LD H,B    */ #[case(&[0x60], get_h, set_b, 0x0001)]      
+    /* 34: LD H,C    */ #[case(&[0x61], get_h, set_c, 0x0001)]      
+    /* 35: LD H,D    */ #[case(&[0x62], get_h, set_d, 0x0001)]      
+    /* 36: LD H,E    */ #[case(&[0x63], get_h, set_e, 0x0001)]      
+    /* 37: LD H,H    */ #[case(&[0x64], get_h, set_h, 0x0001)]      
+    /* 38: LD H,L    */ #[case(&[0x65], get_h, set_l, 0x0001)]      
+    /* 39: LD H,(HL) */ #[case(&[0x66], get_h, set_ind_hl, 0x0001)] 
+    /* 40: LD H,A    */ #[case(&[0x67], get_h, set_a, 0x0001)]      
+    /* 41: LD L,B    */ #[case(&[0x68], get_l, set_b, 0x0001)]      
+    /* 42: LD L,C    */ #[case(&[0x69], get_l, set_c, 0x0001)]      
+    /* 43: LD L,D    */ #[case(&[0x6A], get_l, set_d, 0x0001)]      
+    /* 44: LD L,E    */ #[case(&[0x6B], get_l, set_e, 0x0001)]      
+    /* 45: LD L,H    */ #[case(&[0x6C], get_l, set_h, 0x0001)]      
+    /* 46: LD L,L    */ #[case(&[0x6D], get_l, set_l, 0x0001)]      
+    /* 47: LD L,(HL) */ #[case(&[0x6E], get_l, set_ind_hl, 0x0001)] 
+    /* 48: LD L,A    */ #[case(&[0x6F], get_l, set_a, 0x0001)]      
+    /* 49: LD (HL),B */ #[case(&[0x70], get_ind_hl, set_b, 0x0001)]      
+    /* 50: LD (HL),C */ #[case(&[0x71], get_ind_hl, set_c, 0x0001)]      
+    /* 51: LD (HL),D */ #[case(&[0x72], get_ind_hl, set_d, 0x0001)]      
+    /* 52: LD (HL),E */ #[case(&[0x73], get_ind_hl, set_e, 0x0001)]      
+    /* 53: LD (HL),H */ #[case(&[0x74], get_ind_hl, set_h, 0x0001)]      
+    /* 54: LD (HL),L */ #[case(&[0x75], get_ind_hl, set_l, 0x0001)]      
+    /* 55: LD (HL),A */ #[case(&[0x77], get_ind_hl, set_a, 0x0001)]      
+    /* 56: LD A,B    */ #[case(&[0x78], get_a, set_b, 0x0001)]      
+    /* 57: LD A,C    */ #[case(&[0x79], get_a, set_c, 0x0001)]      
+    /* 58: LD A,D    */ #[case(&[0x7A], get_a, set_d, 0x0001)]      
+    /* 59: LD A,E    */ #[case(&[0x7B], get_a, set_e, 0x0001)]      
+    /* 60: LD A,H    */ #[case(&[0x7C], get_a, set_h, 0x0001)]      
+    /* 61: LD A,L    */ #[case(&[0x7D], get_a, set_l, 0x0001)]      
+    /* 62: LD A,(HL) */ #[case(&[0x7E], get_a, set_ind_hl, 0x0001)] 
+    /* 63: LD A,A    */ #[case(&[0x7F], get_a, set_a, 0x0001)]      
+    /* 64: LD (BC),A */ #[case(&[0x02], get_ind_bc, set_a, 0x0001)]      
+    /* 65: LD (DE),A */ #[case(&[0x12], get_ind_de, set_a, 0x0001)]      
+    /* 66: LD (**),A */ #[case(&[0x32, 0x00, 0xD0], get_mem_byte(0xD000), set_a, 0x0003)]
+    /* 67: LD B,*    */ #[case(&[0x06, 0x42], get_b, set_none, 0x0002)]
+    /* 68: LD D,*    */ #[case(&[0x16, 0x42], get_d, set_none, 0x0002)]
+    /* 69: LD H,*    */ #[case(&[0x26, 0x42], get_h, set_none, 0x0002)]
+    /* 70: LD (HL),* */ #[case(&[0x36, 0x42], get_ind_hl, set_none, 0x0002)]
+    /* 71: LD C,*    */ #[case(&[0x0E, 0x42], get_c, set_none, 0x0002)]
+    /* 72: LD E,*    */ #[case(&[0x1E, 0x42], get_e, set_none, 0x0002)]
+    /* 73: LD L,*    */ #[case(&[0x2E, 0x42], get_l, set_none, 0x0002)]
+    /* 74: LD A,*    */ #[case(&[0x3E, 0x42], get_a, set_none, 0x0002)]
+    fn test_ld8(
+        mut fixture: Fixture,
+        #[case] opcode: &[u8],
+        #[case] get: impl GetByte,
+        #[case] set: impl SetByte,
+        #[case] expected_pc: u16,        
+    ) {
+        fixture.mem_write(0x0000, opcode);
+        set(&mut fixture, 0x42);
+
+        fixture.cpu.exec(&mut fixture.bus);
+
+        assert_eq!(get(&fixture), 0x42);
+        assert_eq!(fixture.cpu.regs.pc(), expected_pc);
     }
 }
