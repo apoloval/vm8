@@ -1,7 +1,7 @@
-use crate::cpu::z81::bus::Bus;
-use crate::cpu::z81::reg::Registers;
-use crate::cpu::z81::flag::{self, Predicate};
-use crate::cpu::z81::op::*;
+use crate::cpu::z80::bus::Bus;
+use crate::cpu::z80::reg::Registers;
+use crate::cpu::z80::flag::{self, Predicate};
+use crate::cpu::z80::op::*;
 
 pub struct CPU {
     regs: Registers,
@@ -795,7 +795,7 @@ impl CPU {
 mod test {
     use rstest::*;
     
-    use crate::cpu::z81::bus::FakeBus;
+    use crate::cpu::z80::bus::FakeBus;
 
     use super::*;
 

@@ -11,12 +11,10 @@ nightly = []
 [dependencies]
 byteorder = "1.2"
 dirs = "1.0.4"
-num-traits = "0.2"
 rustyline = "9.1.0"
 time = "0.1"
 
 [dev-dependencies]
-rand = "0.5"
 rstest = "0.12.0"
 
 [build-dependencies]
@@ -24,10 +22,6 @@ rustc_version = "0.1.*"
 
 [lib]
 name = "vm8"
-
-[[bin]]
-name = "c80"
-path = "src/bin/c80/main.rs"
 
 [[bin]]
 name = "nexus"

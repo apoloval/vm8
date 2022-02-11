@@ -1,5 +1,5 @@
-use crate::cpu::z81::bus::Bus;
-use crate::cpu::z81::reg::Registers;
+use crate::cpu::z80::bus::Bus;
+use crate::cpu::z80::reg::Registers;
 
 /// The context in which an operand evaluates in.
 pub struct Context<'a, B: Bus> {
@@ -159,7 +159,7 @@ impl<T: SrcOp<u16>> DestOp<u16> for Ind16<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::cpu::z81::bus::FakeBus;
+    use crate::cpu::z80::bus::FakeBus;
     use rstest::*;
 
     #[fixture]

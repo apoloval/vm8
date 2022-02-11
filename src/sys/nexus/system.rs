@@ -2,12 +2,12 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
 
-use crate::cpu::z81;
+use crate::cpu::z80;
 use crate::sys::nexus::Command;
 use crate::sys::nexus::mmu::MMU;
 
 pub struct System {    
-    cpu: z81::CPU,
+    cpu: z80::CPU,
     bus: Bus,
 }
 
@@ -15,7 +15,7 @@ impl System {
     pub fn new(bios_path: &Path) -> io::Result<Self> {
         let bios = Self::load_bios(bios_path)?;
         Ok(Self {
-            cpu: z81::CPU::new(),
+            cpu: z80::CPU::new(),
             bus: Bus::new(bios),
         })        
     }
@@ -142,7 +142,7 @@ impl Bus {
     }
 }
 
-impl z81::Bus for Bus {    
+impl z80::Bus for Bus {    
     fn mem_read(&self, addr: u16) -> u8 { 
         let paddr = self.mmu.map_addr(addr);
         self.mem[paddr as usize] 
