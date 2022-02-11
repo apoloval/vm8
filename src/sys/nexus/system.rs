@@ -6,6 +6,7 @@ use std::path::Path;
 use crate::cpu::z80;
 use crate::sys::nexus::Addr;
 use crate::sys::nexus::cmd::Command;
+use crate::sys::nexus::bus::Bus;
 use crate::sys::nexus::mmu::MMU;
 
 pub struct System {    
@@ -93,14 +94,15 @@ impl System {
     }
 
     fn exec_mem_show(&self, addr: Option<Addr>) {
-        let addr_phy = self.resolve_addr(addr.unwrap_or(Addr::Logical(self.cpu.regs().pc())));
-        for org in (addr_phy..addr_phy+256).step_by(16) {
-            print!("  {:04X}:", org);
-            for offset in 0..16 {
-                print!(" {:02X}", self.bus.mem[(org+offset) as usize]);
+        let a = addr.unwrap_or(Addr::Logical(self.cpu.regs().pc()));
+        for i in (0..256).step_by(16) {
+            print!("  {}:", self.display_addr(a + i));
+            for j in 0..16 {
+                print!(" {:02X}", self.bus.mem_read(a + i + j));
             }
-            println!("")
+            println!("");
         }
+        println!("");
     }
 
     fn exec_status(&self) {
@@ -130,13 +132,12 @@ impl System {
     }
 
     fn print_mmu_regs(&self) {
-        let mmu = &self.bus.mmu;
         for i in 0u16..8 {
             println!(
                 "  {} R{}={}   PAGE.{:X}={:05X}   PAGE.{:X}={:05X}", 
                 if i == 0 { "MMU:" } else { "    " },
                 i,
-                if mmu.is_enabled() { format!("{:02X}", mmu.read(i as u8)) } else { String::from("XX") }, 
+                if self.mmu().is_enabled() { format!("{:02X}", self.mmu().read(i as u8)) } else { String::from("XX") }, 
                 i*2,
                 self.resolve_addr(Addr::Logical((i*2) << 12)),
                 i*2 + 1,
@@ -158,7 +159,7 @@ impl System {
                 println!("Breakpoint at {}", self.display_addr(Addr::Logical(pc_log)));
                 break;
             }
-            let pc_phy = self.bus.mmu.map_addr(self.cpu.regs().pc());
+            let pc_phy = self.mmu().map_addr(self.cpu.regs().pc());
             if self.break_phy.contains_key(&pc_phy) {
                 println!("Breakpoint at {}", self.display_addr(Addr::Physical(pc_phy)));
                 break;
@@ -166,60 +167,19 @@ impl System {
         }
     }
 
+    fn mmu(&self) -> &MMU { self.bus.mmu() }
+
     fn resolve_addr(&self, addr: Addr) -> u32 { 
         match addr {
-            Addr::Logical(a) => self.bus.mmu.map_addr(a),
+            Addr::Logical(a) => self.mmu().map_addr(a),
             Addr::Physical(a) => a,
         }
     }
 
     fn display_addr(&self, addr: Addr) -> String {
         match addr {
-            Addr::Logical(a) => format!("{:04X}:{:05X}", a, self.bus.mmu.map_addr(a)),
+            Addr::Logical(a) => format!("{:04X}:{:05X}", a, self.mmu().map_addr(a)),
             Addr::Physical(a) => format!(":{:05X}", a),
         }
     }    
-}
-
-struct Bus {
-    mem: Vec<u8>,
-    mmu: MMU,
-}
-
-impl Bus {
-    fn new(bios: Vec<u8>) -> Self {
-        let mut bus = Self {
-            mem: vec![0; 1*1024*2014],
-            mmu: MMU::new(),
-        };
-        let mut ptr = 0xF0000;
-        for byte in bios {
-            bus.mem[ptr] = byte;
-            ptr += 1;
-        }
-        bus
-    }
-}
-
-impl z80::Bus for Bus {    
-    fn mem_read(&self, addr: u16) -> u8 { 
-        let paddr = self.mmu.map_addr(addr);
-        self.mem[paddr as usize] 
-    }
-    
-    fn mem_write(&mut self, addr: u16, val: u8) {
-        let paddr = self.mmu.map_addr(addr);
-        if paddr < 0xE0000 {
-            self.mem[paddr as usize] = val 
-        }
-    }
-
-    fn io_read(&self, _port: u8) -> u8 { 0xFF}
-
-    fn io_write(&mut self, port: u8, val: u8) { 
-        match port {
-            0x60..=0x67 => self.mmu.write(port - 0x60, val),
-            _ => {},
-        };
-    }
 }
