@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
@@ -9,6 +10,7 @@ use crate::sys::nexus::mmu::MMU;
 pub struct System {    
     cpu: z80::CPU,
     bus: Bus,
+    breakpoints: HashMap<u16, ()>,
 }
 
 impl System {
@@ -17,6 +19,7 @@ impl System {
         Ok(Self {
             cpu: z80::CPU::new(),
             bus: Bus::new(bios),
+            breakpoints: HashMap::new(),
         })        
     }
 
@@ -27,8 +30,10 @@ impl System {
     pub fn exec_cmd(&mut self, cmd: Command) {
         match cmd {
             Command::Status => self.exec_status(),
-            Command::Step => self.exec_step(),
             Command::Reset => self.exec_reset(),
+            Command::Step => self.exec_step(),
+            Command::Resume => self.exec_resume(),
+            Command::Breakpoint { addr } => self.exec_breakpoint(addr),
             Command::MemRead { addr } => self.exec_memread(addr.unwrap_or(self.mapped_addr(self.cpu.regs().pc()))),
             Command::MemWrite { addr, data } => self.exec_memwrite(addr, data),
             _ => unreachable!(),
@@ -46,6 +51,10 @@ impl System {
 
     fn exec_reset(&mut self) {
         self.cpu.reset();
+    }
+
+    fn exec_breakpoint(&mut self, addr: u16) {
+        self.breakpoints.insert(addr, ());
     }
 
     fn exec_memread(&self, addr: u32) {
@@ -111,6 +120,17 @@ impl System {
 
     fn exec_step(&mut self) {
         self.cpu.exec(&mut self.bus);
+    }
+
+    fn exec_resume(&mut self) {
+        loop {
+            self.cpu.exec(&mut self.bus);
+            let pc = self.cpu.regs().pc();
+            if self.breakpoints.contains_key(&pc) {
+                println!("Breakpoint at {}", self.mapped_addr_display(pc));
+                break;
+            }
+        }
     }
 
     fn mapped_addr(&self, addr: u16) -> u32 { 

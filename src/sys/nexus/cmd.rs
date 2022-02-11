@@ -7,7 +7,9 @@ pub enum Command {
     Exit,
     Status,
     Step,
+    Resume,
     Reset,
+    Breakpoint { addr: u16 },
     MemRead { addr: Option<u32> },
     MemWrite { addr: u32, data: Vec<u8> },
 }
@@ -45,6 +47,8 @@ impl Command {
             Some("exit") | Some("x") => Ok(Command::Exit),
             Some("status") | Some("st") => Ok(Command::Status),
             Some("step") | Some("s") => Ok(Command::Step),
+            Some("resume") | Some("r") => Ok(Command::Resume),
+            Some("breakpoint") | Some("bp") => Self::parse_breakpoint(params),
             Some("reset")  => Ok(Command::Reset),
             Some("memread") => Self::parse_memread(params),
             Some("memwrite") => Self::parse_memwrite(params),
@@ -55,17 +59,24 @@ impl Command {
 
     pub fn print_help() {
         println!("Commands:");
-        println!("  help | ?                Print this help");
-        println!("  exit | x                Exit and return to shell");
-        println!("  status | s              Print status of the system");
-        println!("  step | s                Execute one CPU step");
-        println!("  reset                   Reset the system");
-        println!("  memread [<addr>]        Print memory content starting at <addr>[default:PC]");
-        println!("  memwrite <addr> <data>  Write data into memory at given address");
+        println!("  help | ?                        Print this help");
+        println!("  exit | x                        Exit and return to shell");
+        println!("  status | s                      Print status of the system");
+        println!("  step | s                        Execute one CPU step");
+        println!("  resume | r                      Resume the execution");
+        println!("  breakpoint <addr> | bp          Put a breakpoint at given address");
+        println!("  reset                           Reset the system");
+        println!("  memread [<addr>]                Print memory at <addr> [default:PC]");
+        println!("  memwrite <addr> <data>          Write data into memory at given address");
         println!("");
         println!("Data formats:");
         println!("  data:[<byte>]+           Literal data with bytes in hexadecimal");
         println!("  file:[<byte>]+           Literal data with bytes in hexadecimal");
+    }
+
+    fn parse_breakpoint<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
+        let addr = params.next().ok_or(ParseError::NotEnoughParameters).and_then(Self::parse_addr)?;
+        Ok(Command::Breakpoint { addr: addr as u16 })
     }
 
     fn parse_memread<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
