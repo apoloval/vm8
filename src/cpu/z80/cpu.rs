@@ -587,7 +587,7 @@ impl CPU {
     fn exec_inc8(&mut self, bus: &mut impl Bus, dst: impl DestOp<u8>, size: usize, cycles: usize) {
         let mut ctx = Context::from(bus, &mut self.regs);
         let a = dst.get(&ctx);
-        let c = a + 1;
+        let c = a.wrapping_add(1);
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(self.flags_inc8.for_op(a));
@@ -828,8 +828,6 @@ mod test {
 
     use proptest::test_runner::TestCaseResult;
     use proptest::prelude::*;
-    use proptest::test_runner::TestRunner;
-    use proptest::num::{i8, u8, u16};
     use rstest::*;
     
     use crate::cpu::z80::bus::FakeBus;
@@ -854,19 +852,58 @@ mod test {
     #[fixture]
     fn bus() -> impl Bus { FakeBus::new() }
 
-    fn test_prop<S: Strategy, B: Bus>(cpu: CPU, bus: B, s: &S, test: impl Fn(&mut CPU, &mut B, S::Value) -> TestCaseResult) {
-        let mut runner = TestRunner::default();
-        let cpu_cell = RefCell::new(Box::new(cpu));
-        let bus_cell = RefCell::new(Box::new(bus));
+    struct PropScenario<B: Bus> {
+        cpu: RefCell<CPU>,
+        bus: RefCell<B>,
+    }
 
-        match runner.run(s, |s: S::Value| -> TestCaseResult {
-            let mut cpu = cpu_cell.borrow_mut();
-            let mut bus = bus_cell.borrow_mut();
-            test(&mut cpu, &mut bus, s)
-        }) {
-            Ok(_) => (),
-            Err(e) => panic!("{}\n{}", e, runner),
+    impl<B: Bus> PropScenario<B> {
+        fn from(cpu: CPU, bus: B) -> Self {
+            Self { cpu: RefCell::new(cpu), bus: RefCell::new(bus) }
         }
+
+        fn given(&self, f: impl FnOnce(&mut CPU, &mut B)) {
+            f(&mut self.cpu.borrow_mut(), &mut self.bus.borrow_mut());
+        }
+
+        fn given_code(&self, pc: u16, code: &[u8]) {
+            self.given(|cpu, bus| {
+                mem_write(bus, pc, code);
+                cpu.regs.set_pc(pc);
+            });
+        }
+
+        fn when_exec(&self) {
+            self.cpu.borrow_mut().exec(&mut *self.bus.borrow_mut());
+        }
+
+        fn then(&self, f: impl FnOnce(&mut CPU, &mut B) -> TestCaseResult) -> TestCaseResult {
+            f(&mut self.cpu.borrow_mut(), &mut self.bus.borrow_mut())
+        }
+
+    }
+
+    fn prop_assert_flag_unaffected(to: u8, from: u8, bit: usize) -> TestCaseResult {
+        let bitmask = 1u8 << bit;
+        prop_assert_eq!(to & bitmask, from & bitmask);
+        Ok(())
+    }
+
+    fn prop_assert_flag_set(flags: u8, bit: usize) -> TestCaseResult {
+        let bitmask = 1u8 << bit;
+        prop_assert!(flags & bitmask > 0);
+        Ok(())
+    }
+
+    fn prop_assert_flag_reset(flags: u8, bit: usize) -> TestCaseResult {
+        let bitmask = 1u8 << bit;
+        prop_assert!(flags & bitmask == 0);
+        Ok(())
+    }
+
+    fn prop_assert_flag_if(flags: u8, bit: usize, cond: bool) -> TestCaseResult {
+        if cond { prop_assert_flag_set(flags, bit) }
+        else { prop_assert_flag_reset(flags, bit) }
     }
 
     fn mem_write(bus: &mut impl Bus, org: u16, data: &[u8]) {
@@ -944,47 +981,79 @@ mod test {
     }
 
     #[rstest]
-    #[case(0x10, 0x1000, 10, 0x1012, 9)]
-    #[case(-0x10, 0x1000, 10, 0x0FF2, 9)]
-    #[case(0x10, 0x1000, 1, 0x1002, 0)]
-    fn test_djnz<B: Bus>(
-        mut cpu: CPU,
-        mut bus: B,
-        #[case] op: i8, 
-        #[case] pc: u16,
-        #[case] b: u8, 
-        #[case] exp_pc: u16,
-        #[case] exp_b: u8, 
-    ) {
-        mem_write(&mut bus, pc, &[0x10, op as u8]);
-        cpu.regs.set_pc(pc);
-        cpu.regs.set_b(b);
+    fn test_djnz(cpu: CPU, bus: impl Bus) {
+        let scenario = PropScenario::from(cpu, bus);
 
-        cpu.exec(&mut bus);
+        // Jump if not zero
+        proptest!(|(b: u8, pc: u16, pc_inc: i8)| {
+            prop_assume!(b != 1);
+            scenario.given_code(pc, &[0x10, pc_inc as u8]);
+            scenario.given(|cpu, _| cpu.regs.set_b(b));
+            scenario.when_exec();
+            scenario.then(|cpu, _| {
+                prop_assert_eq!(cpu.regs.b(), b.wrapping_sub(1));
+                prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
+                Ok(())
+            })?;
+        });
 
-        assert_eq!(cpu.regs.b(), exp_b);
-        assert_eq!(cpu.regs.pc(), exp_pc);
-    }
-
-    #[rstest]
-    fn test_djnz_jump(cpu: CPU, bus: impl Bus) {
-        test_prop(cpu, bus, &(u16::ANY, i8::ANY), |cpu, bus, (pc, pc_inc)| {
-            mem_write(bus, pc, &[0x10, pc_inc as u8]);
-            cpu.regs.set_pc(pc);
-            cpu.regs.set_b(0xFF);
-    
-            cpu.exec(bus);
-    
-            prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
-            Ok(())
+        // Jump if zero
+        proptest!(|(pc: u16, pc_inc: i8)| {
+            scenario.given_code(pc, &[0x10, pc_inc as u8]);
+            scenario.given(|cpu, _| cpu.regs.set_b(1));
+            scenario.when_exec();
+            scenario.then(|cpu, _| {
+                prop_assert_eq!(cpu.regs.b(), 0);
+                prop_assert_eq!(cpu.regs.pc(), pc.wrapping_add(2));
+                Ok(())
+            })?;
         });
     }
 
     #[rstest]
-    /* INC BC   */ #[case::bc(&[0x03], get_bc, set_bc, 1)]
-    /* INC DE   */ #[case::de(&[0x13], get_de, set_de, 1)]
-    /* INC HL   */ #[case::hl(&[0x23], get_hl, set_hl, 1)]
-    /* INC SP   */ #[case::sp(&[0x33], get_sp, set_sp, 1)]
+    /* 1: INC B    */ #[case(&[0x04], get_b, set_b, 1)]
+    /* 2: INC C    */ #[case(&[0x0C], get_c, set_c, 1)]
+    /* 3: INC D    */ #[case(&[0x14], get_d, set_d, 1)]
+    /* 4: INC E    */ #[case(&[0x1C], get_e, set_e, 1)]
+    /* 5: INC H    */ #[case(&[0x24], get_h, set_h, 1)]
+    /* 6: INC L    */ #[case(&[0x2C], get_l, set_l, 1)]
+    /* 7: INC (HL) */ #[case(&[0x34], get_ind_hl, set_ind_hl, 1)]
+    /* 8: INC A    */ #[case(&[0x3C], get_a, set_a, 1)]
+    fn test_inc8<B: Bus>(
+        cpu: CPU,
+        bus: B,
+        #[case] opcode: &[u8],
+        #[case] get: impl OpGet<u8, B>,
+        #[case] set: impl OpSet<u8, B>,
+        #[case] size: usize,        
+    ) {
+        let scenario = PropScenario::from(cpu, bus);
+        proptest!(|(val: u8, flags: u8)| {
+            scenario.given_code(0x0000, opcode);
+            scenario.given(|cpu, bus| {
+                cpu.regs.set_flags(flags);
+                set.apply(cpu, bus, val);
+            });
+            scenario.when_exec();
+            scenario.then(|cpu, bus| {
+                prop_assert_eq!(get.apply(cpu, bus), val.wrapping_add(1));
+                prop_assert_eq!(cpu.regs.pc(), size as u16);                
+                prop_assert_flag_unaffected(cpu.regs.flags(), flags, 0)?;
+                prop_assert_flag_reset(cpu.regs.flags(), 1)?;
+                prop_assert_flag_if(cpu.regs.flags(), 2, val == 0x7F)?;
+                prop_assert_flag_if(cpu.regs.flags(), 4, val & 0x0F == 0x0F)?;
+                prop_assert_flag_if(cpu.regs.flags(), 6, val == 0xFF)?;
+                prop_assert_flag_if(cpu.regs.flags(), 7, (0x7Fu8..0xFFu8).contains(&val))?;
+                Ok(())
+            })?;
+        });
+    }
+
+    #[rstest]
+    /* 1: INC BC   */ #[case(&[0x03], get_bc, set_bc, 1)]
+    /* 2: INC DE   */ #[case(&[0x13], get_de, set_de, 1)]
+    /* 3: INC HL   */ #[case(&[0x23], get_hl, set_hl, 1)]
+    /* 4: INC SP   */ #[case(&[0x33], get_sp, set_sp, 1)]
     fn test_inc16<B: Bus>(
         cpu: CPU,
         bus: B,
@@ -993,59 +1062,73 @@ mod test {
         #[case] set: impl OpSet<u16, B>,
         #[case] size: usize,        
     ) {
-        test_prop(cpu, bus, &(u16::ANY, u8::ANY), |cpu, bus, (val, flags)| {            
-            cpu.reset();
-            mem_write(bus, 0x0000, opcode);
-            cpu.regs.set_flags(flags);
-            set.apply(cpu, bus, val);
-    
-            cpu.exec(bus);
-    
-            prop_assert_eq!(get.apply(cpu, bus), val.wrapping_add(1));
-            prop_assert_eq!(cpu.regs.pc(), size as u16);
-            prop_assert_eq!(cpu.regs.flags(), flags);
-            Ok(())
+        let scenario = PropScenario::from(cpu, bus);
+        proptest!(|(val: u16, flags: u8)| {
+            scenario.given_code(0x0000, opcode);
+            scenario.given(|cpu, bus| {
+                cpu.regs.set_flags(flags);
+                set.apply(cpu, bus, val);
+            });
+            scenario.when_exec();
+            scenario.then(|cpu, bus| {
+                prop_assert_eq!(get.apply(cpu, bus), val.wrapping_add(1));
+                prop_assert_eq!(cpu.regs.pc(), size as u16);
+                prop_assert_eq!(cpu.regs.flags(), flags);
+                Ok(())
+            })?;
         });
     }
 
     #[rstest]
-    #[case([0x18, 0xFA], 0x1000, 0b0000_0000, 0x0FFC)] // JR -6
-    #[case([0x18, 0x06], 0x1000, 0b0000_0000, 0x1008)] // JR 6
-    #[case([0x20, 0x06], 0x1000, 0b0000_0000, 0x1008)] // JR NZ, 6 ; jump
-    #[case([0x20, 0x06], 0x1000, 0b0100_0000, 0x1002)] // JR NZ, 6 ; no jump
-    #[case([0x28, 0x06], 0x1000, 0b0100_0000, 0x1008)] // JR Z, 6 ; jump
-    #[case([0x28, 0x06], 0x1000, 0b0000_0000, 0x1002)] // JR Z, 6 ; no jump
-    #[case([0x30, 0x06], 0x1000, 0b0000_0000, 0x1008)] // JR NC, 6 ; jump
-    #[case([0x30, 0x06], 0x1000, 0b0000_0001, 0x1002)] // JR NC, 6 ; no jump
-    #[case([0x38, 0x06], 0x1000, 0b0000_0001, 0x1008)] // JR C, 6 ; jump
-    #[case([0x38, 0x06], 0x1000, 0b0000_0000, 0x1002)] // JR C, 6 ; no jump
+    /* 1: JR n      */ #[case(0x18, None)]
+    /* 2: JR NZ,n   */ #[case(0x20, Some(0b0000_0000))]
+    /* 3: JR Z,n    */ #[case(0x28, Some(0b0100_0000))]
+    /* 4: JR NC,n   */ #[case(0x30, Some(0b0000_0000))]
+    /* 5: JR C,n    */ #[case(0x38, Some(0b0000_0001))]
     fn test_jr(
-        mut cpu: CPU,
-        mut bus: impl Bus,
-        #[case] opcode: [u8; 2], 
-        #[case] pc: u16,
-        #[case] f: u8, 
-        #[case] exp_pc: u16,
+        cpu: CPU,
+        bus: impl Bus,
+        #[case] opcode: u8, 
+        #[case] flags: Option<u8>, 
     ) {
-        mem_write(&mut bus, pc, &opcode);
-        cpu.regs.set_pc(pc);
-        cpu.regs.set_flags(f);
+        let scenario = PropScenario::from(cpu, bus);
 
-        cpu.exec(&mut bus);
+        // Jump
+        proptest!(|(pc: u16, pc_inc: i8)| {
+            scenario.given_code(pc, &[opcode, pc_inc as u8]);
+            scenario.given(|cpu, _| for f in flags { cpu.regs.set_flags(f) });
+            scenario.when_exec();
+            scenario.then(|cpu, _| {
+                prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
+                Ok(())
+            })?;
+        });
 
-        assert_eq!(cpu.regs.pc(), exp_pc);
+        // No jump
+        if flags.is_some() {            
+            proptest!(|(pc: u16, pc_inc: i8)| {
+                scenario.given_code(pc, &[opcode, pc_inc as u8]);
+                scenario.given(|cpu, _| for f in flags { cpu.regs.set_flags(!f) });
+                scenario.when_exec();
+                scenario.then(|cpu, _| {
+                    prop_assert_eq!(cpu.regs.pc(), pc.wrapping_add(2));
+                    Ok(())
+                })?;
+            });
+        }
+
     }
 
     #[rstest]
     fn test_jr_jump(cpu: CPU, bus: impl Bus) {
-        test_prop(cpu, bus, &(u16::ANY, i8::ANY), |cpu, bus, (pc, pc_inc)| {
-            mem_write(bus, pc, &[0x18, pc_inc as u8]);
-            cpu.regs.set_pc(pc);
-    
-            cpu.exec(bus);
-    
-            prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
-            Ok(())
+        let scenario = PropScenario::from(cpu, bus);
+        proptest!(|(pc: u16, pc_inc: i8)| {
+            scenario.given_code(pc, &[0x18, pc_inc as u8]);
+            scenario.when_exec();
+            scenario.then(|cpu, _| {
+                prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
+                Ok(())
+            })?;
         });
     }
 
