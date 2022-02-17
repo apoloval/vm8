@@ -15,6 +15,7 @@ rustyline = "9.1.0"
 time = "0.1"
 
 [dev-dependencies]
+proptest = "1.0.0"
 rstest = "0.12.0"
 
 [build-dependencies]

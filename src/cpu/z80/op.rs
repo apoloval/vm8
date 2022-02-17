@@ -23,6 +23,10 @@ pub trait DestOp<T> : SrcOp<T> {
     fn set<B: Bus>(&self, ctx: &mut Context<B>, val: T);
 }
 
+impl<T> SrcOp<T> for T where T: Copy {    
+    fn get<B: Bus>(&self, _: &Context<B>) -> T { *self}
+}
+
 /// A literal 8-bit value that can be used as source operand.
 pub struct Lit8(pub u8);
 

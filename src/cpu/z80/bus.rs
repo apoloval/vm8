@@ -19,6 +19,13 @@ pub trait Bus {
     }
 }
 
+impl Bus for () {    
+    fn mem_read(&self, _: u16) -> u8 { 0xFF}
+    fn mem_write(&mut self, _: u16, _: u8) {}
+    fn io_read(&self, _: u8) -> u8 { 0xFF }
+    fn io_write(&mut self, _: u8, _: u8) {}
+}
+
 pub struct FakeBus {
     mem: [u8; 64*1024],
     io: [u8; 256],

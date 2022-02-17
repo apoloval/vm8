@@ -352,7 +352,7 @@ impl CPU {
             0x68 => self.exec_in(bus, Some(Reg8::L), Reg8::C, true, 2, 12),
             0x69 => self.exec_out(bus, Reg8::C, Reg8::L, 2, 12),
             0x70 => self.exec_in(bus, None, Reg8::C, true, 2, 12),
-            0x71 => self.exec_out(bus, Reg8::C, Lit8(0), 2, 12),
+            0x71 => self.exec_out(bus, Reg8::C, 0, 2, 12),
             0x78 => self.exec_in(bus, Some(Reg8::A), Reg8::C, true, 2, 12),
             0x79 => self.exec_out(bus, Reg8::C, Reg8::A, 2, 12),
             0xA0 => self.exec_ldi(bus, false),
@@ -519,7 +519,8 @@ impl CPU {
         self.regs.set_b(c);
         if c != 0 {
             let rel = bus.mem_read(self.regs.pc() + 1) as i8;
-            self.regs.inc_pc_signed(rel.wrapping_add(2)); // as it is relative to the next instruction
+            self.regs.inc_pc_signed(2); // as it is relative to the next instruction
+            self.regs.inc_pc_signed(rel);
             self.cycles += 13;
         } else {
             self.regs.inc_pc(2);
@@ -596,7 +597,7 @@ impl CPU {
 
     fn exec_inc16(&mut self, bus: &mut impl Bus, dst: impl DestOp<u16>, size: usize, cycles: usize) {
         let mut ctx = Context::from(bus, &mut self.regs);
-        let val = dst.get(&ctx) + 1;
+        let val = dst.get(&ctx).wrapping_add(1);
         dst.set(&mut ctx, val);
         self.regs.inc_pc(size);
         self.cycles += cycles;
@@ -618,7 +619,8 @@ impl CPU {
         let f = self.regs.flags();
         if pred.eval(f) {
             let rel = bus.mem_read(self.regs.pc().wrapping_add(1)) as i8;
-            self.regs.inc_pc_signed(rel.wrapping_add(2)); // as it is relative to next instruction
+            self.regs.inc_pc(2); // as it is relative to next instruction
+            self.regs.inc_pc_signed(rel);
             self.cycles += 13;
         } else {
             self.regs.inc_pc(2);
@@ -822,6 +824,12 @@ impl CPU {
 
 #[cfg(test)]
 mod test {
+    use std::cell::RefCell;
+
+    use proptest::test_runner::TestCaseResult;
+    use proptest::prelude::*;
+    use proptest::test_runner::TestRunner;
+    use proptest::num::{i8, u8, u16};
     use rstest::*;
     
     use crate::cpu::z80::bus::FakeBus;
@@ -834,107 +842,170 @@ mod test {
     const FIXTURE_SP_ADDR: u16 = 0xF300;
 
     #[fixture]
-    fn fixture() -> Fixture {
-        let mut fix = Fixture {
-            cpu: CPU::new(),
-            bus: FakeBus::new(),
-        };
-        fix.cpu.regs.set_bc(FIXTURE_BC_ADDR);
-        fix.cpu.regs.set_de(FIXTURE_DE_ADDR);
-        fix.cpu.regs.set_hl(FIXTURE_HL_ADDR);
-        fix.cpu.regs.set_sp(FIXTURE_SP_ADDR);
-        fix
+    fn cpu() -> CPU { 
+        let mut cpu = CPU::new();
+        cpu.regs.set_bc(FIXTURE_BC_ADDR);
+        cpu.regs.set_de(FIXTURE_DE_ADDR);
+        cpu.regs.set_hl(FIXTURE_HL_ADDR);
+        cpu.regs.set_sp(FIXTURE_SP_ADDR);
+        cpu
     }
 
+    #[fixture]
+    fn bus() -> impl Bus { FakeBus::new() }
 
-    struct Fixture {
-        cpu: CPU,
-        bus: FakeBus,
-    }
+    fn test_prop<S: Strategy, B: Bus>(cpu: CPU, bus: B, s: &S, test: impl Fn(&mut CPU, &mut B, S::Value) -> TestCaseResult) {
+        let mut runner = TestRunner::default();
+        let cpu_cell = RefCell::new(Box::new(cpu));
+        let bus_cell = RefCell::new(Box::new(bus));
 
-    impl Fixture {
-        fn mem_write(&mut self, org: u16, data: &[u8]) {
-            let mut i = org;
-            for b in data {
-                self.bus.mem_write(i, *b);
-                i = i.wrapping_add(1);
-            }
+        match runner.run(s, |s: S::Value| -> TestCaseResult {
+            let mut cpu = cpu_cell.borrow_mut();
+            let mut bus = bus_cell.borrow_mut();
+            test(&mut cpu, &mut bus, s)
+        }) {
+            Ok(_) => (),
+            Err(e) => panic!("{}\n{}", e, runner),
         }
     }
 
-    trait OpGet<T> : FnOnce(&Fixture) -> T {}
-    impl<T, F: FnOnce(&Fixture) -> T> OpGet<T> for F {}
+    fn mem_write(bus: &mut impl Bus, org: u16, data: &[u8]) {
+        let mut i = org;
+        for b in data {
+            bus.mem_write(i, *b);
+            i = i.wrapping_add(1);
+        }
+    }
 
-    trait OpSet<T> : FnOnce(&mut Fixture, T) {}
-    impl<T, F: FnOnce(&mut Fixture, T)> OpSet<T> for F {}
+    trait OpGet<T, B: Bus> {
+        fn apply(&self, cpu: &CPU, bus: &B) -> T;
+    }
+
+    impl<T, B: Bus, F> OpGet<T, B> for F where F: Fn(&CPU, &B) -> T {
+        fn apply(&self, cpu: &CPU, bus: &B) -> T { self(cpu, bus) }
+    }
+
+    trait OpSet<T, B: Bus> {
+        fn apply(&self, cpu: &mut CPU, bus: &mut B, val: T);
+    }
+
+    impl<T, B: Bus, F> OpSet<T, B> for F where F: Fn(&mut CPU, &mut B, T) {
+        fn apply(&self, cpu: &mut CPU, bus: &mut B, val: T) { self(cpu, bus, val) }
+    }
 
     // 8-bit getters
-    fn get_a(f: &Fixture) -> u8 { f.cpu.regs.a() }
-    fn get_b(f: &Fixture) -> u8 { f.cpu.regs.b() }
-    fn get_c(f: &Fixture) -> u8 { f.cpu.regs.c() }
-    fn get_d(f: &Fixture) -> u8 { f.cpu.regs.d() }
-    fn get_e(f: &Fixture) -> u8 { f.cpu.regs.e() }
-    fn get_h(f: &Fixture) -> u8 { f.cpu.regs.h() }
-    fn get_l(f: &Fixture) -> u8 { f.cpu.regs.l() }
-    fn get_ind_bc(f: &Fixture) ->u8 { f.bus.mem_read(f.cpu.regs.bc()) }
-    fn get_ind_de(f: &Fixture) ->u8 { f.bus.mem_read(f.cpu.regs.de()) }    
-    fn get_ind_hl(f: &Fixture) ->u8 { f.bus.mem_read(f.cpu.regs.hl()) }
-    fn get_mem_byte(addr: u16) -> impl OpGet<u8> {
-        move |f: &Fixture| f.bus.mem_read(addr)
+    fn get_a(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.a() }
+    fn get_b(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.b() }
+    fn get_c(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.c() }
+    fn get_d(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.d() }
+    fn get_e(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.e() }
+    fn get_h(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.h() }
+    fn get_l(cpu: &CPU, _: &impl Bus) -> u8 { cpu.regs.l() }
+    fn get_ind_bc(cpu: &CPU, bus: &impl Bus) ->u8 { bus.mem_read(cpu.regs.bc()) }
+    fn get_ind_de(cpu: &CPU, bus: &impl Bus) ->u8 { bus.mem_read(cpu.regs.de()) }    
+    fn get_ind_hl(cpu: &CPU, bus: &impl Bus) ->u8 { bus.mem_read(cpu.regs.hl()) }
+    fn get_mem_byte<B: Bus>(addr: u16) -> impl OpGet<u8, B> {
+        move |_: &CPU, bus: &B| bus.mem_read(addr)
     }
 
     // 16-bit getters
-    fn get_bc(f: &Fixture) -> u16 { f.cpu.regs.bc() }
-    fn get_de(f: &Fixture) -> u16 { f.cpu.regs.de() }
-    fn get_hl(f: &Fixture) -> u16 { f.cpu.regs.hl() }
-    fn get_sp(f: &Fixture) -> u16 { f.cpu.regs.sp() }
-    fn get_mem_word(addr: u16) -> impl OpGet<u16> {
-        move |f: &Fixture| f.bus.mem_read_word(addr)
+    fn get_bc(cpu: &CPU, _: &impl Bus) -> u16 { cpu.regs.bc() }
+    fn get_de(cpu: &CPU, _: &impl Bus) -> u16 { cpu.regs.de() }
+    fn get_hl(cpu: &CPU, _: &impl Bus) -> u16 { cpu.regs.hl() }
+    fn get_sp(cpu: &CPU, _: &impl Bus) -> u16 { cpu.regs.sp() }
+    fn get_mem_word<B: Bus>(addr: u16) -> impl OpGet<u16, B> {
+        move |_: &CPU, bus: &B| bus.mem_read_word(addr)
     }
 
     // 8-bit setters
-    fn set_no_byte(_: &mut Fixture, _: u8) {}
-    fn set_a(f: &mut Fixture, v: u8) { f.cpu.regs.set_a(v) }
-    fn set_b(f: &mut Fixture, v: u8) { f.cpu.regs.set_b(v) }
-    fn set_c(f: &mut Fixture, v: u8) { f.cpu.regs.set_c(v) }
-    fn set_d(f: &mut Fixture, v: u8) { f.cpu.regs.set_d(v) }
-    fn set_e(f: &mut Fixture, v: u8) { f.cpu.regs.set_e(v) }
-    fn set_h(f: &mut Fixture, v: u8) { f.cpu.regs.set_h(v) }
-    fn set_l(f: &mut Fixture, v: u8) { f.cpu.regs.set_l(v) }
-    fn set_ind_bc(f: &mut Fixture, v: u8) { f.bus.mem_write(FIXTURE_BC_ADDR, v) }
-    fn set_ind_de(f: &mut Fixture, v: u8) { f.bus.mem_write(FIXTURE_DE_ADDR, v) }
-    fn set_ind_hl(f: &mut Fixture, v: u8) { f.bus.mem_write(FIXTURE_HL_ADDR, v) }
-    fn set_mem_byte(addr: u16) -> impl OpSet<u8> {
-        move |f: &mut Fixture, v: u8| f.bus.mem_write(addr, v)
+    fn set_no_byte(_: &mut CPU, _: &mut impl Bus, _: u8) {}
+    fn set_a(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_a(v) }
+    fn set_b(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_b(v) }
+    fn set_c(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_c(v) }
+    fn set_d(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_d(v) }
+    fn set_e(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_e(v) }
+    fn set_h(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_h(v) }
+    fn set_l(cpu: &mut CPU, _: &mut impl Bus, v: u8) { cpu.regs.set_l(v) }
+    fn set_ind_bc(_: &mut CPU, bus: &mut impl Bus, v: u8) { bus.mem_write(FIXTURE_BC_ADDR, v) }
+    fn set_ind_de(_: &mut CPU, bus: &mut impl Bus, v: u8) { bus.mem_write(FIXTURE_DE_ADDR, v) }
+    fn set_ind_hl(_: &mut CPU, bus: &mut impl Bus, v: u8) { bus.mem_write(FIXTURE_HL_ADDR, v) }
+    fn set_mem_byte<B: Bus>(addr: u16) -> impl OpSet<u8, B> {
+        move |_: &mut CPU, bus: &mut B, v: u8| bus.mem_write(addr, v)
     }
 
     // 16-bit setters
-    fn set_no_word(_: &mut Fixture, _: u16) {}
-    fn set_hl(f: &mut Fixture, v: u16) { f.cpu.regs.set_hl(v) }
-    fn set_mem_word(addr: u16) -> impl OpSet<u16> {
-        move |f: &mut Fixture, v: u16| f.bus.mem_write_word(addr, v)
+    fn set_no_word(_: &mut CPU, _: &mut impl Bus, _: u16) {}
+    fn set_bc(cpu: &mut CPU, _: &mut impl Bus, v: u16) { cpu.regs.set_bc(v) }
+    fn set_de(cpu: &mut CPU, _: &mut impl Bus, v: u16) { cpu.regs.set_de(v) }
+    fn set_hl(cpu: &mut CPU, _: &mut impl Bus, v: u16) { cpu.regs.set_hl(v) }
+    fn set_sp(cpu: &mut CPU, _: &mut impl Bus, v: u16) { cpu.regs.set_sp(v) }
+    fn set_mem_word<B: Bus>(addr: u16) -> impl OpSet<u16, B> {
+        move |_: &mut CPU, bus: &mut B, v: u16| bus.mem_write_word(addr, v)
     }
 
     #[rstest]
     #[case(0x10, 0x1000, 10, 0x1012, 9)]
     #[case(-0x10, 0x1000, 10, 0x0FF2, 9)]
     #[case(0x10, 0x1000, 1, 0x1002, 0)]
-    fn test_djnz(
-        mut fixture: Fixture, 
+    fn test_djnz<B: Bus>(
+        mut cpu: CPU,
+        mut bus: B,
         #[case] op: i8, 
         #[case] pc: u16,
         #[case] b: u8, 
         #[case] exp_pc: u16,
         #[case] exp_b: u8, 
     ) {
-        fixture.mem_write(pc, &[0x10, op as u8]);
-        fixture.cpu.regs.set_pc(pc);
-        fixture.cpu.regs.set_b(b);
+        mem_write(&mut bus, pc, &[0x10, op as u8]);
+        cpu.regs.set_pc(pc);
+        cpu.regs.set_b(b);
 
-        fixture.cpu.exec(&mut fixture.bus);
+        cpu.exec(&mut bus);
 
-        assert_eq!(fixture.cpu.regs.b(), exp_b);
-        assert_eq!(fixture.cpu.regs.pc(), exp_pc);
+        assert_eq!(cpu.regs.b(), exp_b);
+        assert_eq!(cpu.regs.pc(), exp_pc);
+    }
+
+    #[rstest]
+    fn test_djnz_jump(cpu: CPU, bus: impl Bus) {
+        test_prop(cpu, bus, &(u16::ANY, i8::ANY), |cpu, bus, (pc, pc_inc)| {
+            mem_write(bus, pc, &[0x10, pc_inc as u8]);
+            cpu.regs.set_pc(pc);
+            cpu.regs.set_b(0xFF);
+    
+            cpu.exec(bus);
+    
+            prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
+            Ok(())
+        });
+    }
+
+    #[rstest]
+    /* INC BC   */ #[case::bc(&[0x03], get_bc, set_bc, 1)]
+    /* INC DE   */ #[case::de(&[0x13], get_de, set_de, 1)]
+    /* INC HL   */ #[case::hl(&[0x23], get_hl, set_hl, 1)]
+    /* INC SP   */ #[case::sp(&[0x33], get_sp, set_sp, 1)]
+    fn test_inc16<B: Bus>(
+        cpu: CPU,
+        bus: B,
+        #[case] opcode: &[u8],
+        #[case] get: impl OpGet<u16, B>,
+        #[case] set: impl OpSet<u16, B>,
+        #[case] size: usize,        
+    ) {
+        test_prop(cpu, bus, &(u16::ANY, u8::ANY), |cpu, bus, (val, flags)| {            
+            cpu.reset();
+            mem_write(bus, 0x0000, opcode);
+            cpu.regs.set_flags(flags);
+            set.apply(cpu, bus, val);
+    
+            cpu.exec(bus);
+    
+            prop_assert_eq!(get.apply(cpu, bus), val.wrapping_add(1));
+            prop_assert_eq!(cpu.regs.pc(), size as u16);
+            prop_assert_eq!(cpu.regs.flags(), flags);
+            Ok(())
+        });
     }
 
     #[rstest]
@@ -949,19 +1020,33 @@ mod test {
     #[case([0x38, 0x06], 0x1000, 0b0000_0001, 0x1008)] // JR C, 6 ; jump
     #[case([0x38, 0x06], 0x1000, 0b0000_0000, 0x1002)] // JR C, 6 ; no jump
     fn test_jr(
-        mut fixture: Fixture, 
+        mut cpu: CPU,
+        mut bus: impl Bus,
         #[case] opcode: [u8; 2], 
         #[case] pc: u16,
         #[case] f: u8, 
         #[case] exp_pc: u16,
     ) {
-        fixture.mem_write(pc, &opcode);
-        fixture.cpu.regs.set_pc(pc);
-        fixture.cpu.regs.set_flags(f);
+        mem_write(&mut bus, pc, &opcode);
+        cpu.regs.set_pc(pc);
+        cpu.regs.set_flags(f);
 
-        fixture.cpu.exec(&mut fixture.bus);
+        cpu.exec(&mut bus);
 
-        assert_eq!(fixture.cpu.regs.pc(), exp_pc);
+        assert_eq!(cpu.regs.pc(), exp_pc);
+    }
+
+    #[rstest]
+    fn test_jr_jump(cpu: CPU, bus: impl Bus) {
+        test_prop(cpu, bus, &(u16::ANY, i8::ANY), |cpu, bus, (pc, pc_inc)| {
+            mem_write(bus, pc, &[0x18, pc_inc as u8]);
+            cpu.regs.set_pc(pc);
+    
+            cpu.exec(bus);
+    
+            prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
+            Ok(())
+        });
     }
 
     #[rstest]
@@ -1042,20 +1127,21 @@ mod test {
     /* 75: LD E,*    */ #[case(&[0x1E, 0x42], get_e, set_no_byte, 0x0002)]
     /* 76: LD L,*    */ #[case(&[0x2E, 0x42], get_l, set_no_byte, 0x0002)]
     /* 77: LD A,*    */ #[case(&[0x3E, 0x42], get_a, set_no_byte, 0x0002)]
-    fn test_ld8(
-        mut fixture: Fixture,
+    fn test_ld8<B: Bus>(
+        mut cpu: CPU,
+        mut bus: B,
         #[case] opcode: &[u8],
-        #[case] get: impl OpGet<u8>,
-        #[case] set: impl OpSet<u8>,
+        #[case] get: impl OpGet<u8, B>,
+        #[case] set: impl OpSet<u8, B>,
         #[case] expected_pc: u16,        
     ) {
-        fixture.mem_write(0x0000, opcode);
-        set(&mut fixture, 0x42);
+        mem_write(&mut bus, 0x0000, opcode);
+        set.apply(&mut cpu, &mut bus, 0x42);
 
-        fixture.cpu.exec(&mut fixture.bus);
+        cpu.exec(&mut bus);
 
-        assert_eq!(get(&fixture), 0x42);
-        assert_eq!(fixture.cpu.regs.pc(), expected_pc);
+        assert_eq!(get.apply(&cpu, &bus), 0x42);
+        assert_eq!(cpu.regs.pc(), expected_pc);
     }
 
     #[rstest]
@@ -1066,19 +1152,20 @@ mod test {
     /* 05: LD (**),HL   */ #[case(&[0x22, 0x00, 0xD0], get_mem_word(0xD000), set_hl, 0x0003)]      
     /* 06: LD HL,(**)   */ #[case(&[0x2A, 0x00, 0xD0], get_hl, set_mem_word(0xD000), 0x0003)]      
     /* 07: LD SP,HL     */ #[case(&[0xF9], get_sp, set_hl, 0x0001)]      
-    fn test_ld16(
-        mut fixture: Fixture,
+    fn test_ld16<B: Bus>(
+        mut cpu: CPU,
+        mut bus: B,
         #[case] opcode: &[u8],
-        #[case] get: impl OpGet<u16>,
-        #[case] set: impl OpSet<u16>,
+        #[case] get: impl OpGet<u16, B>,
+        #[case] set: impl OpSet<u16, B>,
         #[case] expected_pc: u16,        
     ) {
-        fixture.mem_write(0x0000, opcode);
-        set(&mut fixture, 0xABCD);
+        mem_write(&mut bus, 0x0000, opcode);
+        set.apply(&mut cpu, &mut bus, 0xABCD);
 
-        fixture.cpu.exec(&mut fixture.bus);
+        cpu.exec(&mut bus);
 
-        assert_eq!(get(&fixture), 0xABCD);
-        assert_eq!(fixture.cpu.regs.pc(), expected_pc);
+        assert_eq!(get.apply(&cpu, &bus), 0xABCD);
+        assert_eq!(cpu.regs.pc(), expected_pc);
     }
 }
