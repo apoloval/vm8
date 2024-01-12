@@ -1096,7 +1096,7 @@ mod test {
         // Jump
         proptest!(|(pc: u16, pc_inc: i8)| {
             scenario.given_code(pc, &[opcode, pc_inc as u8]);
-            scenario.given(|cpu, _| for f in flags { cpu.regs.set_flags(f) });
+            scenario.given(|cpu, _| if let Some(f) = flags { cpu.regs.set_flags(f) });
             scenario.when_exec();
             scenario.then(|cpu, _| {
                 prop_assert_eq!(cpu.regs.pc(), ((2 + pc as i32) + (pc_inc as i32)) as u16);
@@ -1108,7 +1108,7 @@ mod test {
         if flags.is_some() {            
             proptest!(|(pc: u16, pc_inc: i8)| {
                 scenario.given_code(pc, &[opcode, pc_inc as u8]);
-                scenario.given(|cpu, _| for f in flags { cpu.regs.set_flags(!f) });
+                scenario.given(|cpu, _| if let Some(f) = flags { cpu.regs.set_flags(!f) });
                 scenario.when_exec();
                 scenario.then(|cpu, _| {
                     prop_assert_eq!(cpu.regs.pc(), pc.wrapping_add(2));
