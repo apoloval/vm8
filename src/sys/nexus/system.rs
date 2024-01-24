@@ -133,14 +133,16 @@ impl System {
     fn print_mmu_regs(&self) {
         for i in 0u16..8 {
             println!(
-                "  {} R{}={}   PAGE.{:X}={:05X}   PAGE.{:X}={:05X}", 
+                "  {} R{:02}={} PAGE.{:X}={:05X}    R{:02}={} PAGE.{:X}={:05X}", 
                 if i == 0 { "MMU:" } else { "    " },
                 i,
                 if self.mmu().is_enabled() { format!("{:02X}", self.mmu().read(i as u8)) } else { String::from("XX") }, 
-                i*2,
-                self.resolve_addr(Addr::Logical((i*2) << 12)),
-                i*2 + 1,
-                self.resolve_addr(Addr::Logical((i*2 + 1) << 12)),
+                i,
+                self.resolve_addr(Addr::Logical((i) << 12)),
+                i+8,
+                if self.mmu().is_enabled() { format!("{:02X}", self.mmu().read((i+8) as u8)) } else { String::from("XX") }, 
+                i+8,
+                self.resolve_addr(Addr::Logical((i+8) << 12)),
             );
         }
         println!("");
