@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Read};
+use std::io;
 use std::path::Path;
 
 use crate::cpu::z80;
+use crate::vid::nxgfx;
+use crate::mem;
 use crate::sys::nexus::Addr;
 use crate::sys::nexus::cmd::Command;
 use crate::sys::nexus::bus::Bus;
@@ -18,10 +19,17 @@ pub struct System {
 
 impl System {
     pub fn new(bios_path: &Path) -> io::Result<Self> {
-        let bios = Self::load_bios(bios_path)?;
+        let bios = mem::ROM::load_from_file(bios_path)?;
+        let vdc = nxgfx::NXGFX216::with_window_title(
+            "Nexus Computer System emulator");
+        let mut bus = Bus::new();
+
+        bus.attach(Box::new(vdc), 6);
+        bus.attach(Box::new(bios), 7);
+
         Ok(Self {
             cpu: z80::CPU::new(),
-            bus: Bus::new(bios),
+            bus: bus,
             break_log: HashMap::new(),
             break_phy: HashMap::new(),
         })        
@@ -43,15 +51,6 @@ impl System {
             Command::MemShow { addr } => self.exec_mem_show(addr),
             _ => unreachable!(),
         }
-    }
-
-    fn load_bios(path: &Path) -> io::Result<Vec<u8>> {
-        let f = fs::File::open(path)?;
-        let mut reader = io::BufReader::new(f);
-        let mut buffer = Vec::new();
-    
-        reader.read_to_end(&mut buffer)?;
-        Ok(buffer)
     }
 
     fn exec_reset(&mut self) {
@@ -149,6 +148,7 @@ impl System {
 
     fn exec_step(&mut self) {
         self.cpu.exec(&mut self.bus);
+        self.bus.refresh_all();
     }
 
     fn exec_resume(&mut self) {
@@ -164,7 +164,14 @@ impl System {
                 println!("Breakpoint at {}", self.display_addr(Addr::Physical(pc_phy)));
                 break;
             }
+
+            // TODO: adjust this to the clock speed, etc.
+            if self.cpu.cycles() > 120_000 {
+                self.bus.refresh_all();
+                self.cpu.reset_cycles();
+            }
         }
+        self.bus.refresh_all();
     }
 
     fn mmu(&self) -> &MMU { self.bus.mmu() }
@@ -181,5 +188,5 @@ impl System {
             Addr::Logical(a) => format!("{:04X}:{:05X}", a, self.mmu().map_addr(a)),
             Addr::Physical(a) => format!(":{:05X}", a),
         }
-    }    
+    }
 }

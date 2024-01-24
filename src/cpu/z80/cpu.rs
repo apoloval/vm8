@@ -368,7 +368,7 @@ impl CPU {
         if with_carry && ctx.regs.flag(flag::C) {
             b += 1;
         }
-        let c = a + b;
+        let c = a.wrapping_add(b);
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(self.flags_add8.for_ops(a, b));
@@ -380,7 +380,7 @@ impl CPU {
         let mut ctx = Context::from(bus, &mut self.regs);
         let a = dst.get(&ctx);
         let b = src.get(&ctx);
-        let c = a + b;
+        let c = a.wrapping_add(b);
         dst.set(&mut ctx, c);
 
         let ch = (c >> 8) as u8;
@@ -489,7 +489,7 @@ impl CPU {
     fn exec_dec8(&mut self, bus: &mut impl Bus, dst: impl DestOp<u8>, size: usize, cycles: usize) {
         let mut ctx = Context::from(bus, &mut self.regs);
         let a = dst.get(&ctx);
-        let c = a - 1;
+        let c = a.wrapping_sub(1);
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(self.flags_dec8.for_op(a));
@@ -499,7 +499,7 @@ impl CPU {
 
     fn exec_dec16(&mut self, bus: &mut impl Bus, dst: impl DestOp<u16>, size: usize, cycles: usize) {
         let mut ctx = Context::from(bus, &mut self.regs);
-        let val = dst.get(&ctx) - 1;
+        let val = dst.get(&ctx).wrapping_sub(1);
         dst.set(&mut ctx, val);
         self.regs.inc_pc(size);
         self.cycles += cycles;
@@ -790,7 +790,7 @@ impl CPU {
         if with_carry && ctx.regs.flag(flag::C) {
             b += 1;
         }
-        let c = a - b;
+        let c = a.wrapping_add(b);
         dst.set(&mut ctx, c);
 
         self.regs.update_flags(self.flags_sub8.for_ops(a, b));
