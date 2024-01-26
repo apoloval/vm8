@@ -3,9 +3,6 @@ use raylib::prelude::*;
 
 const SCREEN_SCALE: i32 = 4;
 
-// Palette index register address.
-const REGISTER_PAI: u8 = 1; 
-
 pub struct NXGFX216 {
     vram: Vec<u8>,
     registers: Vec<u8>,
@@ -28,10 +25,11 @@ impl NXGFX216 {
         }
     }
 
-    pub fn vram_write(&mut self, addr: u16, val: u8) {
-        let bitplane = self.registers[REGISTER_PAI as usize] & 1;
-        let offset = (bitplane as usize) * 64*1024 + (addr as usize);
-        self.vram[offset] = val;
+    pub fn vram_write(&mut self, addr: u32, val: u8) {
+        let offset = (addr as usize) & 0x3FFFF;
+        if offset < self.vram.len() {
+            self.vram[offset] = val;
+        }
     }
 
     pub fn io_write(&mut self, port: u8, val: u8) {

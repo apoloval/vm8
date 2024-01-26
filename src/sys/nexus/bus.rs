@@ -12,30 +12,10 @@ pub trait Device {
     fn refresh(&mut self);
 }
 
-impl Device for nxgfx::NXGFX216 {
-    fn mem_read(&self, _addr: u16) -> u8 { 0 }
-    fn mem_write(&mut self, addr: u16, val: u8) {
-        self.vram_write(addr, val)
-    }
-    fn io_read(&self, _port: u8) -> u8 { 0 }
-    fn io_write(&mut self, port: u8, val: u8) {
-        self.io_write(port, val)
-    }
-    fn refresh(&mut self) {
-        self.refresh_screen();
-    }
-}
-
-impl Device for mem::ROM {
-    fn mem_read(&self, addr: u16) -> u8 { self.read_byte(addr as usize) }
-    fn mem_write(&mut self, _addr: u16, _val: u8) {}
-    fn io_read(&self, _port: u8) -> u8 { 0 }
-    fn io_write(&mut self, _port: u8, _val: u8) {}
-    fn refresh(&mut self) {}
-}
-
 enum Segment {
     RAM,
+    VDP,
+    BIOS,
     MMU,
     Device(usize),
 }
@@ -44,36 +24,44 @@ impl Segment {
     fn from_mem_addr(addr: u32) -> Self {
         match addr {
             0x00000..=0x7FFFF => Self::RAM,
-            0x80000..=0xFFFFF => Self::Device(((addr & 0xF0000) >> 16) as usize - 8),
+            0x80000..=0xDFFFF => Self::VDP,
+            0xE0000..=0xEFFFF => Self::Device(((addr & 0xE0000) >> 16) as usize - 8),
+            0xF0000..=0xFFFFF => Self::BIOS,
             _ => panic!("Invalid address"),
         }
     }
 
     fn from_io_addr(addr: u8) -> Self {
         match addr {
-            0x60..=0x67 => Self::MMU,
-            0x80..=0xFF => Self::Device(((addr & 0xF0) >> 4) as usize),
+            0x00..=0x0F => Self::MMU,
+            0x10..=0x17 => Self::VDP,
+            0x80..=0xFF => Self::Device(((addr & 0xF0) >> 5) as usize),
             _ => panic!("Invalid address"),
         }
     }
 }
 
 pub struct Bus {
-    mem: Vec<u8>,
+    ram: Vec<u8>,
+    bios: mem::ROM,
     mmu: MMU,
+    vdp: nxgfx::NXGFX216,
     devs: [Option<Box<dyn Device>>; 8],
 }
 
 impl Bus {
-    pub fn new() -> Self {
+    pub fn new(vdp: nxgfx::NXGFX216, bios: mem::ROM) -> Self {
         let bus = Self {
-            mem: vec![0; 512*1024],
+            ram: vec![0; 512*1024],
+            bios,
             mmu: MMU::new(),
+            vdp: vdp,
             devs: Default::default(),
         };
         bus
     }
 
+    #[allow(dead_code)]
     pub fn attach(&mut self, dev: Box<dyn Device>, idx: usize) {
         if idx > 7 {
             panic!("Invalid device index");
@@ -82,6 +70,7 @@ impl Bus {
     }
 
     pub fn refresh_all(&mut self) {
+        self.vdp.refresh_screen();
         for dev in self.devs.iter_mut() {
             if let Some(dev) = dev {
                 dev.refresh();
@@ -104,7 +93,8 @@ impl z80::Bus for Bus {
     fn mem_read(&self, addr: u16) -> u8 { 
         let paddr = self.mmu.map_addr(addr);
         match Segment::from_mem_addr(paddr) {
-            Segment::RAM => self.mem[paddr as usize],
+            Segment::RAM => self.ram[paddr as usize],
+            Segment::BIOS => self.bios.read_byte(paddr as usize),
             Segment::Device(idx) => {
                 if let Some(dev) = &self.devs[idx] {
                     dev.mem_read(paddr as u16)
@@ -119,7 +109,8 @@ impl z80::Bus for Bus {
     fn mem_write(&mut self, addr: u16, val: u8) {
         let paddr = self.mmu.map_addr(addr);
         match Segment::from_mem_addr(paddr) {
-            Segment::RAM => self.mem[paddr as usize] = val,
+            Segment::RAM => self.ram[paddr as usize] = val,
+            Segment::VDP => self.vdp.vram_write(paddr as u32, val),
             Segment::Device(idx) => {
                 if let Some(dev) = &mut self.devs[idx] {
                     dev.mem_write(paddr as u16, val);
@@ -134,6 +125,7 @@ impl z80::Bus for Bus {
     fn io_write(&mut self, port: u8, val: u8) { 
         match Segment::from_io_addr(port) {
             Segment::MMU => self.mmu.write(port & 0x07, val),
+            Segment::VDP => self.vdp.io_write(port & 0x0F, val),
             Segment::Device(idx) => {
                 if let Some(dev) = &mut self.devs[idx] {
                     dev.io_write(port & 0x0F, val);

@@ -22,14 +22,11 @@ impl System {
         let bios = mem::ROM::load_from_file(bios_path)?;
         let vdc = nxgfx::NXGFX216::with_window_title(
             "Nexus Computer System emulator");
-        let mut bus = Bus::new();
-
-        bus.attach(Box::new(vdc), 6);
-        bus.attach(Box::new(bios), 7);
+        let bus = Bus::new(vdc, bios);
 
         Ok(Self {
             cpu: z80::CPU::new(),
-            bus: bus,
+            bus,
             break_log: HashMap::new(),
             break_phy: HashMap::new(),
         })        
