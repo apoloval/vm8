@@ -182,8 +182,111 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.ora(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x21 => {
+                // AND (d,X)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
+            },
+            0x23 => {
+                // AND d,S
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::StackRelative(rel), rep)
+            },
+            0x25 => {
+                // AND d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::Direct(dir), rep)
+            },
+            0x27 => {
+                // AND [d]
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::DirectIndirectLong(dir), rep)
+            },
+            0x29 => {
+                // AND #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.and(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0x2D => {
+                // AND a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.and(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x2F => {
+                // AND al
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.and(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
+            },
+            0x31 => {
+                // AND (d),Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::DirectIndirectIndexed(dir), rep)
+            },
+            0x32 => {
+                // AND (d)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::DirectIndirect(dir), rep)
+            },
+            0x33 => {
+                // AND (d,S),Y
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::StackRelativeIndirectIndexed(rel), rep)
+            },
+            0x35 => {
+                // AND d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
+            0x37 => {
+                // AND [d],Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.and(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
+            },
+            0x39 => {
+                // AND a,Y
+                let abs = self.fetch_pc_word(bus, 1);
+                self.and(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0x3D => {
+                // AND a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.and(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x3F => {
+                // AND al,X
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.and(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
+            },
             _ => unimplemented!()
         }
+    }
+
+    fn and(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("AND"), 
+            operands: format!("{}", mode),
+        });
+
+        let mode_eval = mode.eval(self, bus);
+        let result = self.regs.a() & mode_eval.val;
+        
+        if self.regs.accum_is_byte() {
+            self.regs.al_set(result as u8);
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
+        } else {
+            self.regs.a_set(result);
+            self.regs.set_status_flag(Flag::Z, result == 0);
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+        
+        }
+        self.regs.pc_inc(mode_eval.bytes);
+        self.cycles += mode_eval.cycles;
+
     }
 
     fn brk(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
@@ -299,210 +402,6 @@ impl FromStr for CPU {
 
 }
 
-#[cfg(test)]
-mod tests {
-    use self::status::FlagExpectation;
-
-    use super::*;
-    use crate::cpu::w65c816::assert;
-
-    use rstest::*;
-    
-    #[rstest]
-    #[case::emulation(
-        "P.E:1,PC:A000,P:AA,SP:FF",             // cpu
-        "00A000:0000,00FFFE:3412",              // bus
-        vec![0xBA, 0x02, 0xA0],                 // expected_stack
-        0x1234,                                 // expected_pc        
-        0xBA,                                   // expected_state
-    )]
-    #[case::native(
-        "P.E:0,PBR:B0,PC:A000,P:AA,SP:E0FF",    // cpu
-        "B0A000:0000,00FFE6:3412",              // bus
-        vec![0xAA, 0x02, 0xA0, 0xB0],           // expected_stack
-        0x1234,                                 // expected_pc        
-        0xAA,                                   // expected_state
-    )]
-    fn test_brk(
-        #[case] mut cpu: CPU, 
-        #[case] mut bus: bus::Fake,
-        #[case] expected_stack: Vec<u8>,
-        #[case] expected_pc: u16,
-        #[case] expected_state: u8,
-    ) {
-        cpu.step(&mut bus, &mut NullReporter);
-
-        for (offset, expected) in expected_stack.iter().enumerate() {
-            assert::stack_byte(&cpu, &bus, offset as u16+1, *expected);
-        }
-        assert::program_counter(&cpu, 0, expected_pc);
-        assert::program_state(&cpu, expected_state);
-    }
-
-    #[rstest]
-    #[case::emulation(
-        "P.E:1,PC:A000,A:1160",                         // cpu
-        "00A000:0903",                                  // bus
-        0x1163,                                         // expected
-        "Z:0,N:0",                                      // expected_flags_set
-    )]
-    #[case::native_8bit(
-        "P.E:0,P.M:1,PC:A000,A:1160",                   // cpu
-        "00A000:0903",                                  // bus
-        0x1163,                                         // expected
-        "Z:0,N:0",                                      // expected_flags_set
-    )]
-    #[case::native_16bit(
-        "P.E:0,P.M:0,PC:A000,A:1160",                   // cpu
-        "00A000:090302",                                // bus
-        0x1363,                                         // expected
-        "Z:0,N:0",                                      // expected_flags_set
-    )]
-    #[case::native_8bit_zero(
-        "P.E:0,P.M:1,PC:A000,A:1100",                   // cpu
-        "00A000:0900",                                  // bus
-        0x1100,                                         // expected
-        "Z:1,N:0",                                      // expected_flags_set
-    )]
-    #[case::native_16bit_zero(
-        "P.E:0,P.M:0,PC:A000,A:0000",                   // cpu
-        "00A000:090000",                                // bus
-        0x0000,                                         // expected
-        "Z:1,N:0",                                      // expected_flags_set
-    )]
-    #[case::native_8bit_neg(
-        "P.E:0,P.M:1,PC:A000,A:1180",                   // cpu
-        "00A000:0908",                                  // bus
-        0x1188,                                         // expected
-        "Z:0,N:1",                                      // expected_flags_set
-    )]
-    #[case::native_16bit_neg(
-        "P.E:0,P.M:0,PC:A000,A:8080",                   // cpu
-        "00A000:090808",                                // bus
-        0x8888,                                         // expected
-        "Z:0,N:1",                                      // expected_flags_set
-    )]
-    fn test_ora_results(
-        #[case] mut cpu: CPU,
-        #[case] mut bus: bus::Fake,
-        #[case] expected: u16,
-        #[case] expected_flags: FlagExpectation,
-    ) {
-        cpu.step(&mut bus, &mut NullReporter);
-
-        assert::accum(&cpu, expected);
-        expected_flags.assert(cpu.regs.p());
-    }
-
-
-    /* 
-     * Test ORA instruction decoding. The test cases just have to prepare the CPU and the bus
-     * with the program code and the memory state to run the ORA instruction with a specific
-     * addressing mode. The test assumes A is fully reset before the instruction is executed, 
-     * and it will just check A is not zero after the instruction is executed.
-     */
-    #[rstest]
-    #[case::absolute(
-        "PC:A000",                                      // cpu
-        "00A000:0D5634",                                // bus
-        ("ORA", "$3456"),                               // expected
-        0xA003,                                         // expected_pc
-    )]
-    #[case::absolute_indexed_x(
-        "PC:A000",                                      // cpu
-        "00A000:1D5634",                                // bus
-        ("ORA", "$3456,X"),                             // expected
-        0xA003,                                         // expected_pc
-    )]
-    #[case::absolute_indexed_y(
-        "PC:A000",                                      // cpu
-        "00A000:195634",                                // bus
-        ("ORA", "$3456,Y"),                             // expected
-        0xA003,                                         // expected_pc
-    )]
-    #[case::absolute_long(
-        "PC:A000",                                      // cpu
-        "00A000:0F563412",                              // bus
-        ("ORA", "$123456"),                             // expected
-        0xA004,                                         // expected_pc
-    )]
-    #[case::absolute_long_indexed(
-        "PC:A000",                                      // cpu
-        "00A000:1F563412",                              // bus
-        ("ORA", "$123456,X"),                           // expected
-        0xA004,                                         // expected_pc
-    )]
-    #[case::direct(
-        "PC:A000",                                      // cpu
-        "00A000:0504",                                  // bus
-        ("ORA", "$04"),                                 // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::direct_indirect_indexed(
-        "PC:A000",                                      // cpu
-        "00A000:1104",                                  // bus
-        ("ORA", "($04),Y"),                             // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::direct_indexed_indirect(
-        "PC:A000",                                      // cpu
-        "00A000:0104",                                  // bus
-        ("ORA", "($04,X)"),                             // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::direct_indexed_x(
-        "PC:A000",                                      // cpu
-        "00A000:1504",                                  // bus
-        ("ORA", "$04,X"),                               // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::direct_indirect(
-        "PC:A000",                                      // cpu
-        "00A000:1244",                                  // bus
-        ("ORA", "($44)"),                               // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::direct_indirect_long(
-        "PC:A000",                                      // cpu
-        "00A000:0744",                                  // bus
-        ("ORA", "[$44]"),                               // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::direct_indirect_long_indexed(
-        "PC:A000",                                      // cpu
-        "00A000:1744",                                  // bus
-        ("ORA", "[$44],Y"),                             // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::immediate(
-        "PC:A000",                                      // cpu
-        "00A000:09FFFF",                                // bus
-        ("ORA", "#$FFFF"),                              // expected
-        0xA003,                                         // expected_pc
-    )]
-    #[case::stack_relative(
-        "PC:A000",                                      // cpu
-        "00A000:0304",                                  // bus
-        ("ORA", "$04,S"),                               // expected
-        0xA002,                                         // expected_pc
-    )]
-    #[case::stack_relative_indirect_indexed(
-        "PC:A000",                                      // cpu
-        "00A000:1304",                                  // bus
-        ("ORA", "($04,S),Y"),                           // expected
-        0xA002,                                         // expected_pc
-    )]
-    fn test_ora_decoding(
-        #[case] mut cpu: CPU,
-        #[case] mut bus: bus::Fake,
-        #[case] expected: (&'static str, &'static str),
-        #[case] expected_pc: u16,
-    ) {
-        let mut reporter = ev::Retain::new();
-        cpu.step(&mut bus, &mut reporter);
-
-        let (expected_inst, expected_ops) = expected;
-        reporter.assert_exec(expected_inst, expected_ops);
-        assert::program_counter(&cpu, cpu.regs.pbr(), expected_pc);
-    }
-}
+#[cfg(test)] mod tests_and;
+#[cfg(test)] mod tests_brk;
+#[cfg(test)] mod tests_ora;
