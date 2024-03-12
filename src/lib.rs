@@ -5,4 +5,5 @@ pub mod clock;
 pub mod cpu;
 pub mod mem;
 pub mod sys;
+pub mod utils;
 pub mod vid;

@@ -48,7 +48,7 @@ use rstest::*;
     0x8888,                                         // expected
     "Z:0,N:1",                                      // expected_flags_set
 )]
-fn test_ora_results(
+fn test_results(
     #[case] mut cpu: CPU,
     #[case] mut bus: bus::Fake,
     #[case] expected: u16,
@@ -152,7 +152,7 @@ fn test_ora_results(
     ("ORA", "($04,S),Y"),                           // expected
     0xA002,                                         // expected_pc
 )]
-fn test_ora_decoding(
+fn test_decoding(
     #[case] mut cpu: CPU,
     #[case] mut bus: bus::Fake,
     #[case] expected: (&'static str, &'static str),

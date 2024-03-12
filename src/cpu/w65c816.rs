@@ -9,6 +9,8 @@ mod status;
 pub use bus::{Addr, AddrWrap, Bus};
 pub use ev::{Event, Reporter, NullReporter};
 
+use crate::utils::bcd;
+
 use self::status::Flag;
 #[cfg(test)] use std::str::FromStr;
 
@@ -335,9 +337,125 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.eor(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
+            },            
+            0x61 => {
+                // ADC (d,X)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
+            },
+            0x63 => {
+                // ADC d,S
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::StackRelative(rel), rep)
+            },
+            0x65 => {
+                // ADC d
+                let dir: u8 = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::Direct(dir), rep)
+            },
+            0x67 => {
+                // ADC [d]
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::DirectIndirectLong(dir), rep)
+            },
+            0x69 => {
+                // ADC #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.adc(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0x6D => {
+                // ADC a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.adc(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x6F => {
+                // ADC al
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.adc(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
+            },
+            0x71 => {
+                // ADC (d),Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::DirectIndirectIndexed(dir), rep)
+            },
+            0x72 => {
+                // ADC (d)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::DirectIndirect(dir), rep)
+            },
+            0x73 => {
+                // ADC (d,S),Y
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::StackRelativeIndirectIndexed(rel), rep)
+            },
+            0x75 => {
+                // ADC d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
+            0x77 => {
+                // ADC [d],Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.adc(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
+            },
+            0x79 => {
+                // ADC a,Y
+                let abs = self.fetch_pc_word(bus, 1);
+                self.adc(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0x7D => {
+                // ADC a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.adc(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x7F => {
+                // ADC al,X
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.adc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
             _ => unimplemented!()
         }
+    }
+
+    fn adc(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("ADC"),
+            operands: format!("{}", mode),
+        });
+
+        let mode_eval = mode.eval(self, bus);
+        let prev = self.regs.a();
+
+        let carry = if self.regs.status_flag_is_set(Flag::C) { 1 } else { 0 };
+        let result = if self.regs.status_flag_is_set(Flag::D) {
+            bcd::add_word(
+                bcd::add_word(prev, mode_eval.val),
+                carry,
+            )
+        } else {
+            prev.wrapping_add(mode_eval.val).wrapping_add(carry)
+        };
+
+        if self.regs.accum_is_byte() {
+            self.regs.al_set(result as u8);
+            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
+            self.regs.set_status_flag(Flag::V, (result as i8) < (prev as i8));
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
+        } else {
+            self.regs.a_set(result);
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+            self.regs.set_status_flag(Flag::V, (result as i16) < (prev as i16));
+            self.regs.set_status_flag(Flag::Z, result == 0);
+            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
+        }
+
+        self.regs.pc_inc(mode_eval.bytes);
+        self.cycles += mode_eval.cycles;
     }
 
     fn and(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -363,7 +481,6 @@ impl CPU {
         }
         self.regs.pc_inc(mode_eval.bytes);
         self.cycles += mode_eval.cycles;
-
     }
 
     fn brk(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
@@ -470,7 +587,7 @@ impl FromStr for CPU {
                 (Some("P.M"), Some(val)) => 
                     cpu.regs.set_status_flag(Flag::M, val == "1"),
                 (Some("P.O"), Some(val)) => 
-                    cpu.regs.set_status_flag(Flag::O, val == "1"),
+                    cpu.regs.set_status_flag(Flag::V, val == "1"),
                 (Some("P.N"), Some(val)) => 
                     cpu.regs.set_status_flag(Flag::N, val == "1"),
                 (Some("P.B"), Some(val)) => 
@@ -505,6 +622,7 @@ impl FromStr for CPU {
 
 }
 
+#[cfg(test)] mod tests_adc;
 #[cfg(test)] mod tests_and;
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_eor;

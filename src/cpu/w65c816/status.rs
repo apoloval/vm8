@@ -8,7 +8,7 @@ pub enum Flag {
     D = 0b0000_1000,  // bit 3: decimal mode flag
     X = 0b0001_0000,  // bit 4 (native mode): index register select flag
     M = 0b0010_0000,  // bit 5 (native mode): memory select flag
-    O = 0b0100_0000,  // bit 6: overflow flag
+    V = 0b0100_0000,  // bit 6: overflow flag
     N = 0b1000_0000,  // bit 7: negative flag
 }
 
@@ -97,8 +97,8 @@ impl FromStr for FlagExpectation {
                     flags.push((Flag::X, val == "1")),
                 (Some("M"), Some(val)) =>
                     flags.push((Flag::M, val == "1")),
-                (Some("O"), Some(val)) =>
-                    flags.push((Flag::O, val == "1")),
+                (Some("V"), Some(val)) =>
+                    flags.push((Flag::V, val == "1")),
                 (Some("N"), Some(val)) =>
                     flags.push((Flag::N, val == "1")),
                 (Some("E"), Some(val)) =>
@@ -123,7 +123,7 @@ mod test {
         assert_eq!(Flag::X.mask(), 0b0001_0000);
         assert_eq!(Flag::B.mask(), 0b0001_0000);
         assert_eq!(Flag::M.mask(), 0b0010_0000);
-        assert_eq!(Flag::O.mask(), 0b0100_0000);
+        assert_eq!(Flag::V.mask(), 0b0100_0000);
         assert_eq!(Flag::N.mask(), 0b1000_0000);
     }
 
