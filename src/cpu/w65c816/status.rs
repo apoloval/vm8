@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Flag {
     C = 0b0000_0001,  // bit 0: carry flag
     Z = 0b0000_0010,  // bit 1: zero flag
@@ -12,12 +15,19 @@ pub enum Flag {
 impl Flag {
     pub const B: Flag = Flag::X;  // bit 4 (emulation mode): break flag
 
+    #[inline]
     pub fn mask(self) -> u8 {
         self as u8
     }
 
+    #[inline]
     pub fn set(self, p: &mut u8) {
         *p |= self.mask();
+    }
+
+    #[inline]
+    pub fn clear(self, p: &mut u8) {
+        *p &= !self.mask();
     }
 }
 
@@ -46,6 +56,57 @@ impl Flags {
 
     pub fn apply(self, p: &mut u8) {
         *p = (*p | self.set) & !self.reset;
+    }
+}
+
+#[cfg(test)]
+pub struct FlagExpectation(pub Vec<(Flag, bool)>);
+
+#[cfg(test)]
+impl FlagExpectation {
+    pub fn assert(self, p: u8) {
+        for (flag, expected) in self.0 {
+            if expected {
+                assert_eq!(p & flag.mask(), flag.mask());
+            } else {
+                assert_eq!(p & flag.mask(), 0);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+impl FromStr for FlagExpectation {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut flags = Vec::new();
+
+        for prop in s.split(',') {
+            let mut parts = prop.split(':');
+            match (parts.next(), parts.next()) {
+                (Some("C"), Some(val)) =>
+                    flags.push((Flag::C, val == "1")),
+                (Some("Z"), Some(val)) =>
+                    flags.push((Flag::Z, val == "1")),
+                (Some("I"), Some(val)) =>
+                    flags.push((Flag::I, val == "1")),
+                (Some("D"), Some(val)) =>
+                    flags.push((Flag::D, val == "1")),
+                (Some("X"), Some(val)) =>
+                    flags.push((Flag::X, val == "1")),
+                (Some("M"), Some(val)) =>
+                    flags.push((Flag::M, val == "1")),
+                (Some("O"), Some(val)) =>
+                    flags.push((Flag::O, val == "1")),
+                (Some("N"), Some(val)) =>
+                    flags.push((Flag::N, val == "1")),
+                (Some("E"), Some(val)) =>
+                    flags.push((Flag::N, val == "1")),
+                _ => return Err(format!("Invalid flag expectation: {}", s)),
+            }            
+        }
+        Ok(FlagExpectation(flags))
     }
 }
 
