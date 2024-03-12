@@ -259,6 +259,83 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.and(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x41 => {
+                // EOR (d,X)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
+            },
+            0x43 => {
+                // EOR d,S
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::StackRelative(rel), rep)
+            },
+            0x45 => {
+                // EOR d
+                let dir: u8 = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::Direct(dir), rep)
+            },
+            0x47 => {
+                // EOR [d]
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::DirectIndirectLong(dir), rep)
+            },
+            0x49 => {
+                // EOR #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.eor(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0x4D => {
+                // EOR a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.eor(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x4F => {
+                // EOR al
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.eor(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
+            },
+            0x51 => {
+                // EOR (d),Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::DirectIndirectIndexed(dir), rep)
+            },
+            0x52 => {
+                // EOR (d)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::DirectIndirect(dir), rep)
+            },
+            0x53 => {
+                // EOR (d,S),Y
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::StackRelativeIndirectIndexed(rel), rep)
+            },
+            0x55 => {
+                // EOR d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
+            0x57 => {
+                // EOR [d],Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.eor(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
+            },
+            0x59 => {
+                // EOR a,Y
+                let abs = self.fetch_pc_word(bus, 1);
+                self.eor(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0x5D => {
+                // EOR a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.eor(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x5F => {
+                // EOR al,X
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.eor(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
+            },
             _ => unimplemented!()
         }
     }
@@ -313,6 +390,32 @@ impl CPU {
 
         self.cycles += 7;
     }   
+
+    fn eor(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("EOR"), 
+            operands: format!("{}", mode),
+        });
+
+        let mode_eval = mode.eval(self, bus);
+        let result = self.regs.a() ^ mode_eval.val;
+        
+        if self.regs.accum_is_byte() {
+            self.regs.al_set(result as u8);
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
+        } else {
+            self.regs.a_set(result);
+            self.regs.set_status_flag(Flag::Z, result == 0);
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+        
+        }
+        self.regs.pc_inc(mode_eval.bytes);
+        self.cycles += mode_eval.cycles;
+
+    }
 
     fn ora(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
@@ -404,4 +507,5 @@ impl FromStr for CPU {
 
 #[cfg(test)] mod tests_and;
 #[cfg(test)] mod tests_brk;
+#[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
