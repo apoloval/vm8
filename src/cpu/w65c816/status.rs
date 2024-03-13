@@ -1,4 +1,4 @@
-use std::str::FromStr;
+#[cfg(test)] use std::str::FromStr;
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum Flag {
@@ -81,6 +81,9 @@ impl FromStr for FlagExpectation {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut flags = Vec::new();
+        if s.is_empty() {
+            return Ok(FlagExpectation(flags));
+        }
 
         for prop in s.split(',') {
             let mut parts = prop.split(':');

@@ -1,4 +1,3 @@
-use std::ops::{Add, AddAssign};
 #[cfg(test)] use std::str::FromStr;
 
 /// An address used by the W65C816 CPU buses. In essence, it is a 24-bit value, with the upper 8
@@ -78,10 +77,12 @@ impl Bus for () {
     fn write_byte(&mut self, _: Addr, _: u8) {}
 }
 
+#[cfg(test)]
 pub struct Fake {
     banks: Vec<u8>
 }
 
+#[cfg(test)]
 impl Fake {
     pub fn new() -> Self {
         Self {
@@ -90,6 +91,7 @@ impl Fake {
     }
 }
 
+#[cfg(test)]
 impl Bus for Fake {
     fn read_byte(&self, addr: Addr) -> u8 { 
         self.banks[usize::from(addr)]

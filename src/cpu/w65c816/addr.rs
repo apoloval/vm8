@@ -1,4 +1,4 @@
-use std::{fmt::{self, Display, Formatter}, num::Wrapping};
+use std::fmt::{self, Display, Formatter};
 
 use super::{status::Flag, Addr, AddrWrap, Bus, CPU};
 

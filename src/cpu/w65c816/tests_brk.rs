@@ -1,5 +1,3 @@
-use self::status::FlagExpectation;
-
 use super::*;
 use crate::cpu::w65c816::assert;
 

@@ -16,7 +16,3 @@ pub fn program_state(cpu: &CPU, expected: u8) {
 pub fn accum(cpu: &CPU, expected: u16) {
     assert_eq!(cpu.regs.a(), expected);
 }
-
-pub fn accum_is(cpu: &CPU, expected: impl FnOnce(u16) -> bool) {
-    assert!(expected(cpu.regs.a()));
-}

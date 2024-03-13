@@ -415,6 +415,83 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.adc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0xE1 => {
+                // SBC (d,X)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
+            },
+            0xE3 => {
+                // SBC d,S
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::StackRelative(rel), rep)
+            },
+            0xE5 => {
+                // SBC d
+                let dir: u8 = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::Direct(dir), rep)
+            },
+            0xE7 => {
+                // SBC [d]
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::DirectIndirectLong(dir), rep)
+            },
+            0xE9 => {
+                // SBC #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.sbc(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0xED => {
+                // SBC a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.sbc(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0xEF => {
+                // SBC al
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.sbc(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
+            },
+            0xF1 => {
+                // SBC (d),Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::DirectIndirectIndexed(dir), rep)
+            },
+            0xF2 => {
+                // SBC (d)
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::DirectIndirect(dir), rep)
+            },
+            0xF3 => {
+                // SBC (d,S),Y
+                let rel = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::StackRelativeIndirectIndexed(rel), rep)
+            },
+            0xF5 => {
+                // SBC d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
+            0xF7 => {
+                // SBC [d],Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.sbc(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
+            },
+            0xF9 => {
+                // SBC a,Y
+                let abs = self.fetch_pc_word(bus, 1);
+                self.sbc(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0xFD => {
+                // SBC a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.sbc(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0xFF => {
+                // SBC al,X
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.sbc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
+            },
             _ => unimplemented!()
         }
     }
@@ -559,6 +636,46 @@ impl CPU {
         self.cycles += mode_eval.cycles;
 
     }
+
+    fn sbc(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("SBC"),
+            operands: format!("{}", mode),
+        });
+
+        let mode_eval = mode.eval(self, bus);
+        let prev = self.regs.a();
+
+        // Remind that borrow is the negation of the carry flag in W65C816.
+        let borrow = if self.regs.status_flag_is_set(Flag::C) { 0 } else { 1 };
+        let result = if self.regs.status_flag_is_set(Flag::D) {
+            bcd::sub_word(
+                bcd::sub_word(prev, mode_eval.val),
+                borrow,
+            )
+        } else {
+            prev.wrapping_sub(mode_eval.val).wrapping_sub(borrow)
+        };
+
+        if self.regs.accum_is_byte() {
+            self.regs.al_set(result as u8);
+            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
+            self.regs.set_status_flag(Flag::V, (result as i8) > (prev as i8));
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
+        } else {
+            self.regs.a_set(result);
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+            self.regs.set_status_flag(Flag::V, (result as i16) > (prev as i16));
+            self.regs.set_status_flag(Flag::Z, result == 0);
+            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
+        }
+
+        self.regs.pc_inc(mode_eval.bytes);
+        self.cycles += mode_eval.cycles;
+    }
 }
 
 #[cfg(test)]
@@ -627,3 +744,4 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
+#[cfg(test)] mod tests_sbc;
