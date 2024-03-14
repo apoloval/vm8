@@ -415,6 +415,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.adc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0xC0 => {
+                // CPY #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.cpy(bus, addr::Mode::Immediate(imm), rep)
+            },
             0xC1 => {
                 // CMP (d,X)
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -424,6 +429,11 @@ impl CPU {
                 // CMP d,S
                 let rel = self.fetch_pc_byte(bus, 1);
                 self.cmp(bus, addr::Mode::StackRelative(rel), rep)
+            },
+            0xC4 => {
+                // CPY d
+                let dir: u8 = self.fetch_pc_byte(bus, 1);
+                self.cpy(bus, addr::Mode::Direct(dir), rep)
             },
             0xC5 => {
                 // CMP d
@@ -439,6 +449,11 @@ impl CPU {
                 // CMP #i
                 let imm = self.fetch_pc_word(bus, 1);
                 self.cmp(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0xCC => {
+                // CPY a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.cpy(bus, addr::Mode::Absolute(abs), rep)
             },
             0xCD => {
                 // CMP a
@@ -729,6 +744,32 @@ impl CPU {
         self.cycles += mode_eval.cycles;
     }
 
+    fn cpy(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("CPY"),
+            operands: format!("{}", mode),
+        });
+
+        let mode_eval = mode.eval(self, bus);
+        let prev = self.regs.y();
+        let result = prev.wrapping_sub(mode_eval.val);
+
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
+        } else {
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+            self.regs.set_status_flag(Flag::Z, result == 0);
+            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
+        }
+
+        self.regs.pc_inc(mode_eval.bytes);
+        self.cycles += mode_eval.cycles;
+    }
+
     fn eor(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -888,6 +929,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_cmp;
 #[cfg(test)] mod tests_cpx;
+#[cfg(test)] mod tests_cpy;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
