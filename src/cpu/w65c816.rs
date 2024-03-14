@@ -492,6 +492,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.cmp(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0xE0 => {
+                // CPX #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.cpx(bus, addr::Mode::Immediate(imm), rep)
+            },
             0xE1 => {
                 // SBC (d,X)
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -501,6 +506,11 @@ impl CPU {
                 // SBC d,S
                 let rel = self.fetch_pc_byte(bus, 1);
                 self.sbc(bus, addr::Mode::StackRelative(rel), rep)
+            },
+            0xE4 => {
+                // CPX d
+                let dir: u8 = self.fetch_pc_byte(bus, 1);
+                self.cpx(bus, addr::Mode::Direct(dir), rep)
             },
             0xE5 => {
                 // SBC d
@@ -516,6 +526,11 @@ impl CPU {
                 // SBC #i
                 let imm = self.fetch_pc_word(bus, 1);
                 self.sbc(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0xEC => {
+                // CPX a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.cpx(bus, addr::Mode::Absolute(abs), rep)
             },
             0xED => {
                 // SBC a
@@ -672,6 +687,32 @@ impl CPU {
 
         let mode_eval = mode.eval(self, bus);
         let prev = self.regs.a();
+        let result = prev.wrapping_sub(mode_eval.val);
+
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
+        } else {
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+            self.regs.set_status_flag(Flag::Z, result == 0);
+            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
+        }
+
+        self.regs.pc_inc(mode_eval.bytes);
+        self.cycles += mode_eval.cycles;
+    }
+
+    fn cpx(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("CPX"),
+            operands: format!("{}", mode),
+        });
+
+        let mode_eval = mode.eval(self, bus);
+        let prev = self.regs.x();
         let result = prev.wrapping_sub(mode_eval.val);
 
         if self.regs.accum_is_byte() {
@@ -846,6 +887,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_and;
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_cmp;
+#[cfg(test)] mod tests_cpx;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
