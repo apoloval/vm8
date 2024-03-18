@@ -22,6 +22,7 @@ pub enum Mode {
     AbsoluteIndexedY(u16),              // a,Y
     AbsoluteLong(u8, u16),              // al       --> 65C816 only
     AbsoluteLongIndexed(u8, u16),       // al,X     --> 65C816 only
+    Accumulator,                        //
     Direct(u8),                         // d     
     DirectIndexedIndirect(u8),          // (d,X)
     DirectIndexedX(u8),                 // d,X
@@ -35,150 +36,236 @@ pub enum Mode {
     StackRelativeIndirectIndexed(u8),   // (d,S),Y  --> 65C816 only
 }
 
-pub struct ModeEval {
+pub struct ModeRead {
     pub val: u16,
     pub cycles: u64,
-    pub bytes: u16,
+    pub prog_bytes: u16,
+}
+
+pub struct ModeWrite {
+    pub cycles: u64,
 }
 
 impl Mode {
-    pub fn eval<B: Bus>(self, cpu: &mut CPU, bus: &B) -> ModeEval {
+    pub fn read(self, cpu: &CPU, bus: &impl Bus) -> ModeRead {
         match self {
             Mode::Absolute(addr) =>
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(
                         Addr::from(cpu.regs.dbr(), addr),
                         AddrWrap::Long,
                     ),
                     cycles: 4 + cpu_op16!(cpu),
-                    bytes: 3,
+                    prog_bytes: 3,
                 },
             Mode::AbsoluteIndexedX(addr) => {
                 let ptr1 = Addr::from(cpu.regs.dbr(), addr);
                 let ptr2 = ptr1.wrapping_add(cpu.regs.x(), AddrWrap::Long);
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(ptr2, AddrWrap::Long),
                     cycles: 4 + cpu_op16!(cpu) + Self::addr_page_crossed(cpu, ptr1, ptr2),
-                    bytes: 3,
+                    prog_bytes: 3,
                 }
             },
             Mode::AbsoluteIndexedY(addr) => {
                 let ptr1 = Addr::from(cpu.regs.dbr(), addr);
                 let ptr2 = ptr1.wrapping_add(cpu.regs.y(), AddrWrap::Long);
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(ptr2, AddrWrap::Long),
                     cycles: 4 + cpu_op16!(cpu) + Self::addr_page_crossed(cpu, ptr1, ptr2),
-                    bytes: 3,
+                    prog_bytes: 3,
                 }
             },
             Mode::AbsoluteLong(bank, offset) =>
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(Addr::from(bank, offset), AddrWrap::Long),
                     cycles: 5 + cpu_op16!(cpu),
-                    bytes: 4,
+                    prog_bytes: 4,
                 },
             Mode::AbsoluteLongIndexed(bank, offset) => {
                 let addr = Addr::from(bank, offset)
                     .wrapping_add(cpu.regs.x(), AddrWrap::Long);
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(addr, AddrWrap::Long),
                     cycles: 5 + cpu_op16!(cpu),
-                    bytes: 4,
+                    prog_bytes: 4,
                 }
             },
+            Mode::Accumulator => 
+                ModeRead {
+                    val: cpu.regs.a(),
+                    cycles: 2,
+                    prog_bytes: 1,
+                },
             Mode::Direct(dir) =>
-                ModeEval {
-                    val: cpu.direct_word(bus, dir, 0),
+                ModeRead {
+                    val: cpu.read_direct_word(bus, dir, 0),
                     cycles: 3 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 },
             Mode::DirectIndexedX(dir) =>
-                ModeEval {
-                    val: cpu.direct_word(bus, dir, cpu.regs.x()),
+                ModeRead {
+                    val: cpu.read_direct_word(bus, dir, cpu.regs.x()),
                     cycles: 4 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 },
             Mode::DirectIndexedY(dir) =>
-                ModeEval {
-                    val: cpu.direct_word(bus, dir, cpu.regs.y()),
+                ModeRead {
+                    val: cpu.read_direct_word(bus, dir, cpu.regs.y()),
                     cycles: 4 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 },
             Mode::DirectIndexedIndirect(dir) =>
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(
-                        cpu.direct_ptr(bus, dir, cpu.regs.x()), 
+                        cpu.read_direct_ptr(bus, dir, cpu.regs.x()), 
                         AddrWrap::Long,
                     ),
                     cycles: 6 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 },
             Mode::DirectIndirect(dir) => {
-                println!("DirectIndirect: {:?}", cpu.direct_ptr(bus, dir, 0));
-                ModeEval {
+                println!("DirectIndirect: {:?}", cpu.read_direct_ptr(bus, dir, 0));
+                ModeRead {
                     val: bus.read_word(
-                        cpu.direct_ptr(bus, dir, 0),
+                        cpu.read_direct_ptr(bus, dir, 0),
                         AddrWrap::Long,
                     ),
                     cycles: 5 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 }
             },
             Mode::DirectIndirectIndexed(dir) => {
-                let ptr1 = cpu.direct_ptr(bus, dir, 0);
+                let ptr1 = cpu.read_direct_ptr(bus, dir, 0);
                 let ptr2 = ptr1.wrapping_add(cpu.regs.y(), AddrWrap::Long);
 
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(ptr2, AddrWrap::Long),
                     cycles: 5 + 
                         cpu_op16!(cpu) + 
                         cpu_dl0!(cpu) + 
                         Self::addr_page_crossed(cpu, ptr1, ptr2),
-                    bytes: 2,
+                    prog_bytes: 2,
                 }
             },
             Mode::DirectIndirectLong(offset) => {
-                let addr= cpu.direct_ptr_long(bus, offset, 0);
-                ModeEval {
+                let addr= cpu.read_direct_ptr_long(bus, offset, 0);
+                ModeRead {
                     val: bus.read_word(addr, AddrWrap::Long),
                     cycles: 6 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 }
             },
             Mode::DirectIndirectLongIndexed(offset) => {
-                let addr = cpu.direct_ptr_long(bus, offset, 0)
+                let addr = cpu.read_direct_ptr_long(bus, offset, 0)
                     .wrapping_add(cpu.regs.y(), AddrWrap::Word);
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(addr, AddrWrap::Long,),
                     cycles: 6 + cpu_op16!(cpu) + cpu_dl0!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 }
             },
             Mode::Immediate(value) => 
-                ModeEval {
+                ModeRead {
                     val: value,
                     cycles: 2 + cpu_op16!(cpu),
-                    bytes: 2 + cpu_op16!(cpu),
+                    prog_bytes: 2 + cpu_op16!(cpu),
                 },
             Mode::StackRelative(offset) => {
-                ModeEval {
-                    val: cpu.stack_word(bus, offset as u16),
+                ModeRead {
+                    val: cpu.read_stack_word(bus, offset as u16),
                     cycles: 4 + cpu_op16!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 }
             },
             Mode::StackRelativeIndirectIndexed(offset) => {
                 let addr = Addr::from(
                     cpu.regs.dbr(),
-                    cpu.stack_word(bus, offset as u16),
+                    cpu.read_stack_word(bus, offset as u16),
                 );
                 let ptr = addr.wrapping_add(cpu.regs.y(), AddrWrap::Word);
-                ModeEval {
+                ModeRead {
                     val: bus.read_word(ptr, AddrWrap::Long,),
                     cycles: 7 + cpu_op16!(cpu),
-                    bytes: 2,
+                    prog_bytes: 2,
                 }
             },
+        }
+    }
+
+    pub fn write(self, cpu: &mut CPU, bus: &mut impl Bus, val: u16) -> ModeWrite {
+        if cpu.regs.accum_is_byte() {
+            self.write_byte(cpu, bus, val as u8)
+        } else {
+            self.write_word(cpu, bus, val)
+        }
+    }
+
+    fn write_byte(self, cpu: &mut CPU, bus: &mut impl Bus, val: u8) -> ModeWrite {
+        match self {
+            Mode::Absolute(addr) => {
+                bus.write_byte(
+                    Addr::from(cpu.regs.dbr(), addr),
+                    val,
+                );
+                ModeWrite { cycles: 2 }
+            },
+            Mode::AbsoluteIndexedX(addr) => {
+                bus.write_byte(
+                    Addr::from(cpu.regs.dbr(), addr)
+                        .wrapping_add(cpu.regs.x(), AddrWrap::Long),
+                    val,
+                );
+                ModeWrite { cycles: 2 }
+            },
+            Mode::Accumulator => {
+                cpu.regs.al_set(val);
+                ModeWrite { cycles: 0 }
+            },
+            Mode::Direct(dir) => {
+                cpu.write_direct_byte(bus, dir, 0, val);
+                ModeWrite { cycles: 2 }
+            },
+            Mode::DirectIndexedX(dir) => {
+                cpu.write_direct_byte(bus, dir, cpu.regs.x(), val);
+                ModeWrite { cycles: 2 }
+            },
+            _ => panic!("addressing mode does not support write operation")
+        }
+    }
+
+    fn write_word(self, cpu: &mut CPU, bus: &mut impl Bus, val: u16) -> ModeWrite {
+        match self {
+            Mode::Absolute(addr) => {
+                bus.write_word(
+                    Addr::from(cpu.regs.dbr(), addr),
+                    AddrWrap::Long,
+                    val,
+                );
+                ModeWrite { cycles: 3 }
+            },
+            Mode::AbsoluteIndexedX(addr) => {
+                bus.write_word(
+                    Addr::from(cpu.regs.dbr(), addr)
+                        .wrapping_add(cpu.regs.x(), AddrWrap::Long),
+                    AddrWrap::Long,
+                    val,
+                );
+                ModeWrite { cycles: 3 }
+            },
+            Mode::Accumulator => {
+                cpu.regs.a_set(val);
+                ModeWrite { cycles: 0 }
+            },
+            Mode::Direct(dir) => {
+                cpu.write_direct_word(bus, dir, 0, val);
+                ModeWrite { cycles: 3 }
+            },
+            Mode::DirectIndexedX(dir) => {
+                cpu.write_direct_word(bus, dir, cpu.regs.x(), val);
+                ModeWrite { cycles: 3 }
+            },
+            _ => panic!("addressing mode does not support write operation")
         }
     }
 
@@ -194,6 +281,7 @@ impl Mode {
 impl Display for Mode {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
+            Mode::Accumulator => write!(f, ""),
             Mode::Absolute(addr) => write!(f, "${:04X}", addr),
             Mode::AbsoluteIndexedX(addr) => write!(f, "${:04X},X", addr),
             Mode::AbsoluteIndexedY(addr) => write!(f, "${:04X},Y", addr),
@@ -229,19 +317,19 @@ mod tests {
         "P.E:1",                                            // cpu
         "001234:AB",                                        // bus
         Mode::Absolute(0x1234),                             // addr
-        ModeEval{val: 0x00AB, cycles: 4, bytes: 3},         // expected
+        ModeRead{val: 0x00AB, cycles: 4, prog_bytes: 3},    // expected
     )]
     #[case::absolute_native_8bit(
         "P.E:0,P.M:1,DBR:12",                               // cpu
         "123456:AB",                                        // bus
         Mode::Absolute(0x3456),                             // addr
-        ModeEval{val: 0xAB, cycles: 4, bytes: 3},           // expected
+        ModeRead{val: 0xAB, cycles: 4, prog_bytes: 3},      // expected
     )]
     #[case::absolute_native_16bit(
         "P.E:0,DBR:12",                                     // cpu
         "123456:CDAB",                                      // bus
         Mode::Absolute(0x3456),                             // addr
-        ModeEval{val: 0xABCD, cycles: 5, bytes: 3},         // expected
+        ModeRead{val: 0xABCD, cycles: 5, prog_bytes: 3},    // expected
     )]
 
     /****************************/
@@ -251,31 +339,31 @@ mod tests {
         "P.E:1,X:12",                                       // cpu
         "001246:AB",                                        // bus
         Mode::AbsoluteIndexedX(0x1234),                     // addr
-        ModeEval{val: 0x00AB, cycles: 4, bytes: 3},         // expected
+        ModeRead{val: 0x00AB, cycles: 4, prog_bytes: 3},    // expected
     )]
     #[case::absolute_indexed_x_native_8bit(
         "P.E:0,P.M:1,P.X:1,DBR:12,X:12",                    // cpu
         "123468:AB",                                        // bus
         Mode::AbsoluteIndexedX(0x3456),                     // addr
-        ModeEval{val: 0xAB, cycles: 4, bytes: 3},           // expected
+        ModeRead{val: 0xAB, cycles: 4, prog_bytes: 3},      // expected
     )]
     #[case::absolute_indexed_x_native_8bit_16bitidx(
         "P.E:0,P.M:1,P.X:0,DBR:12,X:12",                    // cpu
         "123468:AB",                                        // bus
         Mode::AbsoluteIndexedX(0x3456),                     // addr
-        ModeEval{val: 0xAB, cycles: 5, bytes: 3},           // expected
+        ModeRead{val: 0xAB, cycles: 5, prog_bytes: 3},      // expected
     )]
     #[case::absolute_indexed_x_native_16bit(
         "P.E:0,DBR:12,X:12",                                // cpu
         "123468:CDAB",                                      // bus
         Mode::AbsoluteIndexedX(0x3456),                     // addr
-        ModeEval{val: 0xABCD, cycles: 6, bytes: 3},         // expected
+        ModeRead{val: 0xABCD, cycles: 6, prog_bytes: 3},    // expected
     )]
     #[case::absolute_indexed_x_native_16bit_8bitidx(
         "P.E:0,P.X:1,DBR:12,X:12",                          // cpu
         "123468:CDAB",                                      // bus
         Mode::AbsoluteIndexedX(0x3456),                     // addr
-        ModeEval{val: 0xABCD, cycles: 5, bytes: 3},         // expected
+        ModeRead{val: 0xABCD, cycles: 5, prog_bytes: 3},    // expected
     )]
 
     /**********************/
@@ -285,13 +373,13 @@ mod tests {
         "P.E:0,P.M:1",                                      // cpu
         "123456:AB",                                        // bus
         Mode::AbsoluteLong(0x12, 0x3456),                   // addr
-        ModeEval{val: 0x00AB, cycles: 5, bytes: 4},         // expected
+        ModeRead{val: 0x00AB, cycles: 5, prog_bytes: 4},    // expected
     )]
     #[case::absolute_long_16bit(
         "P.E:0",                                            // cpu
         "123456:CDAB",                                      // bus
         Mode::AbsoluteLong(0x12, 0x3456),                   // addr
-        ModeEval{val: 0xABCD, cycles: 6, bytes: 4},         // expected
+        ModeRead{val: 0xABCD, cycles: 6, prog_bytes: 4},    // expected
     )]
 
     /********************************/
@@ -301,13 +389,13 @@ mod tests {
         "P.E:0,P.M:1,X:12",                                 // cpu
         "123468:AB",                                        // bus
         Mode::AbsoluteLongIndexed(0x12, 0x3456),            // addr
-        ModeEval{val: 0x00AB, cycles: 5, bytes: 4},         // expected
+        ModeRead{val: 0x00AB, cycles: 5, prog_bytes: 4},    // expected
     )]
     #[case::absolute_long_indexed_16bit(
         "P.E:0,X:12",                                       // cpu
         "123468:CDAB",                                      // bus
         Mode::AbsoluteLongIndexed(0x12, 0x3456),            // addr
-        ModeEval{val: 0xABCD, cycles: 6, bytes: 4},         // expected
+        ModeRead{val: 0xABCD, cycles: 6, prog_bytes: 4},    // expected
     )]
 
     /**************/
@@ -317,55 +405,55 @@ mod tests {
         "P.E:1,DP:FF10",                                    // cpu
         "00FF30:12",                                        // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_emulated_dl0(
         "P.E:1,DP:FF00",                                    // cpu
         "00FF20:12",                                        // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x0012, cycles: 3, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 3, prog_bytes: 2},    // expected
     )]
     #[case::direct_emulated_page_wrapping(
         "P.E:1,DP:FFF0",                                    // cpu
         "000010:12",                                        // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_native_8bit(
         "P.E:0,P.M:1,DP:FF10",                              // cpu
         "00FF30:12",                                        // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_native_8bit_dl0(
         "P.E:0,P.M:1,DP:FF00",                              // cpu
         "00FF20:12",                                        // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x0012, cycles: 3, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 3, prog_bytes: 2},    // expected
     )]
     #[case::direct_native_8bit_bank_wrapping(
         "P.E:0,P.M:1,DP:FFF0",                              // cpu
         "000010:12",                                        // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_native_16bit(
         "P.E:0,P.M:0,DP:FF10",                              // cpu
         "00FF30:3412",                                      // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_native_16bit_dl0(
         "P.E:0,P.M:0,DP:FF00",                              // cpu
         "00FF20:3412",                                      // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x1234, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_native_16bit_wrapping(
         "P.E:0,P.M:0,DP:FFF0",                              // cpu
         "000010:3412",                                      // bus
         Mode::Direct(0x20),                                 // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
 
     /**************************/
@@ -375,55 +463,55 @@ mod tests {
         "P.E:1,DP:FF10,X:12",                               // cpu
         "00FF42:12",                                        // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_emulated_dl0(
         "P.E:1,DP:FF00,X:12",                               // cpu
         "00FF32:12",                                        // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_emulated_page_wrapping(
         "P.E:1,DP:FFF0,X:12",                               // cpu
         "000022:12",                                        // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_native_8bit(
         "P.E:0,P.M:1,DP:FF10,X:12",                         // cpu
         "00FF42:12",                                        // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_native_8bit_dl0(
         "P.E:0,P.M:1,DP:FF00,X:12",                         // cpu
         "00FF32:12",                                        // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_native_8bit_bank_wrapping(
         "P.E:0,P.M:1,DP:FFF0,X:12",                         // cpu
         "000022:12",                                        // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_native_16bit(
         "P.E:0,P.M:0,DP:FF10,X:12",                         // cpu
         "00FF42:3412",                                      // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_native_16bit_dl0(
         "P.E:0,P.M:0,DP:FF00,X:12",                         // cpu
         "00FF32:3412",                                      // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_x_native_16bit_wrapping(
         "P.E:0,P.M:0,DP:FFF0,X:12",                         // cpu
         "000022:3412",                                      // bus
         Mode::DirectIndexedX(0x20),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
 
     /**************************/
@@ -433,55 +521,55 @@ mod tests {
         "P.E:1,DP:FF10,Y:12",                               // cpu
         "00FF42:12",                                        // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_emulated_dl0(
         "P.E:1,DP:FF00,Y:12",                               // cpu
         "00FF32:12",                                        // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_emulated_page_wrapping(
         "P.E:1,DP:FFF0,Y:12",                               // cpu
         "000022:12",                                        // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_native_8bit(
         "P.E:0,P.M:1,DP:FF10,Y:12",                         // cpu
         "00FF42:12",                                        // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_native_8bit_dl0(
         "P.E:0,P.M:1,DP:FF00,Y:12",                         // cpu
         "00FF32:12",                                        // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 4, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 4, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_native_8bit_bank_wrapping(
         "P.E:0,P.M:1,DP:FFF0,Y:12",                         // cpu
         "000022:12",                                        // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x0012, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x0012, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_native_16bit(
         "P.E:0,P.M:0,DP:FF10,Y:12",                         // cpu
         "00FF42:3412",                                      // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_native_16bit_dl0(
         "P.E:0,P.M:0,DP:FF00,Y:12",                         // cpu
         "00FF32:3412",                                      // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_y_native_16bit_wrapping(
         "P.E:0,P.M:0,DP:FFF0,Y:12",                         // cpu
         "000022:3412",                                      // bus
         Mode::DirectIndexedY(0x20),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
 
     /***********************************/
@@ -491,37 +579,37 @@ mod tests {
         "P.E:1,DP:1040,X:12",                               // cpu
         "001056:8040,004080:3412",                          // bus
         Mode::DirectIndexedIndirect(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 7, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_indirect_emulated_dl0(
         "P.E:1,DP:1000,X:12",                               // cpu
         "001016:8040,004080:3412",                          // bus
         Mode::DirectIndexedIndirect(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_indirect_emulated_page_wrapping(
         "P.E:1,DP:1000,X:FF",                               // cpu
         "001003:8040,004080:3412",                          // bus
         Mode::DirectIndexedIndirect(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_indirect_emulated_bank_wrapping(
         "P.E:1,DP:FFF0,X:20",                               // cpu
         "000014:8040,004080:3412",                          // bus
         Mode::DirectIndexedIndirect(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 7, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_indirect_native_16bit(
         "P.E:0,P.M:0,DP:1040,X:12",                         // cpu
         "001056:8040,004080:3412",                          // bus
         Mode::DirectIndexedIndirect(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
     #[case::direct_indexed_indirect_native_16bit_bank_wrapping(
         "P.E:0,DP:FFF0,X:20",                               // cpu
         "000014:8040,004080:3412",                          // bus
         Mode::DirectIndexedIndirect(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
 
     /*************************/
@@ -531,55 +619,55 @@ mod tests {
         "P.E:1,DP:1040",                                    // cpu
         "001044:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x04),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_emulated_dl0(
         "P.E:1,DP:1000",                                    // cpu
         "001004:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x04),                         // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_emulated_page_wrapping(
         "P.E:1,DP:1000",                                    // cpu
         "001000:40,0010FF:80,004080:3412",                  // bus
         Mode::DirectIndirect(0xFF),                         // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_emulated_bank_wrapping(
         "P.E:1,DP:FFF0",                                    // cpu
         "000014:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x24),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_native_8bit(
         "P.E:0,P.M:1,DP:1040",                              // cpu
         "001044:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x04),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_native_8bit_dl0(
         "P.E:0,P.M:1,DP:1000",                              // cpu
         "001004:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x04),                         // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_native_16bit(
         "P.E:0,P.M:0,DP:1040",                              // cpu
         "001044:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x04),                         // addr
-        ModeEval{val: 0x1234, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 7, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_native_16bit_dl0(
         "P.E:0,P.M:0,DP:1000",                              // cpu
         "001004:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x04),                         // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_native_16bit_bank_wrapping(
         "P.E:0,DP:FFF0",                                    // cpu
         "000014:8040,004080:3412",                          // bus
         Mode::DirectIndirect(0x24),                         // addr
-        ModeEval{val: 0x1234, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 7, prog_bytes: 2},    // expected
     )]
 
     /***********************************/
@@ -589,49 +677,49 @@ mod tests {
         "P.E:1,DP:1040,Y:12",                               // cpu
         "001044:8040,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_emulated_dl0(
         "P.E:1,DP:1000,Y:12",                               // cpu
         "001004:8040,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_emulated_page_wrapping(
         "P.E:1,DP:1000,Y:12",                               // cpu
         "001000:40,0010FF:80,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0xFF),                  // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_emulated_bank_wrapping(
         "P.E:1,DP:FFF0,Y:12",                               // cpu
         "000014:8040,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0x24),                  // addr
-        ModeEval{val: 0x1234, cycles: 6, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 6, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_native_16bit(
         "P.E:0,P.M:0,P.X:0,DP:1040,Y:12",                   // cpu
         "001044:8040,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_native_16bit_8bitidx(
         "P.E:0,P.M:0,P.X:1,DP:1040,Y:12",                   // cpu
         "001044:8040,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 7, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_native_16bit_8bitidx_wrapping(
         "P.E:0,P.M:0,P.X:1,DP:1040,Y:22",                   // cpu
         "001044:F040,004112:3412",                          // bus
         Mode::DirectIndirectIndexed(0x04),                  // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_indexed_native_16bit_bank_wrapping(
         "P.E:0,DP:FFF0,Y:12",                               // cpu
         "000014:8040,004092:3412",                          // bus
         Mode::DirectIndirectIndexed(0x24),                  // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
 
     /******************************/
@@ -641,31 +729,31 @@ mod tests {
         "P.E:0,P.M:1,DP:FF10",                              // cpu
         "00FF30:563412,123456:AB",                          // bus
         Mode::DirectIndirectLong(0x20),                     // addr
-        ModeEval{val: 0xAB, cycles: 7, bytes: 2},           // expected
+        ModeRead{val: 0xAB, cycles: 7, prog_bytes: 2},      // expected
     )]
     #[case::direct_indirect_long_8bit_dl0(
         "P.E:0,P.M:1,DP:FF00",                              // cpu
         "00FF20:563412,123456:AB",                          // bus
         Mode::DirectIndirectLong(0x20),                     // addr
-        ModeEval{val: 0xAB, cycles: 6, bytes: 2},           // expected
+        ModeRead{val: 0xAB, cycles: 6, prog_bytes: 2},      // expected
     )]
     #[case::direct_indirect_long_16bit(
         "P.E:0,P.M:0,DP:FF10",                              // cpu
         "00FF30:563412,123456:CDAB",                        // bus
         Mode::DirectIndirectLong(0x20),                     // addr
-        ModeEval{val: 0xABCD, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0xABCD, cycles: 8, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_long_16bit_dl0(
         "P.E:0,P.M:0,DP:FF00",                              // cpu
         "00FF20:563412,123456:CDAB",                        // bus
         Mode::DirectIndirectLong(0x20),                     // addr
-        ModeEval{val: 0xABCD, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0xABCD, cycles: 7, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_long_bank_wrapping(
         "P.E:0,P.M:0,DP:FFF0",                              // cpu
         "000010:FFFF12,12FFFF:CDAB",                        // bus
         Mode::DirectIndirectLong(0x20),                     // addr
-        ModeEval{val: 0xABCD, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0xABCD, cycles: 8, prog_bytes: 2},    // expected
     )]
 
     /****************************************/
@@ -675,31 +763,31 @@ mod tests {
         "P.E:0,P.M:1,DP:FF10,Y:12",                         // cpu
         "00FF30:563412,123468:AB",                          // bus
         Mode::DirectIndirectLongIndexed(0x20),              // addr
-        ModeEval{val: 0xAB, cycles: 7, bytes: 2},           // expected
+        ModeRead{val: 0xAB, cycles: 7, prog_bytes: 2},      // expected
     )]
     #[case::direct_indirect_long_indexed_8bit_dl0(
         "P.E:0,P.M:1,DP:FF00,Y:12",                         // cpu
         "00FF20:563412,123468:AB",                          // bus
         Mode::DirectIndirectLongIndexed(0x20),              // addr
-        ModeEval{val: 0xAB, cycles: 6, bytes: 2},           // expected
+        ModeRead{val: 0xAB, cycles: 6, prog_bytes: 2},      // expected
     )]
     #[case::direct_indirect_long_indexed_16bit(
         "P.E:0,P.M:0,DP:FF10,Y:12",                         // cpu
         "00FF30:563412,123468:CDAB",                        // bus
         Mode::DirectIndirectLongIndexed(0x20),              // addr
-        ModeEval{val: 0xABCD, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0xABCD, cycles: 8, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_long_indexed_16bit_dl0(
         "P.E:0,P.M:0,DP:FF00,Y:12",                         // cpu
         "00FF20:563412,123468:CDAB",                        // bus
         Mode::DirectIndirectLongIndexed(0x20),              // addr
-        ModeEval{val: 0xABCD, cycles: 7, bytes: 2},         // expected
+        ModeRead{val: 0xABCD, cycles: 7, prog_bytes: 2},    // expected
     )]
     #[case::direct_indirect_long_indexed_bank_wrapping(
         "P.E:0,P.M:0,DP:FFF0,Y:0F",                         // cpu
         "000010:F0FF12,12FFFF:CDAB",                        // bus
         Mode::DirectIndirectLongIndexed(0x20),              // addr
-        ModeEval{val: 0xABCD, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0xABCD, cycles: 8, prog_bytes: 2},    // expected
     )]
 
     /*******************/
@@ -709,13 +797,13 @@ mod tests {
         "P.E:1",                                            // cpu
         "",                                                 // bus
         Mode::Immediate(0x00AB),                            // addr
-        ModeEval{val: 0x00AB, cycles: 2, bytes: 2},         // expected
+        ModeRead{val: 0x00AB, cycles: 2, prog_bytes: 2},    // expected
     )]
     #[case::immediate_16bit(
         "P.E:0",                                            // cpu
         "",                                                 // bus
         Mode::Immediate(0x00AB),                            // addr
-        ModeEval{val: 0x00AB, cycles: 3, bytes: 3},         // expected
+        ModeRead{val: 0x00AB, cycles: 3, prog_bytes: 3},    // expected
     )]
 
     /**************************/
@@ -725,25 +813,25 @@ mod tests {
         "P.E:1,SP:FFF0",                                    // cpu
         "0001F2:12",                                        // bus
         Mode::StackRelative(0x02),                          // addr
-        ModeEval{val: 0x12, cycles: 4, bytes: 2},           // expected
+        ModeRead{val: 0x12, cycles: 4, prog_bytes: 2},      // expected
     )]
     #[case::stack_relative_native_8bit(
         "P.E:0,P.M:1,SP:FFF0",                              // cpu
         "00FFF2:12",                                        // bus
         Mode::StackRelative(0x02),                          // addr
-        ModeEval{val: 0x12, cycles: 4, bytes: 2},           // expected
+        ModeRead{val: 0x12, cycles: 4, prog_bytes: 2},      // expected
     )]
     #[case::stack_relative_native_16bit(
         "P.E:0,SP:FFF0",                                    // cpu
         "00FFF2:3412",                                      // bus
         Mode::StackRelative(0x02),                          // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
     #[case::stack_relative_bank_wrapping(
         "P.E:0,SP:FFF0",                                    // cpu
         "000002:3412",                                      // bus
         Mode::StackRelative(0x12),                          // addr
-        ModeEval{val: 0x1234, cycles: 5, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 5, prog_bytes: 2},    // expected
     )]
 
     /*********************************************/
@@ -753,35 +841,107 @@ mod tests {
         "P.E:1,SP:FFF0,Y:08",                               // cpu
         "0001F2:8040,004088:12",                            // bus
         Mode::StackRelativeIndirectIndexed(0x02),           // addr
-        ModeEval{val: 0x12, cycles: 7, bytes: 2},           // expected
+        ModeRead{val: 0x12, cycles: 7, prog_bytes: 2},      // expected
     )]
     #[case::stack_relative_indirect_indexed_native_8bit(
         "P.E:0,P.M:1,SP:FFF0,Y:08",                         // cpu
         "00FFF2:8040,004088:12",                            // bus
         Mode::StackRelativeIndirectIndexed(0x02),           // addr
-        ModeEval{val: 0x12, cycles: 7, bytes: 2},           // expected
+        ModeRead{val: 0x12, cycles: 7, prog_bytes: 2},      // expected
     )]
     #[case::stack_relative_indirect_indexed_native_16bit(
         "P.E:0,SP:FFF0,Y:08",                               // cpu
         "00FFF2:8040,004088:3412",                          // bus
         Mode::StackRelativeIndirectIndexed(0x02),           // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
     #[case::stack_relative_indirect_indexed_bank_wrapping(
         "P.E:0,SP:FFF0,Y:08",                               // cpu
         "000002:8040,004088:3412",                          // bus
         Mode::StackRelativeIndirectIndexed(0x12),           // addr
-        ModeEval{val: 0x1234, cycles: 8, bytes: 2},         // expected
+        ModeRead{val: 0x1234, cycles: 8, prog_bytes: 2},    // expected
     )]
-    fn test_eval(
+    fn test_read(
         #[case] mut cpu: CPU,
         #[case] bus: bus::Fake,
         #[case] addr: Mode,
-        #[case] expected: ModeEval,
+        #[case] expected: ModeRead,
     ) {
-        let eval = addr.eval(&mut cpu, &bus);
-        assert_eq!(eval.val, expected.val);
-        assert_eq!(eval.cycles, expected.cycles);
-        assert_eq!(eval.bytes, expected.bytes);
+        let rd = addr.read(&mut cpu, &bus);
+        assert_eq!(rd.val, expected.val);
+        assert_eq!(rd.cycles, expected.cycles);
+        assert_eq!(rd.prog_bytes, expected.prog_bytes);
+    }
+
+    #[rstest]
+    #[case::absolute_8bit(
+        "P.E:1", 
+        Mode::Absolute(0x5678),
+        0x1234,
+        0x34,
+        ModeWrite{cycles: 2},
+    )]
+    #[case::absolute_16bit(
+        "P.E:0", 
+        Mode::Absolute(0x5678),
+        0x1234,
+        0x1234,
+        ModeWrite{cycles: 3},
+    )]
+    #[case::absolute_indexed_x_8bit(
+        "P.E:1,X:AB", 
+        Mode::AbsoluteIndexedX(0x5678),
+        0x1234,
+        0x34,
+        ModeWrite{cycles: 2},
+    )]
+    #[case::absolute_indexed_x_16bit(
+        "P.E:0,X:ABCD", 
+        Mode::AbsoluteIndexedX(0x5678),
+        0x1234,
+        0x1234,
+        ModeWrite{cycles: 3},
+    )]
+    #[case::direct_8bit(
+        "P.E:1", 
+        Mode::Direct(0x56),
+        0x1234,
+        0x34,
+        ModeWrite{cycles: 2},
+    )]
+    #[case::direct_16bit(
+        "P.E:0", 
+        Mode::Direct(0x56),
+        0x1234,
+        0x1234,
+        ModeWrite{cycles: 3},
+    )]
+    #[case::direct_indexed_x_8bit(
+        "P.E:1,X:AB", 
+        Mode::DirectIndexedX(0x56),
+        0x1234,
+        0x34,
+        ModeWrite{cycles: 2},
+    )]
+    #[case::direct_indexed_x_16bit(
+        "P.E:0,X:ABCD", 
+        Mode::DirectIndexedX(0x56),
+        0x1234,
+        0x1234,
+        ModeWrite{cycles: 3},
+    )]
+    fn test_write(
+        #[case] mut cpu: CPU,
+        #[case] addr: Mode,
+        #[case] input: u16,
+        #[case] output: u16,
+        #[case] expected: ModeWrite,
+    ) {
+        let mut bus = bus::Fake::new();
+        let write = addr.write(&mut cpu, &mut bus, input);
+        let read = addr.read(&mut cpu, &bus);
+
+        assert_eq!(read.val, output);
+        assert_eq!(write.cycles, expected.cycles);
     }
 }

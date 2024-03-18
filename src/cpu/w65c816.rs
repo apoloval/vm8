@@ -29,37 +29,30 @@ impl CPU {
         self.exec_next_instruction(bus, rep);
     }
 
-    fn direct_byte(&mut self, bus: &impl Bus, dir: u8, idx: u16) -> u8 {
-        self.direct_word(bus, dir, idx) as u8
+    fn read_direct_byte(&self, bus: &impl Bus, dir: u8, idx: u16) -> u8 {
+        self.read_direct_word(bus, dir, idx) as u8
     }
 
-    fn direct_word(&mut self, bus: &impl Bus, dir: u8, idx: u16) -> u16 {
-        let wrap = if self.regs.mode_is_emulated() && self.regs.dl() == 0 {
-            AddrWrap::Byte
-        } else {
-            AddrWrap::Word
-        };
-        let addr = Addr::from(0, self.regs.dp())
-            .wrapping_add(dir, wrap)
-            .wrapping_add(idx as u8, wrap);
+    fn read_direct_word(&self, bus: &impl Bus, dir: u8, idx: u16) -> u16 {
+        let (addr, wrap) = self.direct_addr(dir, idx);
         bus.read_word(addr, wrap)
 }
 
-    fn direct_ptr(&mut self, bus: &impl Bus, dir: u8, idx: u16) -> Addr {
+    fn read_direct_ptr(&self, bus: &impl Bus, dir: u8, idx: u16) -> Addr {
         Addr::from(
             self.regs.dbr(), 
-            self.direct_word(bus, dir, idx)
+            self.read_direct_word(bus, dir, idx)
         )
     }
 
-    fn direct_ptr_long(&mut self, bus: &impl Bus, dir: u8, idx: u16) -> Addr {    
+    fn read_direct_ptr_long(&self, bus: &impl Bus, dir: u8, idx: u16) -> Addr {    
         Addr::from(
-            self.direct_byte(bus, dir, idx.wrapping_add(2)),
-            self.direct_word(bus, dir, idx)
+            self.read_direct_byte(bus, dir, idx.wrapping_add(2)),
+            self.read_direct_word(bus, dir, idx)
         )
     }
 
-    fn stack_word(&mut self, bus: &impl Bus, idx: u16) -> u16 {
+    fn read_stack_word(&self, bus: &impl Bus, idx: u16) -> u16 {
         let wrap = if self.regs.mode_is_emulated() { AddrWrap::Byte } 
         else { AddrWrap::Word };
 
@@ -68,16 +61,26 @@ impl CPU {
         bus.read_word(addr, wrap)
     }
 
-    fn fetch_pc_byte<B: Bus>(&mut self, bus: &mut B, offset: u16) -> u8 {
+    fn fetch_pc_byte(&self, bus: &mut impl Bus, offset: u16) -> u8 {
         let addr = Addr::from(self.regs.pbr(), self.regs.pc())
             .wrapping_add(offset, AddrWrap::Word);
         bus.read_byte(addr)
     }
 
-    fn fetch_pc_word<B: Bus>(&mut self, bus: &mut B, offset: u16) -> u16 {
+    fn fetch_pc_word(&self, bus: &mut impl Bus, offset: u16) -> u16 {
         let addr = Addr::from(self.regs.pbr(), self.regs.pc())
             .wrapping_add(offset, AddrWrap::Word);
         bus.read_word(addr, AddrWrap::Word)
+    }
+
+    fn write_direct_byte(&mut self, bus: &mut impl Bus, dir: u8, idx: u16, value: u8) {
+        let (addr, _) = self.direct_addr(dir, idx);
+        bus.write_byte(addr, value);
+    }
+
+    fn write_direct_word(&mut self, bus: &mut impl Bus, dir: u8, idx: u16, value: u16) {
+        let (addr, wrap) = self.direct_addr(dir, idx);
+        bus.write_word(addr, wrap, value);
     }
 
     fn push_byte<B: Bus>(&mut self, bus: &mut B, value: u8) {
@@ -95,6 +98,60 @@ impl CPU {
             self.push_byte(bus, self.regs.pbr());
         }
         self.push_word(bus, self.regs.pc());
+    }
+
+    fn direct_addr(&self, dir: u8, idx: u16) -> (Addr, AddrWrap) {
+        let wrap = if self.regs.mode_is_emulated() && self.regs.dl() == 0 {
+            AddrWrap::Byte
+        } else {
+            AddrWrap::Word
+        };
+        (
+            Addr::from(0, self.regs.dp())
+                .wrapping_add(dir, wrap)
+                .wrapping_add(idx as u8, wrap),
+            wrap,
+        )
+    }
+
+    fn update_status_zero(&mut self, result: u16) {
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
+        } else {
+            self.regs.set_status_flag(Flag::Z, result == 0);
+        }
+    }
+
+    fn update_status_negative(&mut self, result: u16) {
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::N, result & 0x0080 != 0);
+        } else {
+            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
+        }
+    }
+
+    fn update_status_carry(&mut self, prev: u16, result: u16) {
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
+        } else {
+            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
+        }  
+    }
+
+    fn update_status_overflow(&mut self, prev: u16, result: u16) {
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::V, (result as i8) < (prev as i8));
+        } else {
+            self.regs.set_status_flag(Flag::V, (result as i16) < (prev as i16));
+        }    
+    }
+
+    fn update_status_underflow(&mut self, prev: u16, result: u16) {
+        if self.regs.accum_is_byte() {
+            self.regs.set_status_flag(Flag::V, (result as i8) > (prev as i8));
+        } else {
+            self.regs.set_status_flag(Flag::V, (result as i16) > (prev as i16));
+        }    
     }
 }
 
@@ -249,6 +306,10 @@ impl CPU {
                 // AND a,Y
                 let abs = self.fetch_pc_word(bus, 1);
                 self.and(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0x3A => {
+                // DEC
+                self.dec(bus, addr::Mode::Accumulator, rep)
             },
             0x3D => {
                 // AND a,X
@@ -440,6 +501,11 @@ impl CPU {
                 let dir: u8 = self.fetch_pc_byte(bus, 1);
                 self.cmp(bus, addr::Mode::Direct(dir), rep)
             },
+            0xC6 => {
+                // DEC d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.dec(bus, addr::Mode::Direct(dir), rep)
+            },
             0xC7 => {
                 // CMP [d]
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -459,6 +525,11 @@ impl CPU {
                 // CMP a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.cmp(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0xCE => {
+                // DEC a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.dec(bus, addr::Mode::Absolute(abs), rep)
             },
             0xCF => {
                 // CMP al
@@ -486,6 +557,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.cmp(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0xD6 => {
+                // DEC d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.dec(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0xD7 => {
                 // CMP [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -500,6 +576,11 @@ impl CPU {
                 // CMP a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.cmp(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0xDE => {
+                // DEC a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.dec(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0xDF => {
                 // CMP al,X
@@ -611,35 +692,26 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
+        let read = mode.read(self, bus);
         let prev = self.regs.a();
 
         let carry = if self.regs.status_flag_is_set(Flag::C) { 1 } else { 0 };
         let result = if self.regs.status_flag_is_set(Flag::D) {
             bcd::add_word(
-                bcd::add_word(prev, mode_eval.val),
+                bcd::add_word(prev, read.val),
                 carry,
             )
         } else {
-            prev.wrapping_add(mode_eval.val).wrapping_add(carry)
+            prev.wrapping_add(read.val).wrapping_add(carry)
         };
 
-        if self.regs.accum_is_byte() {
-            self.regs.al_set(result as u8);
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-            self.regs.set_status_flag(Flag::V, (result as i8) < (prev as i8));
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
-        } else {
-            self.regs.a_set(result);
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-            self.regs.set_status_flag(Flag::V, (result as i16) < (prev as i16));
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
-        }
-
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        addr::Mode::Accumulator.write(self, bus, result);
+        self.update_status_zero(result);
+        self.update_status_negative(result);
+        self.update_status_carry(prev, result);
+        self.update_status_overflow(prev, result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 
     fn and(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -650,21 +722,14 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
-        let result = self.regs.a() & mode_eval.val;
+        let read = mode.read(self, bus);
+        let result = self.regs.a() & read.val;
         
-        if self.regs.accum_is_byte() {
-            self.regs.al_set(result as u8);
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-        } else {
-            self.regs.a_set(result);
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-        
-        }
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        addr::Mode::Accumulator.write(self, bus, result);
+        self.update_status_zero(result);
+        self.update_status_negative(result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 
     fn brk(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
@@ -700,22 +765,15 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
+        let read = mode.read(self, bus);
         let prev = self.regs.a();
-        let result = prev.wrapping_sub(mode_eval.val);
+        let result = prev.wrapping_sub(read.val);
 
-        if self.regs.accum_is_byte() {
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
-        } else {
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
-        }
-
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        self.update_status_zero(result);
+        self.update_status_negative(result);
+        self.update_status_carry(prev, result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 
     fn cpx(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -726,22 +784,15 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
+        let read = mode.read(self, bus);
         let prev = self.regs.x();
-        let result = prev.wrapping_sub(mode_eval.val);
+        let result = prev.wrapping_sub(read.val);
 
-        if self.regs.accum_is_byte() {
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
-        } else {
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
-        }
-
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        self.update_status_zero(result);
+        self.update_status_negative(result);
+        self.update_status_carry(prev, result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 
     fn cpy(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -752,22 +803,32 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
+        let read = mode.read(self, bus);
         let prev = self.regs.y();
-        let result = prev.wrapping_sub(mode_eval.val);
+        let result = prev.wrapping_sub(read.val);
 
-        if self.regs.accum_is_byte() {
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
-        } else {
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
-        }
+        self.update_status_zero(result);
+        self.update_status_negative(result);
+        self.update_status_carry(prev, result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
 
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+    fn dec(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("DEC"),
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        let result = read.val.wrapping_sub(1);
+        mode.write(self, bus, result);
+        self.update_status_negative(result);
+        self.update_status_zero(result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 
     fn eor(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -778,21 +839,14 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
-        let result = self.regs.a() ^ mode_eval.val;
+        let read = mode.read(self, bus);
+        let result = self.regs.a() ^ read.val;
         
-        if self.regs.accum_is_byte() {
-            self.regs.al_set(result as u8);
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-        } else {
-            self.regs.a_set(result);
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-        
-        }
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        addr::Mode::Accumulator.write(self, bus, result);
+        self.update_status_negative(result);
+        self.update_status_zero(result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
 
     }
 
@@ -804,21 +858,14 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
-        let result = self.regs.a() | mode_eval.val;
+        let read = mode.read(self, bus);
+        let result = self.regs.a() | read.val;
         
-        if self.regs.accum_is_byte() {
-            self.regs.al_set(result as u8);
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-        } else {
-            self.regs.a_set(result);
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-        
-        }
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        addr::Mode::Accumulator.write(self, bus, result);
+        self.update_status_negative(result);
+        self.update_status_zero(result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
 
     }
 
@@ -830,36 +877,27 @@ impl CPU {
             operands: format!("{}", mode),
         });
 
-        let mode_eval = mode.eval(self, bus);
+        let read = mode.read(self, bus);
         let prev = self.regs.a();
 
         // Remind that borrow is the negation of the carry flag in W65C816.
         let borrow = if self.regs.status_flag_is_set(Flag::C) { 0 } else { 1 };
         let result = if self.regs.status_flag_is_set(Flag::D) {
             bcd::sub_word(
-                bcd::sub_word(prev, mode_eval.val),
+                bcd::sub_word(prev, read.val),
                 borrow,
             )
         } else {
-            prev.wrapping_sub(mode_eval.val).wrapping_sub(borrow)
+            prev.wrapping_sub(read.val).wrapping_sub(borrow)
         };
 
-        if self.regs.accum_is_byte() {
-            self.regs.al_set(result as u8);
-            self.regs.set_status_flag(Flag::N, result & 0x80 != 0);
-            self.regs.set_status_flag(Flag::V, (result as i8) > (prev as i8));
-            self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
-            self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
-        } else {
-            self.regs.a_set(result);
-            self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
-            self.regs.set_status_flag(Flag::V, (result as i16) > (prev as i16));
-            self.regs.set_status_flag(Flag::Z, result == 0);
-            self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
-        }
-
-        self.regs.pc_inc(mode_eval.bytes);
-        self.cycles += mode_eval.cycles;
+        addr::Mode::Accumulator.write(self, bus, result);
+        self.update_status_zero(result);
+        self.update_status_negative(result);
+        self.update_status_carry(prev, result);
+        self.update_status_underflow(prev, result);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 }
 
@@ -930,6 +968,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_cmp;
 #[cfg(test)] mod tests_cpx;
 #[cfg(test)] mod tests_cpy;
+#[cfg(test)] mod tests_dec;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
