@@ -16,3 +16,7 @@ pub fn program_state(cpu: &CPU, expected: u8) {
 pub fn accum(cpu: &CPU, expected: u16) {
     assert_eq!(cpu.regs.a(), expected);
 }
+
+pub fn index_x(cpu: &CPU, expected: u16) {
+    assert_eq!(cpu.regs.x(), expected);
+}

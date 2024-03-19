@@ -114,40 +114,40 @@ impl CPU {
         )
     }
 
-    fn update_status_zero(&mut self, result: u16) {
-        if self.regs.accum_is_byte() {
+    fn update_status_zero(&mut self, result: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::Z, result & 0x00FF == 0);
         } else {
             self.regs.set_status_flag(Flag::Z, result == 0);
         }
     }
 
-    fn update_status_negative(&mut self, result: u16) {
-        if self.regs.accum_is_byte() {
+    fn update_status_negative(&mut self, result: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::N, result & 0x0080 != 0);
         } else {
             self.regs.set_status_flag(Flag::N, result & 0x8000 != 0);
         }
     }
 
-    fn update_status_carry(&mut self, prev: u16, result: u16) {
-        if self.regs.accum_is_byte() {
+    fn update_status_carry(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
         } else {
             self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
         }  
     }
 
-    fn update_status_overflow(&mut self, prev: u16, result: u16) {
-        if self.regs.accum_is_byte() {
+    fn update_status_overflow(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::V, (result as i8) < (prev as i8));
         } else {
             self.regs.set_status_flag(Flag::V, (result as i16) < (prev as i16));
         }    
     }
 
-    fn update_status_underflow(&mut self, prev: u16, result: u16) {
-        if self.regs.accum_is_byte() {
+    fn update_status_underflow(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::V, (result as i8) > (prev as i8));
         } else {
             self.regs.set_status_flag(Flag::V, (result as i16) > (prev as i16));
@@ -516,6 +516,10 @@ impl CPU {
                 let imm = self.fetch_pc_word(bus, 1);
                 self.cmp(bus, addr::Mode::Immediate(imm), rep)
             },
+            0xCA => {
+                // DEX
+                self.dex(bus, rep)
+            },
             0xCC => {
                 // CPY a
                 let abs = self.fetch_pc_word(bus, 1);
@@ -706,10 +710,10 @@ impl CPU {
         };
 
         addr::Mode::Accumulator.write(self, bus, result);
-        self.update_status_zero(result);
-        self.update_status_negative(result);
-        self.update_status_carry(prev, result);
-        self.update_status_overflow(prev, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_overflow(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -726,8 +730,8 @@ impl CPU {
         let result = self.regs.a() & read.val;
         
         addr::Mode::Accumulator.write(self, bus, result);
-        self.update_status_zero(result);
-        self.update_status_negative(result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -769,9 +773,9 @@ impl CPU {
         let prev = self.regs.a();
         let result = prev.wrapping_sub(read.val);
 
-        self.update_status_zero(result);
-        self.update_status_negative(result);
-        self.update_status_carry(prev, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -788,9 +792,9 @@ impl CPU {
         let prev = self.regs.x();
         let result = prev.wrapping_sub(read.val);
 
-        self.update_status_zero(result);
-        self.update_status_negative(result);
-        self.update_status_carry(prev, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -807,9 +811,9 @@ impl CPU {
         let prev = self.regs.y();
         let result = prev.wrapping_sub(read.val);
 
-        self.update_status_zero(result);
-        self.update_status_negative(result);
-        self.update_status_carry(prev, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -825,10 +829,27 @@ impl CPU {
         let read = mode.read(self, bus);
         let result = read.val.wrapping_sub(1);
         mode.write(self, bus, result);
-        self.update_status_negative(result);
-        self.update_status_zero(result);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_zero(result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
+    }
+
+    fn dex(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("DEX"),
+            operands: String::from(""),
+        });
+
+        let read = self.regs.x();
+        let result = read.wrapping_sub(1);
+        self.regs.x_set(result);
+        self.update_status_negative(result, Flag::X);
+        self.update_status_zero(result, Flag::X);
+        self.regs.pc_inc(1);
+        self.cycles += 2
     }
 
     fn eor(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -843,8 +864,8 @@ impl CPU {
         let result = self.regs.a() ^ read.val;
         
         addr::Mode::Accumulator.write(self, bus, result);
-        self.update_status_negative(result);
-        self.update_status_zero(result);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_zero(result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
 
@@ -862,8 +883,8 @@ impl CPU {
         let result = self.regs.a() | read.val;
         
         addr::Mode::Accumulator.write(self, bus, result);
-        self.update_status_negative(result);
-        self.update_status_zero(result);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_zero(result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
 
@@ -892,10 +913,10 @@ impl CPU {
         };
 
         addr::Mode::Accumulator.write(self, bus, result);
-        self.update_status_zero(result);
-        self.update_status_negative(result);
-        self.update_status_carry(prev, result);
-        self.update_status_underflow(prev, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_underflow(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -969,6 +990,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_cpx;
 #[cfg(test)] mod tests_cpy;
 #[cfg(test)] mod tests_dec;
+#[cfg(test)] mod tests_dex;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
