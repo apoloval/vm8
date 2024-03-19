@@ -635,6 +635,10 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.sbc(bus, addr::Mode::DirectIndirectLong(dir), rep)
             },
+            0xE8 => {
+                // INX
+                self.inx(rep)
+            },
             0xE9 => {
                 // SBC #i
                 let imm = self.fetch_pc_word(bus, 1);
@@ -933,6 +937,23 @@ impl CPU {
         self.cycles += read.cycles;
     }
 
+    fn inx(&mut self, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("INX"),
+            operands: String::from(""),
+        });
+
+        let read = self.regs.x();
+        let result = read.wrapping_add(1);
+        self.regs.x_set(result);
+        self.update_status_negative(result, Flag::X);
+        self.update_status_zero(result, Flag::X);
+        self.regs.pc_inc(1);
+        self.cycles += 2
+    }
+
     fn ora(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1056,5 +1077,6 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_dey;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_inc;
+#[cfg(test)] mod tests_inx;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
