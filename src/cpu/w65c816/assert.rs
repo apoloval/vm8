@@ -20,3 +20,7 @@ pub fn accum(cpu: &CPU, expected: u16) {
 pub fn index_x(cpu: &CPU, expected: u16) {
     assert_eq!(cpu.regs.x(), expected);
 }
+
+pub fn index_y(cpu: &CPU, expected: u16) {
+    assert_eq!(cpu.regs.y(), expected);
+}

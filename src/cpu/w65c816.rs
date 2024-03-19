@@ -476,6 +476,10 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.adc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x88 => {
+                // DEY
+                self.dey(bus, rep)
+            },
             0xC0 => {
                 // CPY #i
                 let imm = self.fetch_pc_word(bus, 1);
@@ -852,6 +856,23 @@ impl CPU {
         self.cycles += 2
     }
 
+    fn dey(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("DEY"),
+            operands: String::from(""),
+        });
+
+        let read = self.regs.y();
+        let result = read.wrapping_sub(1);
+        self.regs.y_set(result);
+        self.update_status_negative(result, Flag::X);
+        self.update_status_zero(result, Flag::X);
+        self.regs.pc_inc(1);
+        self.cycles += 2
+    }
+
     fn eor(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -991,6 +1012,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_cpy;
 #[cfg(test)] mod tests_dec;
 #[cfg(test)] mod tests_dex;
+#[cfg(test)] mod tests_dey;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
