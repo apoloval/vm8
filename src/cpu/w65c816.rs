@@ -230,6 +230,10 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 self.ora(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
             },
+            0x1A => {
+                // INC
+                self.inc(bus, addr::Mode::Accumulator, rep)
+            },
             0x1D => {
                 // ORA a,X
                 let abs = self.fetch_pc_word(bus, 1);
@@ -478,7 +482,7 @@ impl CPU {
             },
             0x88 => {
                 // DEY
-                self.dey(bus, rep)
+                self.dey(rep)
             },
             0xC0 => {
                 // CPY #i
@@ -522,7 +526,7 @@ impl CPU {
             },
             0xCA => {
                 // DEX
-                self.dex(bus, rep)
+                self.dex(rep)
             },
             0xCC => {
                 // CPY a
@@ -621,6 +625,11 @@ impl CPU {
                 let dir: u8 = self.fetch_pc_byte(bus, 1);
                 self.sbc(bus, addr::Mode::Direct(dir), rep)
             },
+            0xE6 => {
+                // INC d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.inc(bus, addr::Mode::Direct(dir), rep)
+            },
             0xE7 => {
                 // SBC [d]
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -640,6 +649,11 @@ impl CPU {
                 // SBC a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.sbc(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0xEE => {
+                // INC a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.inc(bus, addr::Mode::Absolute(abs), rep)
             },
             0xEF => {
                 // SBC al
@@ -667,6 +681,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.sbc(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0xF6 => {
+                // INC d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.inc(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0xF7 => {
                 // SBC [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -681,6 +700,11 @@ impl CPU {
                 // SBC a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.sbc(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0xFE => {
+                // INC a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.inc(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0xFF => {
                 // SBC al,X
@@ -839,7 +863,7 @@ impl CPU {
         self.cycles += read.cycles;
     }
 
-    fn dex(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+    fn dex(&mut self, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
             pc: self.regs.pc(),
@@ -856,7 +880,7 @@ impl CPU {
         self.cycles += 2
     }
 
-    fn dey(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+    fn dey(&mut self, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
             pc: self.regs.pc(),
@@ -890,6 +914,23 @@ impl CPU {
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
 
+    }
+
+    fn inc(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("INC"),
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        let result = read.val.wrapping_add(1);
+        mode.write(self, bus, result);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_zero(result, Flag::M);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
     }
 
     fn ora(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -1014,5 +1055,6 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_dex;
 #[cfg(test)] mod tests_dey;
 #[cfg(test)] mod tests_eor;
+#[cfg(test)] mod tests_inc;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
