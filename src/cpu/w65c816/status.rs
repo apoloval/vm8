@@ -31,34 +31,6 @@ impl Flag {
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct Flags {
-    set: u8,
-    reset: u8,
-}
-
-impl Flags {
-    pub fn set(flag: Flag) -> Flags {
-        Flags { set: flag.mask(), reset: 0 }
-    }
-
-    pub fn clear(flag: Flag) -> Flags {
-        Flags { set: 0, reset: flag.mask() }
-    }
-
-    pub fn and_set(self, flag: Flag) -> Flags {
-        Flags { set: flag.mask() | self.set, reset: self.reset }        
-    }
-
-    pub fn and_clear(self, flag: Flag) -> Flags {
-        Flags { set: self.set, reset: flag.mask() | self.reset }
-    }
-
-    pub fn apply(self, p: &mut u8) {
-        *p = (*p | self.set) & !self.reset;
-    }
-}
-
 #[cfg(test)]
 pub struct FlagExpectation(pub Vec<(Flag, bool)>);
 
@@ -128,24 +100,5 @@ mod test {
         assert_eq!(Flag::M.mask(), 0b0010_0000);
         assert_eq!(Flag::V.mask(), 0b0100_0000);
         assert_eq!(Flag::N.mask(), 0b1000_0000);
-    }
-
-    #[test]
-    fn flag_affection() {
-        let mut p: u8 = 0b0000_0000;
-        Flags::set(Flag::C).apply(&mut p);        
-        assert_eq!(p, 0b0000_0001);
-
-        p = 0b0000_0001;
-        Flags::clear(Flag::C).apply(&mut p);
-        assert_eq!(p, 0b0000_0000);
-
-        p = 0b0000_0010;
-        Flags::set(Flag::C).and_clear(Flag::Z).apply(&mut p);
-        assert_eq!(p, 0b0000_0001);
-
-        p = 0b0000_0001;
-        Flags::clear(Flag::C).and_set(Flag::Z).apply(&mut p);
-        assert_eq!(p, 0b0000_0010);
-    }
+    }   
 }

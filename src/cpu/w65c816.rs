@@ -223,6 +223,11 @@ impl CPU {
                 let rel = self.fetch_pc_byte(bus, 1);
                 self.ora(bus, addr::Mode::StackRelativeIndirectIndexed(rel), rep)
             },
+            0x14 => {
+                // TRB d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.trb(bus, addr::Mode::Direct(dir), rep)
+            },
             0x15 => {
                 // ORA d,X
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -241,6 +246,11 @@ impl CPU {
             0x1A => {
                 // INC
                 self.inc(bus, addr::Mode::Accumulator, rep)
+            },
+            0x1C => {
+                // TRB a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.trb(bus, addr::Mode::Absolute(abs), rep)
             },
             0x1D => {
                 // ORA a,X
@@ -1077,6 +1087,24 @@ impl CPU {
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
+
+    fn trb(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("TRB"),
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        let mask = self.regs.a();
+        let result = read.val & !mask;       
+
+        mode.write(self, bus, result);
+        self.update_status_zero(read.val & mask, Flag::M);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
 }
 
 #[cfg(test)]
@@ -1156,3 +1184,4 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
+#[cfg(test)] mod tests_trb;
