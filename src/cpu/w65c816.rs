@@ -130,6 +130,14 @@ impl CPU {
         }
     }
 
+    fn update_status_negative_second(&mut self, result: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
+            self.regs.set_status_flag(Flag::V, result & 0x0040 != 0);
+        } else {
+            self.regs.set_status_flag(Flag::V, result & 0x4000 != 0);
+        }
+    }
+
     fn update_status_carry(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
         if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
@@ -255,6 +263,11 @@ impl CPU {
                 let rel = self.fetch_pc_byte(bus, 1);
                 self.and(bus, addr::Mode::StackRelative(rel), rep)
             },
+            0x24 => {
+                // BIT d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.bit(bus, addr::Mode::Direct(dir), rep)
+            },
             0x25 => {
                 // AND d
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -269,6 +282,11 @@ impl CPU {
                 // AND #i
                 let imm = self.fetch_pc_word(bus, 1);
                 self.and(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0x2C => {
+                // BIT a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.bit(bus, addr::Mode::Absolute(abs), rep)
             },
             0x2D => {
                 // AND a
@@ -296,6 +314,11 @@ impl CPU {
                 let rel = self.fetch_pc_byte(bus, 1);
                 self.and(bus, addr::Mode::StackRelativeIndirectIndexed(rel), rep)
             },
+            0x34 => {
+                // BIT d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.bit(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0x35 => {
                 // AND d,X
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -314,6 +337,11 @@ impl CPU {
             0x3A => {
                 // DEC
                 self.dec(bus, addr::Mode::Accumulator, rep)
+            },
+            0x3C => {
+                // BIT a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.bit(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0x3D => {
                 // AND a,X
@@ -483,6 +511,11 @@ impl CPU {
             0x88 => {
                 // DEY
                 self.dey(rep)
+            },
+            0x89 => {
+                // BIT #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.bit(bus, addr::Mode::Immediate(imm), rep)
             },
             0xC0 => {
                 // CPY #i
@@ -768,6 +801,26 @@ impl CPU {
         addr::Mode::Accumulator.write(self, bus, result);
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
+
+    fn bit(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("BIT"),
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        let result = self.regs.a() & read.val;
+                        
+        if !matches!(mode, addr::Mode::Immediate(_)){
+            self.update_status_negative(read.val, Flag::M);
+            self.update_status_negative_second(read.val, Flag::M);
+        }
+        self.update_status_zero(result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -1089,6 +1142,7 @@ impl FromStr for CPU {
 
 #[cfg(test)] mod tests_adc;
 #[cfg(test)] mod tests_and;
+#[cfg(test)] mod tests_bit;
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_cmp;
 #[cfg(test)] mod tests_cpx;

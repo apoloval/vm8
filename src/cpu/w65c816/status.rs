@@ -1,6 +1,6 @@
 #[cfg(test)] use std::str::FromStr;
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum Flag {
     C = 0b0000_0001,  // bit 0: carry flag
     Z = 0b0000_0010,  // bit 1: zero flag
@@ -67,9 +67,9 @@ impl FlagExpectation {
     pub fn assert(self, p: u8) {
         for (flag, expected) in self.0 {
             if expected {
-                assert_eq!(p & flag.mask(), flag.mask());
+                assert_eq!(p & flag.mask(), flag.mask(), "flag {:?} is unexpectedly reset", flag);
             } else {
-                assert_eq!(p & flag.mask(), 0);
+                assert_eq!(p & flag.mask(), 0, "flag {:?} is unexpectedly set", flag);
             }
         }
     }
