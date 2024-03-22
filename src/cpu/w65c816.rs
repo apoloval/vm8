@@ -154,6 +154,10 @@ impl CPU {
         }  
     }
 
+    fn update_status_carry_shift_right(&mut self, prev: u16) {                
+        self.regs.set_status_flag(Flag::C, prev & 0x0001 != 0);
+    }
+
     fn update_status_overflow(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
         if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::V, (result as i8) < (prev as i8));
@@ -421,6 +425,11 @@ impl CPU {
                 let dir: u8 = self.fetch_pc_byte(bus, 1);
                 self.eor(bus, addr::Mode::Direct(dir), rep)
             },
+            0x46 => {
+                // LSR d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.lsr(bus, addr::Mode::Direct(dir), rep)
+            },
             0x47 => {
                 // EOR [d]
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -431,10 +440,19 @@ impl CPU {
                 let imm = self.fetch_pc_word(bus, 1);
                 self.eor(bus, addr::Mode::Immediate(imm), rep)
             },
+            0x4A => {
+                // LSR
+                self.lsr(bus, addr::Mode::Accumulator, rep)
+            },
             0x4D => {
                 // EOR a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.eor(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x4E => {
+                // LSR a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.lsr(bus, addr::Mode::Absolute(abs), rep)
             },
             0x4F => {
                 // EOR al
@@ -462,6 +480,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.eor(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0x56 => {
+                // LSR d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.lsr(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0x57 => {
                 // EOR [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -476,6 +499,11 @@ impl CPU {
                 // EOR a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.eor(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x5E => {
+                // LSR a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.lsr(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0x5F => {
                 // EOR al,X
@@ -1099,6 +1127,28 @@ impl CPU {
         self.cycles += 2
     }
 
+    fn lsr(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("LSR"), 
+            operands: format!("{}", mode),
+        });
+
+        let mut read = mode.read(self, bus);
+        if self.regs.accum_is_byte() {
+            read.val &= 0x00FF;
+        }	
+        let result = read.val >> 1;
+        
+        mode.write(self, bus, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry_shift_right(read.val);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
+
     fn ora(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1262,6 +1312,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_inc;
 #[cfg(test)] mod tests_inx;
 #[cfg(test)] mod tests_iny;
+#[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_sbc;
 #[cfg(test)] mod tests_trb;
