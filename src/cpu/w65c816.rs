@@ -329,6 +329,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.and(bus, addr::Mode::Direct(dir), rep)
             },
+            0x26 => {
+                // ROL d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.rol(bus, addr::Mode::Direct(dir), rep)
+            },
             0x27 => {
                 // AND [d]
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -339,6 +344,10 @@ impl CPU {
                 let imm = self.fetch_pc_word(bus, 1);
                 self.and(bus, addr::Mode::Immediate(imm), rep)
             },
+            0x2A => {
+                // ROL
+                self.rol(bus, addr::Mode::Accumulator, rep)
+            },
             0x2C => {
                 // BIT a
                 let abs = self.fetch_pc_word(bus, 1);
@@ -348,6 +357,11 @@ impl CPU {
                 // AND a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.and(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x2E => {
+                // ROL a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.rol(bus, addr::Mode::Absolute(abs), rep)
             },
             0x2F => {
                 // AND al
@@ -380,6 +394,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.and(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0x36 => {
+                // ROL d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.rol(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0x37 => {
                 // AND [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -403,6 +422,11 @@ impl CPU {
                 // AND a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.and(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x3E => {
+                // ROL a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.rol(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0x3F => {
                 // AND al,X
@@ -1168,6 +1192,26 @@ impl CPU {
 
     }
 
+    fn rol(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("ROL"), 
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        let input_carry = if self.regs.status_flag_is_set(Flag::C) { 1 } else { 0 };
+        let result = (read.val << 1) | input_carry;
+        
+        mode.write(self, bus, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry_shift_left(read.val, Flag::M);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
+
     fn sbc(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1314,6 +1358,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
+#[cfg(test)] mod tests_rol;
 #[cfg(test)] mod tests_sbc;
 #[cfg(test)] mod tests_trb;
 #[cfg(test)] mod tests_tsb;
