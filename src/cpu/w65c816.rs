@@ -138,11 +138,19 @@ impl CPU {
         }
     }
 
-    fn update_status_carry(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
+    fn update_status_carry_arithmetic(&mut self, prev: u16, result: u16, flag_8bit: Flag) {                
         if self.regs.status_flag_is_set(flag_8bit) {
             self.regs.set_status_flag(Flag::C, (result as u8) < (prev as u8));
         } else {
             self.regs.set_status_flag(Flag::C, (result as u16) < (prev as u16));
+        }  
+    }
+
+    fn update_status_carry_shift_left(&mut self, prev: u16, flag_8bit: Flag) {                
+        if self.regs.status_flag_is_set(flag_8bit) {
+            self.regs.set_status_flag(Flag::C, prev & 0x0080 != 0);
+        } else {
+            self.regs.set_status_flag(Flag::C, prev & 0x8000 != 0);
         }  
     }
 
@@ -192,6 +200,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.ora(bus, addr::Mode::Direct(dir), rep)
             },
+            0x06 => {
+                // ASL d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.asl(bus, addr::Mode::Direct(dir), rep)
+            },
             0x07 => {
                 // ORA [d]
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -202,6 +215,10 @@ impl CPU {
                 let imm = self.fetch_pc_word(bus, 1);
                 self.ora(bus, addr::Mode::Immediate(imm), rep)
             },
+            0x0A => {
+                // ASL
+                self.asl(bus, addr::Mode::Accumulator, rep)
+            },
             0x0C => {
                 // TSB a
                 let abs = self.fetch_pc_word(bus, 1);
@@ -211,6 +228,11 @@ impl CPU {
                 // ORA a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.ora(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x0E => {
+                // ASL a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.asl(bus, addr::Mode::Absolute(abs), rep)
             },
             0x0F => {
                 // ORA al
@@ -243,6 +265,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.ora(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0x16 => {
+                // ASL d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.asl(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0x17 => {
                 // ORA [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -266,6 +293,11 @@ impl CPU {
                 // ORA a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.ora(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x1E => {
+                // ASL a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.asl(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0x1F => {
                 // ORA al,X
@@ -801,7 +833,7 @@ impl CPU {
         addr::Mode::Accumulator.write(self, bus, result);
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
-        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_carry_arithmetic(prev, result, Flag::M);
         self.update_status_overflow(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
@@ -821,6 +853,25 @@ impl CPU {
         addr::Mode::Accumulator.write(self, bus, result);
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
+
+    fn asl(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("ASL"), 
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        let result = read.val << 1;
+        
+        mode.write(self, bus, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry_shift_left(read.val, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -884,7 +935,7 @@ impl CPU {
 
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
-        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_carry_arithmetic(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -903,7 +954,7 @@ impl CPU {
 
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
-        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_carry_arithmetic(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -922,7 +973,7 @@ impl CPU {
 
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
-        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_carry_arithmetic(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
     }
@@ -1092,7 +1143,7 @@ impl CPU {
         addr::Mode::Accumulator.write(self, bus, result);
         self.update_status_zero(result, Flag::M);
         self.update_status_negative(result, Flag::M);
-        self.update_status_carry(prev, result, Flag::M);
+        self.update_status_carry_arithmetic(prev, result, Flag::M);
         self.update_status_underflow(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
@@ -1198,6 +1249,7 @@ impl FromStr for CPU {
 
 #[cfg(test)] mod tests_adc;
 #[cfg(test)] mod tests_and;
+#[cfg(test)] mod tests_asl;
 #[cfg(test)] mod tests_bit;
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_cmp;
