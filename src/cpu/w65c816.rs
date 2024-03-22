@@ -550,6 +550,11 @@ impl CPU {
                 let dir: u8 = self.fetch_pc_byte(bus, 1);
                 self.adc(bus, addr::Mode::Direct(dir), rep)
             },
+            0x66 => {
+                // ROR d
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.ror(bus, addr::Mode::Direct(dir), rep)
+            },
             0x67 => {
                 // ADC [d]
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -560,10 +565,19 @@ impl CPU {
                 let imm = self.fetch_pc_word(bus, 1);
                 self.adc(bus, addr::Mode::Immediate(imm), rep)
             },
+            0x6A => {
+                // ROR
+                self.ror(bus, addr::Mode::Accumulator, rep)
+            },
             0x6D => {
                 // ADC a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.adc(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0x6E => {
+                // ROR a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.ror(bus, addr::Mode::Absolute(abs), rep)
             },
             0x6F => {
                 // ADC al
@@ -591,6 +605,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.adc(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0x76 => {
+                // ROR d,X
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.ror(bus, addr::Mode::DirectIndexedX(dir), rep)
+            },
             0x77 => {
                 // ADC [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -605,6 +624,11 @@ impl CPU {
                 // ADC a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.adc(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0x7E => {
+                // ROR a,X
+                let abs = self.fetch_pc_word(bus, 1);
+                self.ror(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
             },
             0x7F => {
                 // ADC al,X
@@ -1212,6 +1236,30 @@ impl CPU {
         self.cycles += read.cycles;
     }
 
+    fn ror(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("ROR"), 
+            operands: format!("{}", mode),
+        });
+
+        let mut read = mode.read(self, bus);
+        let mut input_carry = if self.regs.status_flag_is_set(Flag::C) { 0x8000 } else { 0 };
+        if self.regs.accum_is_byte() {
+            read.val &= 0x00FF;
+            input_carry >>= 8;
+        }
+        let result = (read.val >> 1) | input_carry;
+        
+        mode.write(self, bus, result);
+        self.update_status_zero(result, Flag::M);
+        self.update_status_negative(result, Flag::M);
+        self.update_status_carry_shift_right(read.val);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
+
     fn sbc(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1359,6 +1407,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_rol;
+#[cfg(test)] mod tests_ror;
 #[cfg(test)] mod tests_sbc;
 #[cfg(test)] mod tests_trb;
 #[cfg(test)] mod tests_tsb;
