@@ -31,7 +31,7 @@ impl Bank {
     }
 
     pub fn status_flag_is_set(&self, flag: status::Flag) -> bool { self.p & flag.mask() != 0 }
-    pub fn status_flag_is_reset(&self, flag: status::Flag) -> bool { self.p & flag.mask() == 0 }
+    pub fn status_flag_is_clear(&self, flag: status::Flag) -> bool { self.p & flag.mask() == 0 }
 
     pub fn set_status_flag(&mut self, flag: status::Flag, active: bool) { 
         if active { flag.set(&mut self.p); } 
@@ -111,7 +111,7 @@ impl Bank {
     }
 
     pub fn pc(&self) -> u16 { self.pc }
-    pub fn pc_inc(&mut self, n: u16) { self.pc += n; }
+    pub fn pc_inc(&mut self, n: u16) -> u16 { self.pc += n; self.pc }
     pub fn pc_jump(&mut self, n: u16) { self.pc = n; }
 
     #[inline]

@@ -4,7 +4,7 @@ use super::{status::Flag, Addr, AddrWrap, Bus, CPU};
 
 macro_rules! cpu_op16 {
     ($cpu:expr) => {
-        if $cpu.regs.status_flag_is_reset(Flag::M) { 1 } else { 0 }
+        if $cpu.regs.status_flag_is_clear(Flag::M) { 1 } else { 0 }
     };
 }
 
@@ -270,7 +270,7 @@ impl Mode {
     }
 
     fn addr_page_crossed(cpu: &CPU, ptr1: Addr, ptr2: Addr) -> u64 {
-        if !ptr1.same_page(ptr2) || cpu.regs.status_flag_is_reset(Flag::X) {
+        if !ptr1.same_page(ptr2) || cpu.regs.status_flag_is_clear(Flag::X) {
             1
         } else {
             0

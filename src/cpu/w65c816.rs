@@ -1,3 +1,4 @@
+mod branch;
 mod bus;
 mod ev;
 mod int;
@@ -244,6 +245,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.ora(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
             },
+            0x10 => {
+                // BPL
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::Plus, rel, rep);
+            },
             0x11 => {
                 // ORA (d),Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -369,6 +375,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.and(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
             },
+            0x30 => {
+                // BMI
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::Minus, rel, rep);
+            },
             0x31 => {
                 // AND (d),Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -484,6 +495,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.eor(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
             },
+            0x50 => {
+                // BVC
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::OverflowClear, rel, rep);
+            },
             0x51 => {
                 // EOR (d),Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -585,6 +601,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.adc(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
             },
+            0x70 => {
+                // BVS
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::OverflowSet, rel, rep)
+            },
             0x71 => {
                 // ADC (d),Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -636,6 +657,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.adc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x80 => {
+                // BRA
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::Always, rel, rep)
+            },
             0x88 => {
                 // DEY
                 self.dey(rep)
@@ -644,6 +670,16 @@ impl CPU {
                 // BIT #i
                 let imm = self.fetch_pc_word(bus, 1);
                 self.bit(bus, addr::Mode::Immediate(imm), rep)
+            },
+            0x90 => {
+                // BCC
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::CarryClear, rel, rep)
+            },
+            0xB0 => {
+                // BCS
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::CarrySet, rel, rep)
             },
             0xC0 => {
                 // CPY #i
@@ -713,6 +749,11 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.cmp(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
+            },
+            0xD0 => {
+                // BNE
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::NotEqual, rel, rep)
             },
             0xD1 => {
                 // CMP (d),Y
@@ -829,6 +870,11 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.sbc(bus, addr::Mode::AbsoluteLong(bank, abs), rep)
+            },
+            0xF0 => {
+                // BEQ
+                let rel = self.fetch_pc_byte(bus, 1) as i8;
+                self.branch(branch::Condition::Equal, rel, rep)
             },
             0xF1 => {
                 // SBC (d),Y
@@ -970,6 +1016,27 @@ impl CPU {
         self.update_status_zero(result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
+    }
+
+    fn branch(&mut self, cond: branch::Condition, rel: i8, rep: &mut impl Reporter) {
+        let no_branch_pc = self.regs.pc_inc(2);
+        let branch_pc = self.regs.pc().wrapping_add_signed(rel.into());
+
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from(cond.branch_mnemo()), 
+            operands: format!("${:04X}", branch_pc),
+        });
+
+        self.cycles += 2;
+        if cond.eval(self) {
+            self.regs.pc_jump(branch_pc);
+            self.cycles += 1;
+            if self.regs.mode_is_emulated() && (no_branch_pc & 0xFF00) != (branch_pc & 0xFF00) {
+                self.cycles += 1;
+            }
+        }
     }
 
     fn brk(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
@@ -1353,7 +1420,7 @@ impl FromStr for CPU {
                     cpu.regs.set_status_flag(Flag::X, val == "1"),
                 (Some("P.M"), Some(val)) => 
                     cpu.regs.set_status_flag(Flag::M, val == "1"),
-                (Some("P.O"), Some(val)) => 
+                (Some("P.V"), Some(val)) => 
                     cpu.regs.set_status_flag(Flag::V, val == "1"),
                 (Some("P.N"), Some(val)) => 
                     cpu.regs.set_status_flag(Flag::N, val == "1"),
@@ -1393,6 +1460,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_and;
 #[cfg(test)] mod tests_asl;
 #[cfg(test)] mod tests_bit;
+#[cfg(test)] mod tests_branch;
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_cmp;
 #[cfg(test)] mod tests_cpx;
