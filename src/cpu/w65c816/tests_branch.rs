@@ -76,11 +76,29 @@ use rstest::*;
     ("BPL", "$A044"),                               // expected_inst
     0xA044,                                         // expected_pc
 )]
-#[case::bra_branch(
+#[case::bra_positive(
     "PC:A000",                                      // cpu
     "00A000:8042",                                  // bus
     ("BRA", "$A044"),                               // expected_inst
     0xA044,                                         // expected_pc
+)]
+#[case::bra_negative(
+    "PC:A000",                                      // cpu
+    "00A000:80FE",                                  // bus
+    ("BRA", "$A000"),                               // expected_inst
+    0xA000,                                         // expected_pc
+)]
+#[case::brl_positive(
+    "PC:A000",                                      // cpu
+    "00A000:824210",                                  // bus
+    ("BRL", "$B045"),                               // expected_inst
+    0xB045,                                         // expected_pc
+)]
+#[case::brl_negative(
+    "PC:A000",                                      // cpu
+    "00A000:82FDFF",                                  // bus
+    ("BRL", "$A000"),                               // expected_inst
+    0xA000,                                         // expected_pc
 )]
 #[case::bvc_no_branch(
     "PC:A000,P.V:1",                                // cpu

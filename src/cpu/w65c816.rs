@@ -662,6 +662,11 @@ impl CPU {
                 let rel = self.fetch_pc_byte(bus, 1) as i8;
                 self.branch(branch::Condition::Always, rel, rep)
             },
+            0x82 => {
+                // BRL
+                let rel = self.fetch_pc_word(bus, 1) as i16;
+                self.brl(rel, rep)
+            },
             0x88 => {
                 // DEY
                 self.dey(rep)
@@ -1062,6 +1067,21 @@ impl CPU {
         self.regs.pbr_set(0);
 
         self.cycles += 7;
+    }
+
+    fn brl(&mut self, rel: i16, rep: &mut impl Reporter) {
+        let no_branch_pc = self.regs.pc_inc(3);
+        let branch_pc = self.regs.pc().wrapping_add_signed(rel.into());
+
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("BRL"), 
+            operands: format!("${:04X}", branch_pc),
+        });
+
+        self.cycles += 4;
+        self.regs.pc_jump(branch_pc);
     }
 
     fn cmp(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
