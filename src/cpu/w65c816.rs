@@ -1050,8 +1050,7 @@ impl CPU {
     }
 
     fn branch(&mut self, cond: branch::Condition, rel: i8, rep: &mut impl Reporter) {
-        let no_branch_pc = self.regs.pc_inc(2);
-        let branch_pc = self.regs.pc().wrapping_add_signed(rel.into());
+        let branch_pc = self.regs.pc().wrapping_add(2).wrapping_add_signed(rel.into());
 
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1060,6 +1059,7 @@ impl CPU {
             operands: format!("${:04X}", branch_pc),
         });
 
+        let no_branch_pc = self.regs.pc_inc(2);
         self.cycles += 2;
         if cond.eval(self) {
             self.regs.pc_jump(branch_pc);
@@ -1096,8 +1096,7 @@ impl CPU {
     }
 
     fn brl(&mut self, rel: i16, rep: &mut impl Reporter) {
-        let no_branch_pc = self.regs.pc_inc(3);
-        let branch_pc = self.regs.pc().wrapping_add_signed(rel.into());
+        let branch_pc = self.regs.pc().wrapping_add(3).wrapping_add_signed(rel.into());
 
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
