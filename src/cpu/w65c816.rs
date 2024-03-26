@@ -479,6 +479,11 @@ impl CPU {
                 // LSR
                 self.lsr(bus, addr::Mode::Accumulator, rep)
             },
+            0x4C => {
+                // JMP a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.jmp(bus, addr::Mode::AbsoluteJump(abs), rep)
+            },
             0x4D => {
                 // EOR a
                 let abs = self.fetch_pc_word(bus, 1);
@@ -535,6 +540,12 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 self.eor(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
             },
+            0x5C => {
+                // JMP al
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.jmp(bus, addr::Mode::AbsoluteLongJump(bank, abs), rep)
+            },
             0x5D => {
                 // EOR a,X
                 let abs = self.fetch_pc_word(bus, 1);
@@ -584,6 +595,11 @@ impl CPU {
             0x6A => {
                 // ROR
                 self.ror(bus, addr::Mode::Accumulator, rep)
+            },
+            0x6C => {
+                // JMP (a)
+                let abs = self.fetch_pc_word(bus, 1);
+                self.jmp(bus, addr::Mode::AbsoluteIndirectJump(abs), rep)
             },
             0x6D => {
                 // ADC a
@@ -640,6 +656,11 @@ impl CPU {
                 // ADC a,Y
                 let abs = self.fetch_pc_word(bus, 1);
                 self.adc(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0x7C => {
+                // JMP (a,X)
+                let abs = self.fetch_pc_word(bus, 1);
+                self.jmp(bus, addr::Mode::AbsoluteIndexedIndirectJump(abs), rep)
             },
             0x7D => {
                 // ADC a,X
@@ -794,6 +815,11 @@ impl CPU {
                 // CMP a,Y
                 let abs = self.fetch_pc_word(bus, 1);
                 self.cmp(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
+            },
+            0xDC => {
+                // JMP [a]
+                let abs = self.fetch_pc_word(bus, 1);
+                self.jmp(bus, addr::Mode::AbsoluteIndirectLongJump(abs), rep)
             },
             0xDD => {
                 // CMP a,X
@@ -1262,6 +1288,21 @@ impl CPU {
         self.cycles += 2
     }
 
+    fn jmp(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        let jump = mode.jump(self, bus);
+
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("JMP"), 
+            operands: format!("{}", mode),
+        });
+
+        self.regs.pbr_set(jump.bank);
+        self.regs.pc_jump(jump.addr);
+        self.cycles += jump.cycles;
+    }
+
     fn lsr(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1489,6 +1530,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_dex;
 #[cfg(test)] mod tests_dey;
 #[cfg(test)] mod tests_eor;
+#[cfg(test)] mod tests_jmp;
 #[cfg(test)] mod tests_inc;
 #[cfg(test)] mod tests_inx;
 #[cfg(test)] mod tests_iny;

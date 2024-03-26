@@ -18,6 +18,11 @@ macro_rules! cpu_dl0 {
 #[derive(Clone, Copy)]
 pub enum Mode {
     Absolute(u16),                      // a
+    AbsoluteJump(u16),                  // a
+    AbsoluteIndirectJump(u16),          // (a)
+    AbsoluteIndirectLongJump(u16),      // [a]      --> 65C816 only
+    AbsoluteIndexedIndirectJump(u16),   // (a,X)    --> 65C816 only
+    AbsoluteLongJump(u8, u16),          // al       --> 65C816 only
     AbsoluteIndexedX(u16),              // a,X
     AbsoluteIndexedY(u16),              // a,Y
     AbsoluteLong(u8, u16),              // al       --> 65C816 only
@@ -44,6 +49,14 @@ pub struct ModeRead {
 
 pub struct ModeWrite {
     pub cycles: u64,
+}
+
+pub struct ModeJump {
+    pub bank: u8,
+    pub addr: u16,
+    pub cycles: u64,
+    pub prog_bytes: u16,
+
 }
 
 impl Mode {
@@ -190,6 +203,7 @@ impl Mode {
                     prog_bytes: 2,
                 }
             },
+            _ => panic!("addressing mode does not support read operation"),
         }
     }
 
@@ -198,6 +212,58 @@ impl Mode {
             self.write_byte(cpu, bus, val as u8)
         } else {
             self.write_word(cpu, bus, val)
+        }
+    }
+
+    pub fn jump(self, cpu: &CPU, bus: &impl Bus) -> ModeJump {
+        match self {
+            Mode::AbsoluteJump(addr) => {
+                ModeJump {
+                    bank: cpu.regs.pbr(),
+                    addr,
+                    cycles: 3,
+                    prog_bytes: 3,
+                }
+            },
+            Mode::AbsoluteLongJump(bank, addr) => {
+                ModeJump {
+                    bank,
+                    addr,
+                    cycles: 4,
+                    prog_bytes: 4,
+                }
+            },
+            Mode::AbsoluteIndirectJump(addr) => {
+                ModeJump {
+                    bank: cpu.regs.pbr(),
+                    addr: bus.read_word(
+                        Addr::from(0, addr),
+                        AddrWrap::Long,
+                    ),
+                    cycles: 5,
+                    prog_bytes: 3,
+                }
+            },
+            Mode::AbsoluteIndirectLongJump(addr) => {
+                let indir = Addr::from(0, addr);
+                ModeJump {
+                    bank: bus.read_byte(indir.wrapping_add(2usize, AddrWrap::Word)),
+                    addr: bus.read_word(indir, AddrWrap::Word),
+                    cycles: 6,
+                    prog_bytes: 3,
+                }
+            },
+            Mode::AbsoluteIndexedIndirectJump(addr) => {
+                let indir = Addr::from(0, addr)
+                    .wrapping_add(cpu.regs.x(), AddrWrap::Word);
+                ModeJump {
+                    bank: cpu.regs.pbr(),
+                    addr: bus.read_word(indir,AddrWrap::Word),
+                    cycles: 6,
+                    prog_bytes: 3,
+                }
+            },
+            _ => panic!("addressing mode does not support jump operation"),
         }
     }
 
@@ -283,6 +349,11 @@ impl Display for Mode {
         match self {
             Mode::Accumulator => write!(f, ""),
             Mode::Absolute(addr) => write!(f, "${:04X}", addr),
+            Mode::AbsoluteJump(addr) => write!(f, "${:04X}", addr),
+            Mode::AbsoluteIndirectJump(addr) => write!(f, "(${:04X})", addr),
+            Mode::AbsoluteIndirectLongJump(addr) => write!(f, "[${:04X}]", addr),
+            Mode::AbsoluteIndexedIndirectJump(addr) => write!(f, "(${:04X},X)", addr),
+            Mode::AbsoluteLongJump(bank, addr) => write!(f, "${:02X}{:04X}", bank, addr),
             Mode::AbsoluteIndexedX(addr) => write!(f, "${:04X},X", addr),
             Mode::AbsoluteIndexedY(addr) => write!(f, "${:04X},Y", addr),
             Mode::AbsoluteLong(bank, addr) => write!(f, "${:02X}{:04X}", bank, addr),
@@ -944,4 +1015,49 @@ mod tests {
         assert_eq!(read.val, output);
         assert_eq!(write.cycles, expected.cycles);
     }
+
+    #[rstest]
+    #[case::absolute(
+        "PBR:A0",                                                       // cpu
+        "",                                                             // bus
+        Mode::AbsoluteJump(0x1234),                                     // addr
+        ModeJump{bank: 0xA0, addr: 0x1234, cycles: 3, prog_bytes: 3},   // expected
+    )]
+    #[case::absolute_long(
+        "PBR:A0",                                                       // cpu
+        "",                                                             // bus
+        Mode::AbsoluteLongJump(0xB0, 0x1234),                           // addr
+        ModeJump{bank: 0xB0, addr: 0x1234, cycles: 4, prog_bytes: 4},   // expected
+    )]
+    #[case::absolute_indirect(
+        "PBR:A0",                                                       // cpu
+        "001234:CDAB",                                                  // bus
+        Mode::AbsoluteIndirectJump(0x1234),                             // addr
+        ModeJump{bank: 0xA0, addr: 0xABCD, cycles: 5, prog_bytes: 3},   // expected
+    )]
+    #[case::absolute_indexed_indirect(
+        "PBR:A0,X:02",                                                  // cpu
+        "001236:CDAB",                                                  // bus
+        Mode::AbsoluteIndexedIndirectJump(0x1234),                      // addr
+        ModeJump{bank: 0xA0, addr: 0xABCD, cycles: 6, prog_bytes: 3},   // expected
+    )]
+    #[case::absolute_indirect_long(
+        "PBR:A0",                                                       // cpu
+        "001234:CDABB0",                                                // bus
+        Mode::AbsoluteIndirectLongJump(0x1234),                         // addr
+        ModeJump{bank: 0xB0, addr: 0xABCD, cycles: 6, prog_bytes: 3},   // expected
+    )]
+    fn test_jump(
+        #[case] mut cpu: CPU,
+        #[case] bus: bus::Fake,
+        #[case] addr: Mode,
+        #[case] expected: ModeJump,
+    ) {
+        let jp = addr.jump(&mut cpu, &bus);
+        assert_eq!(jp.bank, expected.bank);
+        assert_eq!(jp.addr, expected.addr);
+        assert_eq!(jp.cycles, expected.cycles);
+        assert_eq!(jp.prog_bytes, expected.prog_bytes);
+    }
+
 }
