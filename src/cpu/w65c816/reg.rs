@@ -111,7 +111,7 @@ impl Bank {
     }
 
     pub fn pc(&self) -> u16 { self.pc }
-    pub fn pc_inc(&mut self, n: u16) -> u16 { self.pc += n; self.pc }
+    pub fn pc_inc(&mut self, n: u16) -> u16 { self.pc = self.pc.wrapping_add(n); self.pc }
     pub fn pc_jump(&mut self, n: u16) { self.pc = n; }
 
     #[inline]
