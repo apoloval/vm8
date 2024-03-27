@@ -53,13 +53,24 @@ impl CPU {
         )
     }
 
-    fn read_stack_word(&self, bus: &impl Bus, idx: u16) -> u16 {
+    fn stack_addr(&self, idx: u16) -> (Addr, AddrWrap) {
         let wrap = 
             if self.regs.mode_is_emulated() { AddrWrap::Byte } 
             else { AddrWrap::Word };
 
-        let addr = Addr::from(0, self.regs.sp())
-            .wrapping_add(idx, wrap);
+        (
+            Addr::from(0, self.regs.sp()).wrapping_add(idx, wrap),
+            wrap
+        )
+    }
+
+    fn read_stack_byte(&self, bus: &impl Bus, idx: u16) -> u8 {
+        let (addr, _) = self.stack_addr(idx);
+        bus.read_byte(addr)
+    }
+
+    fn read_stack_word(&self, bus: &impl Bus, idx: u16) -> u16 {
+        let (addr, wrap) = self.stack_addr(idx);
         bus.read_word(addr, wrap)
     }
 
@@ -100,6 +111,12 @@ impl CPU {
             self.push_byte(bus, self.regs.pbr());
         }
         self.push_word(bus, self.regs.pc());
+    }
+
+    fn pop_byte(&mut self, bus: &impl Bus) -> u8 {
+        let byte = self.read_stack_byte(bus, 1);
+        self.regs.sp_inc(1);
+        byte
     }
 
     fn pop_word(&mut self, bus: &impl Bus) -> u16 {
@@ -617,6 +634,10 @@ impl CPU {
             0x6A => {
                 // ROR
                 self.ror(bus, addr::Mode::Accumulator, rep)
+            },
+            0x6B => {
+                // RTL
+                self.rtl(bus, rep)
             },
             0x6C => {
                 // JMP (a)
@@ -1401,6 +1422,22 @@ impl CPU {
 
     }
 
+    fn rtl(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("RTL"), 
+            operands: String::from(""),
+        });
+
+        let pc = self.pop_word(bus);
+        let pbr = self.pop_byte(bus);
+        self.regs.pbr_set(pbr);
+        self.regs.pc_jump(pc);
+        self.regs.pc_inc(1);
+        self.cycles += 6;
+    }
+
     fn rts(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1609,6 +1646,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
+#[cfg(test)] mod tests_rtl;
 #[cfg(test)] mod tests_rts;
 #[cfg(test)] mod tests_rol;
 #[cfg(test)] mod tests_ror;
