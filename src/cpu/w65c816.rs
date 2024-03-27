@@ -315,6 +315,11 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.ora(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x20 => {
+                // JSR a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.jsr(bus, addr::Mode::AbsoluteJump(abs), rep)
+            },
             0x21 => {
                 // AND (d,X)
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -942,6 +947,11 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 self.sbc(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
             },
+            0xFC => {
+                // JSR (a,X)
+                let abs = self.fetch_pc_word(bus, 1);
+                self.jsr(bus, addr::Mode::AbsoluteIndexedIndirectJump(abs), rep)
+            },
             0xFD => {
                 // SBC a,X
                 let abs = self.fetch_pc_word(bus, 1);
@@ -1299,7 +1309,22 @@ impl CPU {
 
         self.regs.pbr_set(jump.bank);
         self.regs.pc_jump(jump.addr);
-        self.cycles += jump.cycles;
+        self.cycles += jump.jmp_cycles;
+    }
+
+    fn jsr(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        let jump = mode.jump(self, bus);
+
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("JSR"), 
+            operands: format!("{}", mode),
+        });
+
+        self.push_word(bus, self.regs.pc().wrapping_add(2));
+        self.regs.pc_jump(jump.addr);
+        self.cycles += jump.jsr_cycles;
     }
 
     fn lsr(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -1530,6 +1555,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_dey;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_jmp;
+#[cfg(test)] mod tests_jsr;
 #[cfg(test)] mod tests_inc;
 #[cfg(test)] mod tests_inx;
 #[cfg(test)] mod tests_iny;

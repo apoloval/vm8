@@ -54,7 +54,8 @@ pub struct ModeWrite {
 pub struct ModeJump {
     pub bank: u8,
     pub addr: u16,
-    pub cycles: u64,
+    pub jmp_cycles: u64,
+    pub jsr_cycles: u64,
     pub prog_bytes: u16,
 
 }
@@ -221,7 +222,8 @@ impl Mode {
                 ModeJump {
                     bank: cpu.regs.pbr(),
                     addr,
-                    cycles: 3,
+                    jmp_cycles: 3,
+                    jsr_cycles: 6,
                     prog_bytes: 3,
                 }
             },
@@ -229,7 +231,8 @@ impl Mode {
                 ModeJump {
                     bank,
                     addr,
-                    cycles: 4,
+                    jmp_cycles: 4,
+                    jsr_cycles: 8,
                     prog_bytes: 4,
                 }
             },
@@ -240,7 +243,8 @@ impl Mode {
                         Addr::from(0, addr),
                         AddrWrap::Long,
                     ),
-                    cycles: 5,
+                    jmp_cycles: 5,
+                    jsr_cycles: 0, // not used
                     prog_bytes: 3,
                 }
             },
@@ -249,7 +253,8 @@ impl Mode {
                 ModeJump {
                     bank: bus.read_byte(indir.wrapping_add(2usize, AddrWrap::Word)),
                     addr: bus.read_word(indir, AddrWrap::Word),
-                    cycles: 6,
+                    jmp_cycles: 6,
+                    jsr_cycles: 0, // not used
                     prog_bytes: 3,
                 }
             },
@@ -259,7 +264,8 @@ impl Mode {
                 ModeJump {
                     bank: cpu.regs.pbr(),
                     addr: bus.read_word(indir,AddrWrap::Word),
-                    cycles: 6,
+                    jmp_cycles: 6,
+                    jsr_cycles: 8,
                     prog_bytes: 3,
                 }
             },
@@ -1021,31 +1027,61 @@ mod tests {
         "PBR:A0",                                                       // cpu
         "",                                                             // bus
         Mode::AbsoluteJump(0x1234),                                     // addr
-        ModeJump{bank: 0xA0, addr: 0x1234, cycles: 3, prog_bytes: 3},   // expected
+        ModeJump{                       // expected
+            bank: 0xA0, 
+            addr: 0x1234, 
+            jmp_cycles: 3, 
+            jsr_cycles: 6, 
+            prog_bytes: 3,
+        },
     )]
     #[case::absolute_long(
-        "PBR:A0",                                                       // cpu
-        "",                                                             // bus
-        Mode::AbsoluteLongJump(0xB0, 0x1234),                           // addr
-        ModeJump{bank: 0xB0, addr: 0x1234, cycles: 4, prog_bytes: 4},   // expected
+        "PBR:A0",                                       // cpu
+        "",                                             // bus
+        Mode::AbsoluteLongJump(0xB0, 0x1234),           // addr
+        ModeJump{                                       // expected
+            bank: 0xB0, 
+            addr: 0x1234, 
+            jmp_cycles: 4, 
+            jsr_cycles: 8, 
+            prog_bytes: 4,
+        },
     )]
     #[case::absolute_indirect(
-        "PBR:A0",                                                       // cpu
-        "001234:CDAB",                                                  // bus
-        Mode::AbsoluteIndirectJump(0x1234),                             // addr
-        ModeJump{bank: 0xA0, addr: 0xABCD, cycles: 5, prog_bytes: 3},   // expected
+        "PBR:A0",                                       // cpu
+        "001234:CDAB",                                  // bus
+        Mode::AbsoluteIndirectJump(0x1234),             // addr
+        ModeJump{                                       // expected
+            bank: 0xA0, 
+            addr: 0xABCD, 
+            jmp_cycles: 5, 
+            jsr_cycles: 0, 
+            prog_bytes: 3
+        },
     )]
     #[case::absolute_indexed_indirect(
-        "PBR:A0,X:02",                                                  // cpu
-        "001236:CDAB",                                                  // bus
-        Mode::AbsoluteIndexedIndirectJump(0x1234),                      // addr
-        ModeJump{bank: 0xA0, addr: 0xABCD, cycles: 6, prog_bytes: 3},   // expected
+        "PBR:A0,X:02",                                  // cpu
+        "001236:CDAB",                                  // bus
+        Mode::AbsoluteIndexedIndirectJump(0x1234),      // addr
+        ModeJump{                                       // expected
+            bank: 0xA0, 
+            addr: 0xABCD, 
+            jmp_cycles: 6, 
+            jsr_cycles: 8, 
+            prog_bytes: 3
+        },
     )]
     #[case::absolute_indirect_long(
-        "PBR:A0",                                                       // cpu
-        "001234:CDABB0",                                                // bus
-        Mode::AbsoluteIndirectLongJump(0x1234),                         // addr
-        ModeJump{bank: 0xB0, addr: 0xABCD, cycles: 6, prog_bytes: 3},   // expected
+        "PBR:A0",                                       // cpu
+        "001234:CDABB0",                                // bus
+        Mode::AbsoluteIndirectLongJump(0x1234),         // addr
+        ModeJump{                                       // expected
+            bank: 0xB0, 
+            addr: 0xABCD, 
+            jmp_cycles: 6, 
+            jsr_cycles: 0, 
+            prog_bytes: 3
+        },
     )]
     fn test_jump(
         #[case] mut cpu: CPU,
@@ -1056,7 +1092,7 @@ mod tests {
         let jp = addr.jump(&mut cpu, &bus);
         assert_eq!(jp.bank, expected.bank);
         assert_eq!(jp.addr, expected.addr);
-        assert_eq!(jp.cycles, expected.cycles);
+        assert_eq!(jp.jmp_cycles, expected.jmp_cycles);
         assert_eq!(jp.prog_bytes, expected.prog_bytes);
     }
 

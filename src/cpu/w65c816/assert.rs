@@ -1,7 +1,18 @@
 use super::{Addr, Bus, CPU};
 
 pub fn stack_byte(cpu: &CPU, bus: &impl Bus, offset: u16, expected: u8) {
-    assert_eq!(bus.read_byte(Addr::from(0, cpu.regs.sp()+offset)), expected);
+    assert_eq!(
+        bus.read_byte(Addr::from(0, cpu.regs.sp()+offset+1)), 
+        expected, 
+        "unexpected stack byte at {:#X}", 
+        cpu.regs.sp()+offset+1,
+    );
+}
+
+pub fn stack_bytes(cpu: &CPU, bus: &impl Bus, offset: u16, expected: &[u8]) {
+    for (i, &expected) in expected.iter().enumerate() {
+        stack_byte(cpu, bus, offset+i as u16, expected);
+    }
 }
 
 pub fn program_counter(cpu: &CPU, expected_bank: u8, expected_pc: u16) {
