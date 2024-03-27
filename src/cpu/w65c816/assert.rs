@@ -15,6 +15,10 @@ pub fn stack_bytes(cpu: &CPU, bus: &impl Bus, offset: u16, expected: &[u8]) {
     }
 }
 
+pub fn stack_pointer(cpu: &CPU, expected: u16) {
+    assert_eq!(cpu.regs.sp(), expected, "unexpected stack pointer: {:#X}", cpu.regs.sp());
+}
+
 pub fn program_counter(cpu: &CPU, expected_bank: u8, expected_pc: u16) {
     assert_eq!(cpu.regs.pbr(), expected_bank, "unexpected program bank: {:#X}", cpu.regs.pbr());
     assert_eq!(cpu.regs.pc(), expected_pc, "unexpected program counter: {:#X}", cpu.regs.pc());

@@ -54,8 +54,9 @@ impl CPU {
     }
 
     fn read_stack_word(&self, bus: &impl Bus, idx: u16) -> u16 {
-        let wrap = if self.regs.mode_is_emulated() { AddrWrap::Byte } 
-        else { AddrWrap::Word };
+        let wrap = 
+            if self.regs.mode_is_emulated() { AddrWrap::Byte } 
+            else { AddrWrap::Word };
 
         let addr = Addr::from(0, self.regs.sp())
             .wrapping_add(idx, wrap);
@@ -99,6 +100,12 @@ impl CPU {
             self.push_byte(bus, self.regs.pbr());
         }
         self.push_word(bus, self.regs.pc());
+    }
+
+    fn pop_word(&mut self, bus: &impl Bus) -> u16 {
+        let word = self.read_stack_word(bus, 1);
+        self.regs.sp_inc(2);
+        word
     }
 
     fn direct_addr(&self, dir: u8, idx: u16) -> (Addr, AddrWrap) {
@@ -572,7 +579,11 @@ impl CPU {
                 let abs = self.fetch_pc_word(bus, 1);
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.eor(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
-            },            
+            },
+            0x60 => {
+                // RTS
+                self.rts(bus, rep)
+            },
             0x61 => {
                 // ADC (d,X)
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -1390,6 +1401,20 @@ impl CPU {
 
     }
 
+    fn rts(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("RTS"), 
+            operands: String::from(""),
+        });
+
+        let pc = self.pop_word(bus);
+        self.regs.pc_jump(pc);
+        self.regs.pc_inc(1);
+        self.cycles += 6;
+    }
+
     fn rol(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1584,6 +1609,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
+#[cfg(test)] mod tests_rts;
 #[cfg(test)] mod tests_rol;
 #[cfg(test)] mod tests_ror;
 #[cfg(test)] mod tests_sbc;
