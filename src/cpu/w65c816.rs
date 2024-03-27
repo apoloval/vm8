@@ -325,6 +325,12 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.and(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
             },
+            0x22 => {
+                // JSL al
+                let abs = self.fetch_pc_word(bus, 1);
+                let bank = self.fetch_pc_byte(bus, 3);
+                self.jsl(bus, addr::Mode::AbsoluteLongJump(bank, abs), rep)
+            },
             0x23 => {
                 // AND d,S
                 let rel = self.fetch_pc_byte(bus, 1);
@@ -1312,6 +1318,22 @@ impl CPU {
         self.cycles += jump.jmp_cycles;
     }
 
+    fn jsl(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        let jump = mode.jump(self, bus);
+
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("JSL"), 
+            operands: format!("{}", mode),
+        });
+
+        self.push_byte(bus, self.regs.pbr());
+        self.push_word(bus, self.regs.pc().wrapping_add(3));
+        self.regs.pc_jump(jump.addr);
+        self.cycles += jump.jsr_cycles;
+    }
+
     fn jsr(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         let jump = mode.jump(self, bus);
 
@@ -1555,6 +1577,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_dey;
 #[cfg(test)] mod tests_eor;
 #[cfg(test)] mod tests_jmp;
+#[cfg(test)] mod tests_jsl;
 #[cfg(test)] mod tests_jsr;
 #[cfg(test)] mod tests_inc;
 #[cfg(test)] mod tests_inx;

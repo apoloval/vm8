@@ -4,23 +4,15 @@ use crate::cpu::w65c816::assert;
 use rstest::*;
 
 #[rstest]
-#[case::absolute(
+#[case::absolute_long(
     "PC:B000,PBR:A0,SP:FFFF",                       // cpu
-    "A0B000:203412",                                // bus
-    ("JSR", "$1234"),                               // expected_inst
+    "A0B000:223412C0",                              // bus
+    ("JSL", "$C01234"),                             // expected_inst
     0xA0,                                           // expected_pbr
     0x1234,                                         // expected_pc
-    &[0x02, 0xB0],                                  // expected_stack
+    &[0x03, 0xB0, 0xA0],                            // expected_stack
 )]
-#[case::absolute_indexed_indirect(
-    "PC:B000,PBR:A0,X:02,SP:FFFF",                  // cpu
-    "A0B000:FC3412,001236:7856",                    // bus
-    ("JSR", "($1234,X)"),                           // expected_inst
-    0xA0,                                           // expected_pbr
-    0x5678,                                         // expected_pc
-    &[0x02, 0xB0],                                  // expected_stack
-)]
-fn test_jsr(
+fn test_jsl(
     #[case] mut cpu: CPU,
     #[case] mut bus: bus::Fake,
     #[case] expected_inst: (&'static str, &'static str),
