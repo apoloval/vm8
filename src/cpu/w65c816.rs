@@ -106,13 +106,6 @@ impl CPU {
         self.push_byte(bus, value as u8);
     }
 
-    fn push_pc<B: Bus>(&mut self, bus: &mut B) {
-        if self.regs.mode_is_native() {
-            self.push_byte(bus, self.regs.pbr());
-        }
-        self.push_word(bus, self.regs.pc());
-    }
-
     fn pop_byte(&mut self, bus: &impl Bus) -> u8 {
         let byte = self.read_stack_byte(bus, 1);
         self.regs.sp_inc(1);
@@ -198,6 +191,35 @@ impl CPU {
             self.regs.set_status_flag(Flag::V, (result as i16) > (prev as i16));
         }    
     }
+
+    fn interrupt(&mut self, bus: &mut impl Bus, vector: int::Vector) {
+        // Push the return address (including PBR in native mode)
+        self.regs.pc_inc(2);
+        if self.regs.mode_is_native() {
+            self.push_byte(bus, self.regs.pbr());
+        }
+        self.push_word(bus, self.regs.pc());
+
+        // Push the status register with B flag set in emulation mode
+        let mut p = self.regs.p();
+        if self.regs.mode_is_emulated() {
+            status::Flag::B.set(&mut p);
+        }
+        self.push_byte(bus, p);
+
+        // Set the I and D flags and jump to the interrupt vector
+        self.regs.set_status_flag(status::Flag::I, true);
+        self.regs.set_status_flag(status::Flag::D, false);
+
+        // Jump to the interrupt vector
+        vector.jump(self, bus);
+
+        // Adjust cycles
+        self.cycles += 7;
+        if self.regs.mode_is_native() {
+            self.cycles += 1;
+        }
+    }
 }
 
 /**********************************/
@@ -213,6 +235,11 @@ impl CPU {
                 // ORA (d,X)
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.ora(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
+            },
+            0x02 => {
+                // COP
+                let imm = self.fetch_pc_byte(bus, 1);
+                self.cop(bus, imm, rep)
             },
             0x03 => {
                 // ORA d,S
@@ -1126,37 +1153,7 @@ impl CPU {
             operands: String::from(""),
         });
 
-        // Push the return address (including PBR in native mode)
-        self.regs.pc_inc(2);
-        if self.regs.mode_is_native() {
-            self.push_byte(bus, self.regs.pbr());
-        }
-        self.push_word(bus, self.regs.pc());
-
-        // Push the status register with B flag set in emulation mode
-        let mut p = self.regs.p();
-        if self.regs.mode_is_emulated() {
-            status::Flag::B.set(&mut p);
-        }
-        self.push_byte(bus, p);
-
-        // Set the I and D flags and jump to the interrupt vector
-        self.regs.set_status_flag(status::Flag::I, true);
-        self.regs.set_status_flag(status::Flag::D, false);
-
-        // Jump to the interrupt vector
-        let vector = 
-            if self.regs.mode_is_emulated() { int::VECTOR_EMULATION_IRQBRK }
-            else { int::VECTOR_NATIVE_BRK };
-
-        self.regs.pc_jump(bus.read_word(Addr::from(0, vector), AddrWrap::Long));
-        self.regs.pbr_set(0);
-
-        // Adjust cycles
-        self.cycles += 7;
-        if self.regs.mode_is_native() {
-            self.cycles += 1;
-        }
+        self.interrupt(bus, int::Vector::BRK);
     }
 
     fn brl(&mut self, rel: i16, rep: &mut impl Reporter) {
@@ -1190,6 +1187,17 @@ impl CPU {
         self.update_status_carry_arithmetic(prev, result, Flag::M);
         self.regs.pc_inc(read.prog_bytes);
         self.cycles += read.cycles;
+    }
+
+    fn cop(&mut self, bus: &mut impl Bus, imm: u8, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("COP"), 
+            operands: format!("#${:02X}", imm),
+        });
+
+        self.interrupt(bus, int::Vector::COP);
     }
 
     fn cpx(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
@@ -1648,6 +1656,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_branch;
 #[cfg(test)] mod tests_brk;
 #[cfg(test)] mod tests_cmp;
+#[cfg(test)] mod tests_cop;
 #[cfg(test)] mod tests_cpx;
 #[cfg(test)] mod tests_cpy;
 #[cfg(test)] mod tests_dec;

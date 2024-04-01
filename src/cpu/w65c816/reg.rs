@@ -21,7 +21,7 @@ impl Bank {
     pub fn reset<B: Bus>(&mut self, bus: &mut B) {
         self.e = true;
         self.pc = bus.read_word(
-            Addr::from(0, int::VECTOR_EMULATION_RESET),
+            Addr::from(0, int::Vector::RST.emulation),
             AddrWrap::Long,
         );
         self.pbr = 0;
