@@ -78,6 +78,8 @@ impl FromStr for FlagExpectation {
                     flags.push((Flag::N, val == "1")),
                 (Some("E"), Some(val)) =>
                     flags.push((Flag::N, val == "1")),
+                (Some("B"), Some(val)) =>
+                    flags.push((Flag::B, val == "1")),
                 _ => return Err(format!("Invalid flag expectation: {}", s)),
             }            
         }

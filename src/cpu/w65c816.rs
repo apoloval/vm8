@@ -1126,13 +1126,25 @@ impl CPU {
             operands: String::from(""),
         });
 
-        if self.regs.mode_is_emulated() {
-            self.regs.set_status_flag(status::Flag::B, true);
-        }
+        // Push the return address (including PBR in native mode)
         self.regs.pc_inc(2);
-        self.push_pc(bus);
-        self.push_byte(bus, self.regs.p());
+        if self.regs.mode_is_native() {
+            self.push_byte(bus, self.regs.pbr());
+        }
+        self.push_word(bus, self.regs.pc());
 
+        // Push the status register with B flag set in emulation mode
+        let mut p = self.regs.p();
+        if self.regs.mode_is_emulated() {
+            status::Flag::B.set(&mut p);
+        }
+        self.push_byte(bus, p);
+
+        // Set the I and D flags and jump to the interrupt vector
+        self.regs.set_status_flag(status::Flag::I, true);
+        self.regs.set_status_flag(status::Flag::D, false);
+
+        // Jump to the interrupt vector
         let vector = 
             if self.regs.mode_is_emulated() { int::VECTOR_EMULATION_IRQBRK }
             else { int::VECTOR_NATIVE_BRK };
@@ -1140,7 +1152,11 @@ impl CPU {
         self.regs.pc_jump(bus.read_word(Addr::from(0, vector), AddrWrap::Long));
         self.regs.pbr_set(0);
 
+        // Adjust cycles
         self.cycles += 7;
+        if self.regs.mode_is_native() {
+            self.cycles += 1;
+        }
     }
 
     fn brl(&mut self, rel: i16, rep: &mut impl Reporter) {
