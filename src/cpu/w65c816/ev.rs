@@ -1,4 +1,3 @@
-
 /* An event reported by the CPU. */
 #[derive(Debug)]
 pub enum Event {
@@ -34,8 +33,8 @@ impl Retain {
     pub fn assert_exec(&mut self, expected_inst: &str, expected_ops: &str) {
         match self.last {
             Some(Event::Exec { ref instruction, ref operands, ..}) => {
-                assert_eq!(expected_inst, instruction);
-                assert_eq!(expected_ops, operands);
+                assert_eq!(instruction, expected_inst);
+                assert_eq!(operands, expected_ops);
             }
             _ => panic!("Expected Event::Exec, got {:?}", self.last),
         }

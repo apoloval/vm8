@@ -507,6 +507,10 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.and(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x40 => {
+                // RTI
+                self.rti(bus, rep)
+            },
             0x41 => {
                 // EOR (d,X)
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -1446,6 +1450,28 @@ impl CPU {
 
     }
 
+    fn rti(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("RTI"), 
+            operands: String::from(""),
+        });
+
+        let p = self.pop_byte(bus);
+        self.regs.p_set(p);
+
+        let pc = self.pop_word(bus);
+        self.regs.pc_jump(pc);
+
+        if self.regs.mode_is_native() {
+            let pbr = self.pop_byte(bus);
+            self.regs.pbr_set(pbr);
+            self.cycles += 1;
+        }
+        self.cycles += 6;
+    }
+
     fn rtl(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1671,6 +1697,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
+#[cfg(test)] mod tests_rti;
 #[cfg(test)] mod tests_rtl;
 #[cfg(test)] mod tests_rts;
 #[cfg(test)] mod tests_rol;

@@ -24,6 +24,10 @@ pub fn program_counter(cpu: &CPU, expected_bank: u8, expected_pc: u16) {
     assert_eq!(cpu.regs.pc(), expected_pc, "unexpected program counter: {:#X}", cpu.regs.pc());
 }
 
+pub fn status(cpu: &CPU, expected: u8) {
+    assert_eq!(cpu.regs.p(), expected, "unexpected status: {:#X}", cpu.regs.p());
+}
+
 pub fn accum(cpu: &CPU, expected: u16) {
     assert_eq!(cpu.regs.a(), expected, "unexpected accumulator: {:#X}", cpu.regs.a());
 }
