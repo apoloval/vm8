@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[cfg(test)] use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -28,6 +30,21 @@ impl Flag {
     #[inline]
     pub fn clear(self, p: &mut u8) {
         *p &= !self.mask();
+    }
+}
+
+impl Display for Flag {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Flag::C => write!(f, "C"),
+            Flag::Z => write!(f, "Z"),
+            Flag::I => write!(f, "I"),
+            Flag::D => write!(f, "D"),
+            Flag::X => write!(f, "X"),
+            Flag::M => write!(f, "M"),
+            Flag::V => write!(f, "V"),
+            Flag::N => write!(f, "N"),
+        }
     }
 }
 

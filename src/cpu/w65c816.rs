@@ -336,6 +336,10 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.ora(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
             },
+            0x18 => {
+                // CLC
+                self.clc(rep)
+            },
             0x19 => {
                 // ORA a,Y
                 let abs = self.fetch_pc_word(bus, 1);
@@ -601,6 +605,10 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.eor(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
             },
+            0x58 => {
+                // CLI
+                self.cli(rep)
+            },
             0x59 => {
                 // EOR a,Y
                 let abs = self.fetch_pc_word(bus, 1);
@@ -781,6 +789,10 @@ impl CPU {
                 let rel = self.fetch_pc_byte(bus, 1) as i8;
                 self.branch(branch::Condition::CarrySet, rel, rep)
             },
+            0xB8 => {
+                // CLV
+                self.clv(rep)
+            },
             0xC0 => {
                 // CPY #i
                 let imm = self.fetch_pc_word(bus, 1);
@@ -884,6 +896,10 @@ impl CPU {
                 // CMP [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.cmp(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
+            },
+            0xD8 => {
+                // CLD
+                self.cld(rep)
             },
             0xD9 => {
                 // CMP a,Y
@@ -1173,6 +1189,25 @@ impl CPU {
         self.cycles += 4;
         self.regs.pc_jump(branch_pc);
     }
+
+    #[inline]
+    fn cl(&mut self, flag: Flag, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: format!("CL{}", flag), 
+            operands: String::from(""),
+        });
+
+        self.regs.set_status_flag(flag, false);
+        self.regs.pc_inc(1);
+        self.cycles += 2;
+    }
+
+    fn clc(&mut self, rep: &mut impl Reporter) { self.cl(Flag::C, rep); }
+    fn cld(&mut self, rep: &mut impl Reporter) { self.cl(Flag::D, rep); }
+    fn cli(&mut self, rep: &mut impl Reporter) { self.cl(Flag::I, rep); }
+    fn clv(&mut self, rep: &mut impl Reporter) { self.cl(Flag::V, rep); }
 
     fn cmp(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
@@ -1681,6 +1716,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_bit;
 #[cfg(test)] mod tests_branch;
 #[cfg(test)] mod tests_brk;
+#[cfg(test)] mod tests_cl;
 #[cfg(test)] mod tests_cmp;
 #[cfg(test)] mod tests_cop;
 #[cfg(test)] mod tests_cpx;
