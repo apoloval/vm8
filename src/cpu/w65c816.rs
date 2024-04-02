@@ -481,6 +481,10 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.and(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
             },
+            0x38 => {
+                // SEC
+                self.sec(rep)
+            },
             0x39 => {
                 // AND a,Y
                 let abs = self.fetch_pc_word(bus, 1);
@@ -760,6 +764,10 @@ impl CPU {
                 let bank = self.fetch_pc_byte(bus, 3);
                 self.adc(bus, addr::Mode::AbsoluteLongIndexed(bank, abs), rep)
             },
+            0x78 => {
+                // SEI
+                self.sei(rep)
+            },
             0x80 => {
                 // BRA
                 let rel = self.fetch_pc_byte(bus, 1) as i8;
@@ -1026,6 +1034,10 @@ impl CPU {
                 // SBC [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.sbc(bus, addr::Mode::DirectIndirectLongIndexed(dir), rep)
+            },
+            0xF8 => {
+                // SED
+                self.sed(rep)
             },
             0xF9 => {
                 // SBC a,Y
@@ -1612,6 +1624,23 @@ impl CPU {
         self.cycles += read.cycles;
     }
 
+    #[inline]
+    fn se(&mut self, flag: Flag, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: format!("SE{}", flag), 
+            operands: String::from(""),
+        });
+        self.regs.set_status_flag(flag, true);
+        self.regs.pc_inc(1);
+        self.cycles += 2;
+    }
+
+    fn sec(&mut self, rep: &mut impl Reporter) { self.se(Flag::C, rep); }
+    fn sed(&mut self, rep: &mut impl Reporter) { self.se(Flag::D, rep); }
+    fn sei(&mut self, rep: &mut impl Reporter) { self.se(Flag::I, rep); }
+
     fn trb(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1739,5 +1768,6 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_rol;
 #[cfg(test)] mod tests_ror;
 #[cfg(test)] mod tests_sbc;
+#[cfg(test)] mod tests_se;
 #[cfg(test)] mod tests_trb;
 #[cfg(test)] mod tests_tsb;
