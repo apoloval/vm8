@@ -811,6 +811,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.cmp(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
             },
+            0xC2 => {
+                // REP #i
+                let imm = self.fetch_pc_byte(bus, 1);
+                self.rep(imm, rep)
+            },
             0xC3 => {
                 // CMP d,S
                 let rel = self.fetch_pc_byte(bus, 1);
@@ -1497,6 +1502,26 @@ impl CPU {
 
     }
 
+    fn rep(&mut self, bits: u8, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("REP"), 
+            operands: format!("#${:02X}", bits),
+        });
+
+        let emu = self.regs.mode_is_emulated();
+        let p = self.regs.p() & !bits;
+        self.regs.p_set(p);
+        if emu {
+            self.regs.set_status_flag(Flag::M, true);
+            self.regs.set_status_flag(Flag::X, true);
+        }
+
+        self.regs.pc_inc(2);
+        self.cycles += 3;
+    }
+
     fn rti(&mut self, bus: &mut impl Bus, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1762,6 +1787,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
+#[cfg(test)] mod tests_rep;
 #[cfg(test)] mod tests_rti;
 #[cfg(test)] mod tests_rtl;
 #[cfg(test)] mod tests_rts;
