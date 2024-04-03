@@ -950,6 +950,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.sbc(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
             },
+            0xE2 => {
+                // SEP #i
+                let imm = self.fetch_pc_byte(bus, 1);
+                self.sep(imm, rep)
+            },
             0xE3 => {
                 // SBC d,S
                 let rel = self.fetch_pc_byte(bus, 1);
@@ -1666,6 +1671,21 @@ impl CPU {
     fn sed(&mut self, rep: &mut impl Reporter) { self.se(Flag::D, rep); }
     fn sei(&mut self, rep: &mut impl Reporter) { self.se(Flag::I, rep); }
 
+    fn sep(&mut self, bits: u8, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("SEP"), 
+            operands: format!("#${:02X}", bits),
+        });
+
+        let p = self.regs.p() | bits;
+        self.regs.p_set(p);
+
+        self.regs.pc_inc(2);
+        self.cycles += 3;
+    }
+
     fn trb(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1795,5 +1815,6 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_ror;
 #[cfg(test)] mod tests_sbc;
 #[cfg(test)] mod tests_se;
+#[cfg(test)] mod tests_sep;
 #[cfg(test)] mod tests_trb;
 #[cfg(test)] mod tests_tsb;
