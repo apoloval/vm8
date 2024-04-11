@@ -797,6 +797,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.lda(bus, addr::Mode::DirectIndexedIndirect(dir), rep)
             },
+            0xA2 => {
+                // LDX #i
+                let imm = self.fetch_pc_word(bus, 1);
+                self.ldx(bus, addr::Mode::Immediate(imm), rep)
+            },
             0xA3 => {
                 // LDA d,S
                 let rel = self.fetch_pc_byte(bus, 1);
@@ -806,6 +811,11 @@ impl CPU {
                 // LDA d
                 let dir: u8 = self.fetch_pc_byte(bus, 1);
                 self.lda(bus, addr::Mode::Direct(dir), rep)
+            },
+            0xA6 => {
+                // LDX d
+                let dir: u8 = self.fetch_pc_byte(bus, 1);
+                self.ldx(bus, addr::Mode::Direct(dir), rep)
             },
             0xA7 => {
                 // LDA [d]
@@ -821,6 +831,11 @@ impl CPU {
                 // LDA a
                 let abs = self.fetch_pc_word(bus, 1);
                 self.lda(bus, addr::Mode::Absolute(abs), rep)
+            },
+            0xAE => {
+                // LDX a
+                let abs = self.fetch_pc_word(bus, 1);
+                self.ldx(bus, addr::Mode::Absolute(abs), rep)
             },
             0xAF => {
                 // LDA al
@@ -853,6 +868,11 @@ impl CPU {
                 let dir = self.fetch_pc_byte(bus, 1);
                 self.lda(bus, addr::Mode::DirectIndexedX(dir), rep)
             },
+            0xB6 => {
+                // LDX d,Y
+                let dir = self.fetch_pc_byte(bus, 1);
+                self.ldx(bus, addr::Mode::DirectIndexedY(dir), rep)
+            },
             0xB7 => {
                 // LDA [d],Y
                 let dir = self.fetch_pc_byte(bus, 1);
@@ -871,6 +891,11 @@ impl CPU {
                 // LDA a,X
                 let abs = self.fetch_pc_word(bus, 1);
                 self.lda(bus, addr::Mode::AbsoluteIndexedX(abs), rep)
+            },
+            0xBE => {
+                // LDX a,Y
+                let abs = self.fetch_pc_word(bus, 1);
+                self.ldx(bus, addr::Mode::AbsoluteIndexedY(abs), rep)
             },
             0xBF => {
                 // LDA al,X
@@ -1559,6 +1584,22 @@ impl CPU {
         self.cycles += read.cycles;
     }
 
+    fn ldx(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
+        rep.report(|| Event::Exec { 
+            pbr: self.regs.pbr(),
+            pc: self.regs.pc(),
+            instruction: String::from("LDX"), 
+            operands: format!("{}", mode),
+        });
+
+        let read = mode.read(self, bus);
+        self.regs.x_set(read.val);
+        self.update_status_negative(read.val, Flag::X);
+        self.update_status_zero(read.val, Flag::X);
+        self.regs.pc_inc(read.prog_bytes);
+        self.cycles += read.cycles;
+    }
+
     fn lsr(&mut self, bus: &mut impl Bus, mode: addr::Mode, rep: &mut impl Reporter) {
         rep.report(|| Event::Exec { 
             pbr: self.regs.pbr(),
@@ -1899,6 +1940,7 @@ impl FromStr for CPU {
 #[cfg(test)] mod tests_inx;
 #[cfg(test)] mod tests_iny;
 #[cfg(test)] mod tests_lda;
+#[cfg(test)] mod tests_ldx;
 #[cfg(test)] mod tests_lsr;
 #[cfg(test)] mod tests_ora;
 #[cfg(test)] mod tests_rep;
