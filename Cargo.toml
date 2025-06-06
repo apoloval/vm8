@@ -9,6 +9,7 @@ build = "build.rs"
 nightly = []
 
 [dependencies]
+bitflags = "2.9.1"
 byteorder = "1.2"
 dirs = "1.0.4"
 raylib = { version = "3.7" }
