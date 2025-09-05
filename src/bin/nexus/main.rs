@@ -14,13 +14,14 @@ fn main() -> Result<(), String> {
         Ok(s) => s,
         Err(err) => return Err(format!("Error: failed to load Nexus BIOS ROM from {}: {}", bios_path.display(), err)),
     };
+    sys.exec_cmd(Command::Reset);
 
     let mut rl = Editor::<()>::new();
     println!("Nexus Computer System Emulator v{}", env!("CARGO_PKG_VERSION"));
     println!("Copyright (C) 2021-2022 Alvaro Polo");
     println!("");
     loop {
-        match rl.readline(sys.prompt().as_str()) {
+        match rl.readline("vm8> ") {
             Ok(line) if line.len() == 0  => {},
             Ok(line) => {
                 match Command::parse(line.as_str()) {

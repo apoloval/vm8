@@ -2,38 +2,33 @@ use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
-use crate::cpu::z80;
-use crate::vid::nxgfx;
+use crate::cpu::w65c02;
+use crate::cpu::w65c02::Bus as W65C02Bus;
+use crate::vid::nxvid;
 use crate::mem;
-use crate::sys::nexus::Addr;
 use crate::sys::nexus::cmd::Command;
 use crate::sys::nexus::bus::Bus;
-use crate::sys::nexus::mmu::MMU;
 
 pub struct System {    
-    cpu: z80::CPU,
+    cpu: w65c02::CPU,
     bus: Bus,
-    break_log: HashMap<u16, ()>,
-    break_phy: HashMap<u32, ()>,
+    breakpoints: HashMap<u16, ()>,
+    cycles: usize,
 }
 
 impl System {
     pub fn new(bios_path: &Path) -> io::Result<Self> {
         let bios = mem::ROM::load_from_file(bios_path)?;
-        let vdc = nxgfx::NXGFX216::with_window_title(
+        let vid = nxvid::NXVID::with_window_title(
             "Nexus Computer System emulator");
-        let bus = Bus::new(vdc, bios);
+        let bus = Bus::new(vid, bios);
 
         Ok(Self {
-            cpu: z80::CPU::new(),
+            cpu: w65c02::CPU::new(),
             bus,
-            break_log: HashMap::new(),
-            break_phy: HashMap::new(),
+            breakpoints: HashMap::new(),
+            cycles: 0,
         })        
-    }
-
-    pub fn prompt(&self) -> String {
-        format!("[{}]> ", self.display_addr(Addr::Logical(self.cpu.regs().pc())))
     }
 
     pub fn exec_cmd(&mut self, cmd: Command) {
@@ -51,48 +46,35 @@ impl System {
     }
 
     fn exec_reset(&mut self) {
-        self.cpu.reset();
+        self.cpu.reset(&mut self.bus);
     }
 
-    fn exec_break_set(&mut self, addr: Addr) {
-        match addr {
-            Addr::Logical(a) => self.break_log.insert(a, ()),
-            Addr::Physical(a) => self.break_phy.insert(a, ()),
-        };        
+    fn exec_break_set(&mut self, addr: u16) {
+        self.breakpoints.insert(addr, ());
     }
 
     fn exec_break_show(&mut self) {
-        if self.break_log.len() > 0 {
-            println!("Logical address:");
-            for addr in self.break_log.keys() {
-                println!("  {}", self.display_addr(Addr::Logical(*addr)));
-            }
-            println!("");
-        }
-        if self.break_phy.len() > 0 {
-            println!("Logical address:");
-            for addr in self.break_phy.keys() {
-                println!("  {}", self.display_addr(Addr::Physical(*addr)));
+        if self.breakpoints.len() > 0 {
+            println!("Breakpoints:");
+            for addr in self.breakpoints.keys() {
+                println!("  {:04X}", addr);
             }
             println!("");
         }
     }
 
-    fn exec_break_delete(&mut self, addr: Option<Addr>) {
-        match addr {
-            Some(Addr::Logical(it)) => { self.break_log.remove(&it); },
-            Some(Addr::Physical(it)) => { self.break_phy.remove(&it); },
-            None => {
-                self.break_log.clear();
-                self.break_phy.clear();
-            },
-        };            
+    fn exec_break_delete(&mut self, addr: Option<u16>) {
+        if let Some(addr) = addr {
+            self.breakpoints.remove(&addr);
+        } else {
+            self.breakpoints.clear();
+        }
     }
 
-    fn exec_mem_show(&self, addr: Option<Addr>) {
-        let a = addr.unwrap_or(Addr::Logical(self.cpu.regs().pc()));
+    fn exec_mem_show(&self, addr: Option<u16>) {
+        let a = addr.unwrap_or(self.cpu.pc);
         for i in (0..256).step_by(16) {
-            print!("  {}:", self.display_addr(a + i));
+            print!("  {:04X}:", a + i);
             for j in 0..16 {
                 print!(" {:02X}", self.bus.mem_read(a + i + j));
             }
@@ -102,90 +84,45 @@ impl System {
     }
 
     fn exec_status(&self) {
-        self.print_cpu_regs();
-        self.print_mmu_regs();
-    }
-
-    fn print_cpu_regs(&self) {
-        let regs = self.cpu.regs();
-        println!(
-            "  CPU: AF={:04X}[{:04X}]   PC={}", 
-            regs.af(), regs.af_(), self.display_addr(Addr::Logical(regs.pc())),
+        println!("  CPU   : A={:02X} X={:02X} Y={:02X}  SP={:02X} PC={:04X} P={:02X}", 
+            self.cpu.a, self.cpu.x, self.cpu.y, self.cpu.sp, self.cpu.pc, self.cpu.status,
         );
-        println!(
-            "       BC={:04X}[{:04X}]   SP={}", 
-            regs.bc(), regs.bc_(), self.display_addr(Addr::Logical(regs.sp())),
+        println!("  Banks : {:02X} {:02X} {:02X} {:02X}", 
+            self.bus.bank_reg(0), self.bus.bank_reg(1), self.bus.bank_reg(2), self.bus.bank_reg(3),
         );
-        println!(
-            "       DE={:04X}[{:04X}]", 
-            regs.de(), regs.de_(),
-        );
-        println!(
-            "       HL={:04X}[{:04X}]", 
-            regs.hl(), regs.hl_(),
-        );
-        println!("");
-    }
-
-    fn print_mmu_regs(&self) {
-        for i in 0u16..8 {
-            println!(
-                "  {} R{:02}={} PAGE.{:X}={:05X}    R{:02}={} PAGE.{:X}={:05X}", 
-                if i == 0 { "MMU:" } else { "    " },
-                i,
-                if self.mmu().is_enabled() { format!("{:02X}", self.mmu().read(i as u8)) } else { String::from("XX") }, 
-                i,
-                self.resolve_addr(Addr::Logical((i) << 12)),
-                i+8,
-                if self.mmu().is_enabled() { format!("{:02X}", self.mmu().read((i+8) as u8)) } else { String::from("XX") }, 
-                i+8,
-                self.resolve_addr(Addr::Logical((i+8) << 12)),
-            );
-        }
         println!("");
     }
 
     fn exec_step(&mut self) {
-        self.cpu.exec(&mut self.bus);
+        let pc = self.cpu.pc;
+        let inst = self.cpu.exec(&mut self.bus);
+        print!("{:04X}:   ", pc);
+        for i in 0..3 {
+            if i < inst.len() {
+                print!("{:02X} ", self.bus.mem_read(pc.wrapping_add(i as u16)));
+            } else {
+                print!("   ");
+            }
+        }
+        println!("   {}", inst);
         self.bus.refresh_all();
     }
 
     fn exec_resume(&mut self) {
         loop {
-            self.cpu.exec(&mut self.bus);
-            let pc_log = self.cpu.regs().pc();
-            if self.break_log.contains_key(&pc_log) {
-                println!("Breakpoint at {}", self.display_addr(Addr::Logical(pc_log)));
-                break;
-            }
-            let pc_phy = self.mmu().map_addr(self.cpu.regs().pc());
-            if self.break_phy.contains_key(&pc_phy) {
-                println!("Breakpoint at {}", self.display_addr(Addr::Physical(pc_phy)));
+            let inst = self.cpu.exec(&mut self.bus);
+            self.cycles += inst.cycles;
+            if self.breakpoints.contains_key(&self.cpu.pc) {
+                println!("Breakpoint at {:04X}", self.cpu.pc);
                 break;
             }
 
             // TODO: adjust this to the clock speed, etc.
-            if self.cpu.cycles() > 120_000 {
+            if self.cycles > 120_000 {
                 self.bus.refresh_all();
-                self.cpu.reset_cycles();
+                self.cycles = 0;
             }
         }
         self.bus.refresh_all();
-    }
-
-    fn mmu(&self) -> &MMU { self.bus.mmu() }
-
-    fn resolve_addr(&self, addr: Addr) -> u32 { 
-        match addr {
-            Addr::Logical(a) => self.mmu().map_addr(a),
-            Addr::Physical(a) => a,
-        }
-    }
-
-    fn display_addr(&self, addr: Addr) -> String {
-        match addr {
-            Addr::Logical(a) => format!("{:04X}:{:05X}", a, self.mmu().map_addr(a)),
-            Addr::Physical(a) => format!(":{:05X}", a),
-        }
     }
 }

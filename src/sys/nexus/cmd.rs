@@ -1,8 +1,6 @@
 use std::fmt;
 use std::io;
 
-use crate::sys::nexus::Addr;
-
 pub enum Command {
     Help,
     Exit,
@@ -10,10 +8,10 @@ pub enum Command {
     Step,
     Resume,
     Reset,
-    BreakSet { addr: Addr },
+    BreakSet { addr: u16 },
     BreakShow,
-    BreakDelete { addr: Option<Addr> },
-    MemShow { addr: Option<Addr> },
+    BreakDelete { addr: Option<u16> },
+    MemShow { addr: Option<u16> },
 }
 
 #[derive(Debug)]
@@ -76,8 +74,7 @@ impl Command {
         println!("  exit | x                        Exit and return to shell");
         println!("");
         println!("Data formats:");
-        println!("  <addr>=[0-9A-F]{{1,4}}          A logical address");
-        println!("  <addr>=:[0-9A-F]{{1,5}}         A physical address");
+        println!("  <addr>=[0-9A-F]{{1,4}}          A 16-bit address");
     }
 
     fn parse_show<'a, I: Iterator<Item=&'a str>>(mut params: I) -> Result<Command, ParseError> {
@@ -110,17 +107,10 @@ impl Command {
         }
     }
 
-    fn parse_addr(s: &str) -> Result<Addr, ParseError> {
-        if let Some(pa) = s.strip_prefix(":") {
-            match u32::from_str_radix(pa, 16) {
-                Ok(val) if val & 0xFFFFF == val => Ok(Addr::Physical(val)),
-                _ => Err(ParseError::InvalidParameter(String::from(s))),
-            }
-        } else {
-            match u16::from_str_radix(s, 16) {
-                Ok(val) => Ok(Addr::Logical(val)),
-                _ => Err(ParseError::InvalidParameter(String::from(s))),
-            }
+    fn parse_addr(s: &str) -> Result<u16, ParseError> {
+        match u16::from_str_radix(s, 16) {
+            Ok(val) => Ok(val),
+            _ => Err(ParseError::InvalidParameter(String::from(s))),
         }
     }
 }

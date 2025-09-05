@@ -12,6 +12,7 @@ nightly = []
 bitflags = "2.9.1"
 byteorder = "1.2"
 dirs = "1.0.4"
+rand = "0.8.5"
 raylib = { version = "3.7" }
 rustyline = "9.1.0"
 time = "0.1"
