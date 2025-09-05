@@ -10,27 +10,27 @@ fn test_bcc() {
     cpu.status.remove(Flags::CARRY);
     bus.mem_write(0x2000, 0x90); // BCC
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.insert(Flags::CARRY);
     bus.mem_write(0x2000, 0x90); // BCC
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.remove(Flags::CARRY);
     bus.mem_write(0x20F0, 0x90); // BCC
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -43,27 +43,27 @@ fn test_bcs() {
     cpu.status.insert(Flags::CARRY);
     bus.mem_write(0x2000, 0xB0); // BCS
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.remove(Flags::CARRY);
     bus.mem_write(0x2000, 0xB0); // BCS
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.insert(Flags::CARRY);
     bus.mem_write(0x20F0, 0xB0); // BCS
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -76,27 +76,27 @@ fn test_beq() {
     cpu.status.insert(Flags::ZERO);
     bus.mem_write(0x2000, 0xF0); // BEQ
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.remove(Flags::ZERO);
     bus.mem_write(0x2000, 0xF0); // BEQ
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.insert(Flags::ZERO);
     bus.mem_write(0x20F0, 0xF0); // BEQ
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -109,27 +109,27 @@ fn test_bmi() {
     cpu.status.insert(Flags::NEGATIVE);
     bus.mem_write(0x2000, 0x30); // BMI
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.remove(Flags::NEGATIVE);
     bus.mem_write(0x2000, 0x30); // BMI
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.insert(Flags::NEGATIVE);
     bus.mem_write(0x20F0, 0x30); // BMI
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -142,27 +142,27 @@ fn test_bne() {
     cpu.status.remove(Flags::ZERO);
     bus.mem_write(0x2000, 0xD0); // BNE
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.insert(Flags::ZERO);
     bus.mem_write(0x2000, 0xD0); // BNE
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.remove(Flags::ZERO);
     bus.mem_write(0x20F0, 0xD0); // BNE
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -175,27 +175,27 @@ fn test_bpl() {
     cpu.status.remove(Flags::NEGATIVE);
     bus.mem_write(0x2000, 0x10); // BPL
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.insert(Flags::NEGATIVE);
     bus.mem_write(0x2000, 0x10); // BPL
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.remove(Flags::NEGATIVE);
     bus.mem_write(0x20F0, 0x10); // BPL
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -208,27 +208,27 @@ fn test_bvc() {
     cpu.status.remove(Flags::OVERFLOW);
     bus.mem_write(0x2000, 0x50); // BVC
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.insert(Flags::OVERFLOW);
     bus.mem_write(0x2000, 0x50); // BVC
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.remove(Flags::OVERFLOW);
     bus.mem_write(0x20F0, 0x50); // BVC
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
 
 #[test]
@@ -241,25 +241,25 @@ fn test_bvs() {
     cpu.status.insert(Flags::OVERFLOW);
     bus.mem_write(0x2000, 0x70); // BVS
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2044);
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Branch not taken
     cpu.pc = 0x2000;
     cpu.status.remove(Flags::OVERFLOW);
     bus.mem_write(0x2000, 0x70); // BVS
     bus.mem_write(0x2001, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2002);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.cycles, 2);
 
     // Branch taken, page cross
     cpu.pc = 0x20F0;
     cpu.status.insert(Flags::OVERFLOW);
     bus.mem_write(0x20F0, 0x70); // BVS
     bus.mem_write(0x20F1, 0x42);
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2134);
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 } 

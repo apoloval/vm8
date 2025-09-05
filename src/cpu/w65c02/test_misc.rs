@@ -1,4 +1,4 @@
-use crate::cpu::w65c02::{Bus, CPU, bus::FakeBus};
+use crate::cpu::w65c02::{Bus, CPU, bus::FakeBus, inst::Opcode};
 
 #[test]
 fn test_nop() {
@@ -7,7 +7,8 @@ fn test_nop() {
 
     cpu.pc = 0x2000;
     bus.mem_write(0x2000, 0xEA); // NOP
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert_eq!(cpu.pc, 0x2001);
-    assert_eq!(cycles, 2);
+    assert_eq!(inst.opcode, Opcode::NOP);
+    assert_eq!(inst.cycles, 2);
 }

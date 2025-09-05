@@ -1,4 +1,3 @@
-mod addr;
 mod bus; 
 mod cpu;
 mod inst;
@@ -13,6 +12,5 @@ mod inst;
 #[cfg(test)] mod test_misc;
 #[cfg(test)] mod test_bits;
 
-pub use addr::*;
 pub use bus::*;
 pub use cpu::CPU;
