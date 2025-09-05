@@ -1,11 +1,11 @@
 use bitflags::bitflags;
 
-use crate::cpu::w65c02::{inst, Bus};
+use crate::cpu::w65c02::{inst, Bus, inst::Instruction};
 
 
-const VECTOR_RESET: u16 = 0xFFFC;
-const VECTOR_IRQ: u16 = 0xFFFE;
-const VECTOR_NMI: u16 = 0xFFFA;
+pub(crate) const VECTOR_RESET: u16 = 0xFFFC;
+pub(crate) const VECTOR_IRQ: u16 = 0xFFFE;
+pub(crate) const VECTOR_NMI: u16 = 0xFFFA;
 
 bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,7 +53,7 @@ impl CPU {
         self.pc = bus.mem_read_word(VECTOR_RESET);
     }
 
-    pub fn exec<B: Bus>(&mut self, bus: &mut B) -> usize {
+    pub fn exec<B: Bus>(&mut self, bus: &mut B) -> Instruction {
         let inst = inst::decode(self, bus);
         (inst.handler)(self, bus, &inst)
     }

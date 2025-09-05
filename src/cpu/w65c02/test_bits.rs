@@ -11,11 +11,11 @@ fn test_bit() {
     bus.mem_write(0x0001, 0x42);
     bus.mem_write(0x0042, 0xAA);
     cpu.a = 0x55;
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert!(cpu.status.contains(Flags::ZERO));
     assert!(cpu.status.contains(Flags::NEGATIVE));
     assert!(!cpu.status.contains(Flags::OVERFLOW)); 
-    assert_eq!(cycles, 3);
+    assert_eq!(inst.cycles, 3);
 
     // Absolute
     cpu.pc = 0x0000;
@@ -24,9 +24,9 @@ fn test_bit() {
     bus.mem_write(0x0002, 0x00);
     bus.mem_write(0x0042, 0x00);
     cpu.a = 0xFF;
-    let cycles = cpu.exec(&mut bus);
+    let inst = cpu.exec(&mut bus);
     assert!(cpu.status.contains(Flags::ZERO));
     assert!(!cpu.status.contains(Flags::NEGATIVE));
     assert!(!cpu.status.contains(Flags::OVERFLOW));
-    assert_eq!(cycles, 4);
+    assert_eq!(inst.cycles, 4);
 }
